@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { Request, Response, NextFunction } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -9,10 +10,7 @@ async function bootstrap() {
   // CORS must be enabled BEFORE global prefix and other middleware
   // CORS - Allow all origins with proper preflight handling
   app.enableCors({
-    origin: (origin, callback) => {
-      // Allow all origins - no restrictions
-      callback(null, true);
-    },
+    origin: true, // Allow all origins
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
     allowedHeaders: [
       'Content-Type',
@@ -28,6 +26,19 @@ async function bootstrap() {
     maxAge: 86400, // Cache preflight requests for 24 hours
     preflightContinue: false,
     optionsSuccessStatus: 204,
+  });
+  
+  // Also add explicit OPTIONS handler as middleware for better compatibility
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method === 'OPTIONS') {
+      res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers');
+      res.header('Access-Control-Allow-Credentials', 'true');
+      res.header('Access-Control-Max-Age', '86400');
+      return res.status(204).end();
+    }
+    next();
   });
   
   console.log('✅ CORS enabled - allowing all origins');
