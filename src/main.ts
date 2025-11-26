@@ -68,9 +68,10 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = process.env.PORT || 8081;
-  await app.listen(port);
-  console.log(`Application is running on: http://localhost:${port}`);
-  console.log(`Swagger docs: http://localhost:${port}/api/docs`);
+  await app.listen(port, '0.0.0.0'); // Listen on all interfaces for Railway
+  console.log(`✅ Application is running on port ${port}`);
+  console.log(`✅ CORS enabled - allowing all origins`);
+  console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
 }
 
 bootstrap();
