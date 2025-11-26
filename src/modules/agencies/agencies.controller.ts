@@ -1,91 +1,42 @@
-import { Request, Response } from 'express';
-import { AgenciesService } from './agencies.service';
-import { z } from 'zod';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { AgenciesService, AgencyCreateDTO, AgencyUpdateDTO } from './agencies.service';
 
-const agenciesService = new AgenciesService();
-
-const createAgencySchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  cnpj: z.string().min(1, 'CNPJ is required'),
-  email: z.string().email('Invalid email format'),
-  phone: z.string().optional(),
-  address: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  zipCode: z.string().optional(),
-  plan: z.string().optional(),
-  maxProperties: z.number().optional(),
-  maxUsers: z.number().optional(),
-});
-
-const updateAgencySchema = z.object({
-  name: z.string().optional(),
-  email: z.string().email('Invalid email format').optional(),
-  phone: z.string().optional(),
-  address: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  zipCode: z.string().optional(),
-  plan: z.string().optional(),
-  status: z.string().optional(),
-  maxProperties: z.number().optional(),
-  maxUsers: z.number().optional(),
-  agencyFee: z.number().min(0).max(100).optional(),
-});
-
+@ApiTags('Agencies')
+@Controller('agencies')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class AgenciesController {
-  createAgency = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const validatedData = createAgencySchema.parse(req.body);
-      const agency = await agenciesService.createAgency(validatedData);
-      res.status(201).json(agency);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({
-          status: 'error',
-          message: 'Validation error',
-          errors: error.errors,
-        });
-        return;
-      }
-      throw error;
-    }
-  };
+  constructor(private readonly agenciesService: AgenciesService) {}
 
-  getAgencies = async (req: Request, res: Response): Promise<void> => {
-    const agencies = await agenciesService.getAgencies();
-    res.json(agencies);
-  };
+  @Get()
+  @ApiOperation({ summary: 'Get all agencies' })
+  async getAgencies() {
+    return this.agenciesService.getAgencies();
+  }
 
-  getAgencyById = async (req: Request, res: Response): Promise<void> => {
-    const { id } = req.params;
-    const agency = await agenciesService.getAgencyById(id);
-    res.json(agency);
-  };
+  @Get(':id')
+  @ApiOperation({ summary: 'Get agency by ID' })
+  async getAgencyById(@Param('id') id: string) {
+    return this.agenciesService.getAgencyById(id);
+  }
 
-  updateAgency = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { id } = req.params;
-      const validatedData = updateAgencySchema.parse(req.body);
-      const agency = await agenciesService.updateAgency(id, validatedData);
-      res.json(agency);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({
-          status: 'error',
-          message: 'Validation error',
-          errors: error.errors,
-        });
-        return;
-      }
-      throw error;
-    }
-  };
+  @Post()
+  @ApiOperation({ summary: 'Create a new agency' })
+  async createAgency(@Body() data: AgencyCreateDTO) {
+    return this.agenciesService.createAgency(data);
+  }
 
-  deleteAgency = async (req: Request, res: Response): Promise<void> => {
-    const { id } = req.params;
-    const result = await agenciesService.deleteAgency(id);
-    res.json(result);
-  };
+  @Put(':id')
+  @ApiOperation({ summary: 'Update an agency' })
+  async updateAgency(@Param('id') id: string, @Body() data: AgencyUpdateDTO) {
+    return this.agenciesService.updateAgency(id, data);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete an agency' })
+  async deleteAgency(@Param('id') id: string) {
+    return this.agenciesService.deleteAgency(id);
+  }
 }
-

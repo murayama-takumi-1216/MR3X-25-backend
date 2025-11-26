@@ -1,83 +1,54 @@
-import { Request, Response } from 'express';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PropertiesService } from './properties.service';
-import { propertyCreateSchema, propertyUpdateSchema } from './properties.dto';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
+@ApiTags('Properties')
+@Controller('properties')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class PropertiesController {
-  private propertiesService: PropertiesService;
+  constructor(private readonly propertiesService: PropertiesService) {}
 
-  constructor() {
-    this.propertiesService = new PropertiesService();
+  @Get()
+  @ApiOperation({ summary: 'List all properties' })
+  @ApiQuery({ name: 'skip', required: false })
+  @ApiQuery({ name: 'take', required: false })
+  @ApiQuery({ name: 'agencyId', required: false })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'ownerId', required: false })
+  async findAll(
+    @Query('skip') skip?: number,
+    @Query('take') take?: number,
+    @Query('agencyId') agencyId?: string,
+    @Query('status') status?: string,
+    @Query('ownerId') ownerId?: string,
+  ) {
+    return this.propertiesService.findAll({ skip, take, agencyId, status, ownerId });
   }
 
-  getProperties = async (req: Request, res: Response) => {
-    const userId = req.user!.userId;
-    const role = req.user!.role;
-    const agencyId = req.user!.agencyId;
-    const brokerId = req.user!.brokerId;
-    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
-    const result = await this.propertiesService.getProperties(userId, role, agencyId, brokerId, search);
-    if (role === 'AGENCY_ADMIN') {
-      console.log(`[PropertiesController] AGENCY_ADMIN ${userId} fetched ${Array.isArray(result) ? result.length : 0} properties for agency ${agencyId ?? 'none'}`);
-    }
-    res.json(result);
-  };
+  @Get(':id')
+  @ApiOperation({ summary: 'Get property by ID' })
+  async findOne(@Param('id') id: string) {
+    return this.propertiesService.findOne(id);
+  }
 
-  getPropertyById = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const userId = req.user!.userId;
-    const role = req.user!.role;
-    const result = await this.propertiesService.getPropertyById(id, userId, role);
-    res.json(result);
-  };
+  @Post()
+  @ApiOperation({ summary: 'Create a new property' })
+  async create(@Body() data: any, @CurrentUser('sub') userId: string) {
+    return this.propertiesService.create(data, userId);
+  }
 
-  getPropertyAgreement = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const userId = req.user!.userId;
-    const result = await this.propertiesService.getPropertyAgreement(id, userId);
-    res.json(result);
-  };
+  @Put(':id')
+  @ApiOperation({ summary: 'Update property' })
+  async update(@Param('id') id: string, @Body() data: any) {
+    return this.propertiesService.update(id, data);
+  }
 
-  createProperty = async (req: Request, res: Response) => {
-    const userId = req.user!.userId;
-    const role = req.user!.role;
-    const agencyId = req.user!.agencyId;
-    const brokerId = req.user!.brokerId;
-    const data = propertyCreateSchema.parse(req.body);
-    const result = await this.propertiesService.createProperty(userId, role, agencyId, brokerId, data);
-    res.json(result);
-  };
-
-  updateProperty = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const userId = req.user!.userId;
-    const role = req.user!.role;
-    const data = propertyUpdateSchema.parse(req.body);
-    const agencyId = req.user!.agencyId;
-    const result = await this.propertiesService.updateProperty(id, userId, role, data, agencyId);
-    res.json(result);
-  };
-
-  deleteProperty = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const userId = req.user!.userId;
-    const role = req.user!.role;
-    const agencyId = req.user!.agencyId;
-    await this.propertiesService.deleteProperty(id, userId, role, agencyId);
-    res.status(204).send();
-  };
-
-  assignBroker = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { brokerId } = req.body as { brokerId?: string | null };
-    const user = req.user!;
-
-    const result = await this.propertiesService.assignBroker(id, {
-      userId: user.userId,
-      role: user.role,
-      agencyId: user.agencyId,
-    }, brokerId ?? null);
-
-    res.json(result);
-  };
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete property' })
+  async remove(@Param('id') id: string, @CurrentUser('sub') userId: string) {
+    return this.propertiesService.remove(id, userId);
+  }
 }
-

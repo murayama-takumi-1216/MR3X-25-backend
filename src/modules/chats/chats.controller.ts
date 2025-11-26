@@ -1,66 +1,68 @@
-import { Request, Response } from 'express';
+import { Controller, Get, Post, Delete, Patch, Param, Body, UseGuards, Req } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ChatsService } from './chats.service';
-import { chatCreateSchema, messageCreateSchema } from './chats.dto';
 
+@ApiTags('Chats')
+@Controller('chats')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class ChatsController {
-  private chatsService: ChatsService;
+  constructor(private readonly chatsService: ChatsService) {}
 
-  constructor() {
-    this.chatsService = new ChatsService();
+  @Get()
+  @ApiOperation({ summary: 'Get all chats for the user' })
+  async getChats(@Req() req: any) {
+    const userId = req.user.sub;
+    return this.chatsService.getChats(userId);
   }
 
-  getChats = async (req: Request, res: Response) => {
-    const userId = req.user!.userId;
-    const result = await this.chatsService.getChats(userId);
-    res.json(result);
-  };
+  @Get('available-users')
+  @ApiOperation({ summary: 'Get available users to chat with' })
+  async getAvailableUsers(@Req() req: any) {
+    const userId = req.user.sub;
+    const role = req.user.role;
+    return this.chatsService.getAvailableUsers(userId, role);
+  }
 
-  getMessages = async (req: Request, res: Response) => {
-    const { chatId } = req.params;
-    const userId = req.user!.userId;
-    const result = await this.chatsService.getMessages(chatId, userId);
-    res.json(result);
-  };
+  @Get(':chatId/messages')
+  @ApiOperation({ summary: 'Get messages for a chat' })
+  async getMessages(@Param('chatId') chatId: string, @Req() req: any) {
+    const userId = req.user.sub;
+    return this.chatsService.getMessages(chatId, userId);
+  }
 
-  sendMessage = async (req: Request, res: Response) => {
-    const { chatId } = req.params;
-    const userId = req.user!.userId;
-    const data = messageCreateSchema.parse(req.body);
-    const result = await this.chatsService.sendMessage(chatId, userId, data);
-    res.json(result);
-  };
+  @Post()
+  @ApiOperation({ summary: 'Create a new chat' })
+  async createChat(@Body() body: { participantId: string }, @Req() req: any) {
+    const userId = req.user.sub;
+    return this.chatsService.createChat(userId, body.participantId);
+  }
 
-  createChat = async (req: Request, res: Response) => {
-    const userId = req.user!.userId;
-    const data = chatCreateSchema.parse(req.body);
-    const result = await this.chatsService.createChat(userId, data);
-    res.json(result);
-  };
+  @Post(':chatId/messages')
+  @ApiOperation({ summary: 'Send a message in a chat' })
+  async sendMessage(
+    @Param('chatId') chatId: string,
+    @Body() body: { content: string },
+    @Req() req: any,
+  ) {
+    const userId = req.user.sub;
+    return this.chatsService.sendMessage(chatId, userId, body.content);
+  }
 
-  getAvailableUsers = async (req: Request, res: Response) => {
-    try {
-      const userId = req.user!.userId;
-      const role = req.user!.role;
-      const result = await this.chatsService.getAvailableUsers(userId, role);
-      res.json(result);
-    } catch (error: any) {
-      console.error('Error in getAvailableUsers:', error);
-      res.status(500).json({ error: error.message || 'Internal server error' });
-    }
-  };
-
-  deleteChat = async (req: Request, res: Response) => {
-    const { chatId } = req.params;
-    const userId = req.user!.userId;
+  @Delete(':chatId')
+  @ApiOperation({ summary: 'Delete a chat' })
+  async deleteChat(@Param('chatId') chatId: string, @Req() req: any) {
+    const userId = req.user.sub;
     await this.chatsService.deleteChat(chatId, userId);
-    res.status(200).json({ message: 'Chat deleted successfully' });
-  };
+    return { message: 'Chat deleted successfully' };
+  }
 
-  markAsRead = async (req: Request, res: Response) => {
-    const { chatId } = req.params;
-    const userId = req.user!.userId;
+  @Patch(':chatId/read')
+  @ApiOperation({ summary: 'Mark messages as read' })
+  async markAsRead(@Param('chatId') chatId: string, @Req() req: any) {
+    const userId = req.user.sub;
     await this.chatsService.markAsRead(chatId, userId);
-    res.status(200).json({ message: 'Messages marked as read' });
-  };
+    return { message: 'Messages marked as read' };
+  }
 }
-

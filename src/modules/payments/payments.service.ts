@@ -1,10 +1,13 @@
-import { prisma } from '../../config/database';
-import { NotFoundError, ForbiddenError } from '../../shared/errors/AppError';
-import { PaymentCreateDTO, PaymentUpdateDTO } from './payments.dto';
-import { createAuditLog } from '../../shared/utils/audit-logger';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { PrismaService } from '../../config/prisma.service';
+import { CreatePaymentDto, PaymentType } from './dto/create-payment.dto';
+import { UpdatePaymentDto } from './dto/update-payment.dto';
 
+@Injectable()
 export class PaymentsService {
-  async getPayments(userId: string, role: string, userAgencyId?: string, userBrokerId?: string) {
+  constructor(private prisma: PrismaService) {}
+
+  async findAll(userId: string, role: string, userAgencyId?: string, userBrokerId?: string) {
     try {
       const where: any = {};
 
@@ -51,7 +54,7 @@ export class PaymentsService {
         where.id = BigInt(-1); // This will return no results
       }
 
-      const payments = await prisma.payment.findMany({
+      const payments = await this.prisma.payment.findMany({
         where,
         include: {
           property: {
@@ -83,15 +86,15 @@ export class PaymentsService {
           },
         },
         orderBy: { dataPagamento: 'desc' },
-      }).catch(() => []);
+      });
 
       return payments.map(payment => ({
         ...payment,
         id: payment.id.toString(),
-        propertyId: payment.propertyId.toString(),
-        contractId: payment.contratoId.toString(),
-        userId: payment.userId.toString(),
-        agencyId: payment.agencyId ? payment.agencyId.toString() : null,
+        propertyId: payment.propertyId?.toString(),
+        contractId: payment.contratoId?.toString(),
+        userId: payment.userId?.toString(),
+        agencyId: payment.agencyId?.toString() || null,
         property: payment.property ? {
           ...payment.property,
           id: payment.property.id.toString(),
@@ -115,8 +118,8 @@ export class PaymentsService {
     }
   }
 
-  async getPaymentById(paymentId: string, userId: string, role: string) {
-    const payment = await prisma.payment.findUnique({
+  async findOne(paymentId: string, userId: string, role: string) {
+    const payment = await this.prisma.payment.findUnique({
       where: { id: BigInt(paymentId) },
       include: {
         property: {
@@ -146,56 +149,72 @@ export class PaymentsService {
     });
 
     if (!payment) {
-      throw new NotFoundError('Payment not found');
+      throw new NotFoundException('Payment not found');
     }
 
     // Check access permissions
     if (role === 'PROPRIETARIO' || role === 'INDEPENDENT_OWNER' || role === 'GESTOR') {
-      if (payment.property.ownerId.toString() !== userId) {
-        throw new ForbiddenError('Access denied');
+      if (payment.property?.ownerId?.toString() !== userId) {
+        throw new ForbiddenException('Access denied');
       }
     } else if (role === 'INQUILINO') {
-      if (payment.userId.toString() !== userId) {
-        throw new ForbiddenError('Access denied');
+      if (payment.userId?.toString() !== userId) {
+        throw new ForbiddenException('Access denied');
       }
     }
 
-    return payment;
+    return {
+      ...payment,
+      id: payment.id.toString(),
+      propertyId: payment.propertyId?.toString(),
+      contractId: payment.contratoId?.toString(),
+      userId: payment.userId?.toString(),
+      agencyId: payment.agencyId?.toString() || null,
+      property: payment.property ? {
+        ...payment.property,
+        id: payment.property.id.toString(),
+        ownerId: payment.property.ownerId?.toString(),
+      } : null,
+      contract: payment.contract ? {
+        ...payment.contract,
+        id: payment.contract.id.toString(),
+      } : null,
+      user: payment.user ? {
+        ...payment.user,
+        id: payment.user.id.toString(),
+      } : null,
+    };
   }
 
-  async createPayment(userId: string, data: PaymentCreateDTO) {
-    // Verify property and contract belong to user or user is tenant
-    const property = await prisma.property.findUnique({
+  async create(userId: string, data: CreatePaymentDto) {
+    // Verify property exists
+    const property = await this.prisma.property.findUnique({
       where: { id: BigInt(data.propertyId) },
     });
 
     if (!property) {
-      throw new NotFoundError('Property not found');
+      throw new NotFoundException('Property not found');
     }
 
-    const contract = await prisma.contract.findUnique({
+    // Verify contract exists
+    const contract = await this.prisma.contract.findUnique({
       where: { id: BigInt(data.contratoId) },
     });
 
     if (!contract) {
-      throw new NotFoundError('Contract not found');
+      throw new NotFoundException('Contract not found');
     }
 
-    // Convert base64 comprovante if provided
-    let comprovanteBuffer: Buffer | undefined;
-    if (data.comprovante) {
-      comprovanteBuffer = Buffer.from(data.comprovante, 'base64');
-    }
-
-    const payment = await prisma.payment.create({
+    const payment = await this.prisma.payment.create({
       data: {
         valorPago: data.valorPago,
         dataPagamento: new Date(data.dataPagamento),
         contratoId: BigInt(data.contratoId),
         propertyId: BigInt(data.propertyId),
         userId: BigInt(userId),
+        agencyId: property.agencyId,
         tipo: data.tipo,
-        comprovante: comprovanteBuffer,
+        comprovante: data.comprovante ? Buffer.from(data.comprovante, 'base64') : null,
       },
       include: {
         property: {
@@ -223,31 +242,37 @@ export class PaymentsService {
     });
 
     // Update contract's last payment date
-    await prisma.contract.update({
+    await this.prisma.contract.update({
       where: { id: BigInt(data.contratoId) },
       data: {
         lastPaymentDate: new Date(data.dataPagamento),
       },
     });
 
-    // Create audit log
-    await createAuditLog({
-      event: 'PAYMENT_CREATED',
-      userId: userId,
-      entity: 'PAYMENT',
-      entityId: payment.id.toString(),
-      dataAfter: {
-        amount: payment.valorPago.toString(),
-        date: payment.dataPagamento,
-        type: payment.tipo,
-      },
-    });
-
-    return payment;
+    return {
+      ...payment,
+      id: payment.id.toString(),
+      propertyId: payment.propertyId?.toString(),
+      contractId: payment.contratoId?.toString(),
+      userId: payment.userId?.toString(),
+      agencyId: payment.agencyId?.toString() || null,
+      property: payment.property ? {
+        ...payment.property,
+        id: payment.property.id.toString(),
+      } : null,
+      contract: payment.contract ? {
+        ...payment.contract,
+        id: payment.contract.id.toString(),
+      } : null,
+      user: payment.user ? {
+        ...payment.user,
+        id: payment.user.id.toString(),
+      } : null,
+    };
   }
 
-  async updatePayment(paymentId: string, userId: string, role: string, data: PaymentUpdateDTO) {
-    const existing = await prisma.payment.findUnique({
+  async update(paymentId: string, userId: string, role: string, data: UpdatePaymentDto) {
+    const existing = await this.prisma.payment.findUnique({
       where: { id: BigInt(paymentId) },
       include: {
         property: true,
@@ -255,21 +280,15 @@ export class PaymentsService {
     });
 
     if (!existing) {
-      throw new NotFoundError('Payment not found');
+      throw new NotFoundException('Payment not found');
     }
 
     // Check permissions
-    if (role !== 'ADMIN' && existing.property.ownerId.toString() !== userId) {
-      throw new ForbiddenError('Access denied');
+    if (role !== 'ADMIN' && role !== 'CEO' && existing.property?.ownerId?.toString() !== userId) {
+      throw new ForbiddenException('Access denied');
     }
 
-    const dataBefore = {
-      amount: existing.valorPago.toString(),
-      date: existing.dataPagamento,
-      type: existing.tipo,
-    };
-
-    const payment = await prisma.payment.update({
+    const payment = await this.prisma.payment.update({
       where: { id: BigInt(paymentId) },
       data: {
         valorPago: data.valorPago,
@@ -278,43 +297,22 @@ export class PaymentsService {
         propertyId: data.propertyId ? BigInt(data.propertyId) : undefined,
         tipo: data.tipo,
       },
-      include: {
-        property: {
-          select: {
-            id: true,
-            name: true,
-            address: true,
-          },
-        },
-        contract: {
-          select: {
-            id: true,
-            startDate: true,
-            endDate: true,
-          },
-        },
-      },
     });
 
-    // Create audit log
-    await createAuditLog({
-      event: 'PAYMENT_UPDATED',
-      userId: userId,
-      entity: 'PAYMENT',
-      entityId: payment.id.toString(),
-      dataBefore,
-      dataAfter: {
-        amount: payment.valorPago.toString(),
-        date: payment.dataPagamento,
-        type: payment.tipo,
-      },
-    });
-
-    return payment;
+    return {
+      id: payment.id.toString(),
+      valorPago: payment.valorPago,
+      dataPagamento: payment.dataPagamento,
+      tipo: payment.tipo,
+      propertyId: payment.propertyId?.toString(),
+      contractId: payment.contratoId?.toString(),
+      userId: payment.userId?.toString(),
+      agencyId: payment.agencyId?.toString() || null,
+    };
   }
 
-  async deletePayment(paymentId: string, userId: string, role: string) {
-    const existing = await prisma.payment.findUnique({
+  async remove(paymentId: string, userId: string, role: string) {
+    const existing = await this.prisma.payment.findUnique({
       where: { id: BigInt(paymentId) },
       include: {
         property: true,
@@ -322,33 +320,22 @@ export class PaymentsService {
     });
 
     if (!existing) {
-      throw new NotFoundError('Payment not found');
+      throw new NotFoundException('Payment not found');
     }
 
     // Check permissions
-    if (role !== 'ADMIN' && existing.property.ownerId.toString() !== userId) {
-      throw new ForbiddenError('Access denied');
+    if (role !== 'ADMIN' && role !== 'CEO' && existing.property?.ownerId?.toString() !== userId) {
+      throw new ForbiddenException('Access denied');
     }
 
-    // Create audit log before deletion
-    await createAuditLog({
-      event: 'PAYMENT_DELETED',
-      userId: userId,
-      entity: 'PAYMENT',
-      entityId: existing.id.toString(),
-      dataBefore: {
-        amount: existing.valorPago.toString(),
-        date: existing.dataPagamento,
-        type: existing.tipo,
-      },
-    });
-
-    await prisma.payment.delete({
+    await this.prisma.payment.delete({
       where: { id: BigInt(paymentId) },
     });
+
+    return { success: true };
   }
 
-  async getAnnualReport(userId: string, role: string, year?: number) {
+  async getAnnualReport(userId: string, role: string, year?: number, userAgencyId?: string) {
     try {
       const targetYear = year || new Date().getFullYear();
       const startDate = new Date(targetYear, 0, 1);
@@ -376,15 +363,15 @@ export class PaymentsService {
         where.userId = BigInt(userId);
       }
       // AGENCY_MANAGER can see all payments in their agency
-      else if (role === 'AGENCY_MANAGER') {
-        // Will need to filter by agency if agencyId is available
+      else if (role === 'AGENCY_MANAGER' && userAgencyId) {
+        where.agencyId = BigInt(userAgencyId);
       }
       // Other roles have no access
       else {
         where.id = BigInt(-1); // This will return no results
       }
 
-      const payments = await prisma.payment.findMany({
+      const payments = await this.prisma.payment.findMany({
         where,
         include: {
           property: {
@@ -396,27 +383,27 @@ export class PaymentsService {
           },
         },
         orderBy: { dataPagamento: 'asc' },
-      }).catch(() => []);
+      });
 
-    // Group by month
-    const monthlyData = Array.from({ length: 12 }, (_, i) => ({
-      month: i + 1,
-      monthName: new Date(targetYear, i, 1).toLocaleDateString('pt-BR', { month: 'long' }),
-      total: 0,
-      count: 0,
-      byType: {
-        ALUGUEL: 0,
-        CONDOMINIO: 0,
-        IPTU: 0,
-        OUTROS: 0,
-      },
-    }));
+      // Group by month
+      const monthlyData = Array.from({ length: 12 }, (_, i) => ({
+        month: i + 1,
+        monthName: new Date(targetYear, i, 1).toLocaleDateString('pt-BR', { month: 'long' }),
+        total: 0,
+        count: 0,
+        byType: {
+          ALUGUEL: 0,
+          CONDOMINIO: 0,
+          IPTU: 0,
+          OUTROS: 0,
+        } as Record<string, number>,
+      }));
 
       payments.forEach(payment => {
         const month = new Date(payment.dataPagamento).getMonth();
         monthlyData[month].total += Number(payment.valorPago) || 0;
         monthlyData[month].count += 1;
-        const paymentType = payment.tipo as keyof typeof monthlyData[0]['byType'];
+        const paymentType = payment.tipo as string;
         if (monthlyData[month].byType[paymentType] !== undefined) {
           monthlyData[month].byType[paymentType] += Number(payment.valorPago) || 0;
         } else {
@@ -431,7 +418,18 @@ export class PaymentsService {
         total: totalYear,
         totalPayments: payments.length,
         monthly: monthlyData,
-        payments,
+        payments: payments.map(p => ({
+          ...p,
+          id: p.id.toString(),
+          propertyId: p.propertyId?.toString(),
+          contractId: p.contratoId?.toString(),
+          userId: p.userId?.toString(),
+          agencyId: p.agencyId?.toString() || null,
+          property: p.property ? {
+            ...p.property,
+            id: p.property.id.toString(),
+          } : null,
+        })),
       };
     } catch (error: any) {
       console.error('Error in getAnnualReport service:', error);
@@ -439,4 +437,3 @@ export class PaymentsService {
     }
   }
 }
-

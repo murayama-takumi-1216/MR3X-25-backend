@@ -1,74 +1,77 @@
-import { Request, Response } from 'express';
+import { Controller, Post, Body, UseGuards, Req, HttpCode, HttpStatus } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { loginSchema, registerSchema, forgotPasswordSchema, resetPasswordSchema, requestEmailCodeSchema, confirmEmailCodeSchema, completeRegisterSchema } from './auth.dto';
+import { RegisterDto, LoginDto, VerifyEmailRequestDto, VerifyEmailConfirmDto, ForgotPasswordDto, ResetPasswordDto, CompleteRegisterDto } from './dto/auth.dto';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
+@ApiTags('Auth')
+@Controller('auth')
 export class AuthController {
-  private authService: AuthService;
+  constructor(private readonly authService: AuthService) {}
 
-  constructor() {
-    this.authService = new AuthService();
+  @Post('register')
+  @ApiOperation({ summary: 'Register a new user' })
+  async register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto);
   }
 
-  login = async (req: Request, res: Response) => {
-    const data = loginSchema.parse(req.body);
-    try {
-      const result = await this.authService.login(data);
-      res.json(result);
-    } catch (err: any) {
-      // Scrub generic invalid credential errors for better DX logging
-      if (process.env.NODE_ENV !== 'production') {
-        console.error('Login failed:', err?.message);
-      }
-      throw err;
-    }
-  };
+  @Post('register/complete')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Complete registration after email verification' })
+  async completeRegistration(@Body() dto: CompleteRegisterDto) {
+    return this.authService.completeRegistration(dto);
+  }
 
-  register = async (req: Request, res: Response) => {
-    const data = registerSchema.parse(req.body);
-    const result = await this.authService.register(data);
-    res.status(200).json(result);
-  };
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'User login' })
+  async login(@Body() dto: LoginDto) {
+    return this.authService.login(dto);
+  }
 
-  requestEmailCode = async (req: Request, res: Response) => {
-    const data = requestEmailCodeSchema.parse(req.body);
-    const result = await this.authService.requestEmailCode(data);
-    res.json(result);
-  };
+  @Post('verify-email/request')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request email verification code' })
+  async verifyEmailRequest(@Body() dto: VerifyEmailRequestDto) {
+    return this.authService.verifyEmailRequest(dto);
+  }
 
-  confirmEmailCode = async (req: Request, res: Response) => {
-    const data = confirmEmailCodeSchema.parse(req.body);
-    const result = await this.authService.confirmEmailCode(data);
-    res.json(result);
-  };
+  @Post('verify-email/confirm')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm email verification' })
+  async verifyEmailConfirm(@Body() dto: VerifyEmailConfirmDto) {
+    return this.authService.verifyEmailConfirm(dto);
+  }
 
-  completeRegistration = async (req: Request, res: Response) => {
-    const data = completeRegisterSchema.parse(req.body);
-    const result = await this.authService.completeRegistration(data);
-    res.status(200).json(result);
-  };
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request password reset' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
 
-  forgotPassword = async (req: Request, res: Response) => {
-    const data = forgotPasswordSchema.parse(req.body);
-    await this.authService.forgotPassword(data);
-    res.status(204).send();
-  };
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password with code' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
+  }
 
-  resetPassword = async (req: Request, res: Response) => {
-    const data = resetPasswordSchema.parse(req.body);
-    await this.authService.resetPassword(data);
-    res.status(204).send();
-  };
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Logout current session' })
+  async logout(@Req() req: any) {
+    return this.authService.logout(BigInt(req.user.sub));
+  }
 
-  logout = async (req: Request, res: Response) => {
-    // No refresh token needed - just return success
-    const result = await this.authService.logout();
-    res.json(result);
-  };
-
-  logoutAll = async (req: Request, res: Response) => {
-    const userId = req.user!.userId;
-    const result = await this.authService.logoutAll(userId);
-    res.json(result);
-  };
+  @Post('logout-all')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Logout all sessions' })
+  async logoutAll(@Req() req: any) {
+    return this.authService.logoutAll(BigInt(req.user.sub));
+  }
 }
-

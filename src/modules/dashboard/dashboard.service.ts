@@ -1,6 +1,10 @@
-import { prisma } from '../../config/database';
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../config/prisma.service';
 
+@Injectable()
 export class DashboardService {
+  constructor(private prisma: PrismaService) {}
+
   private buildDashboardResponse(
     properties: any[],
     contracts: any[],
@@ -109,187 +113,187 @@ export class DashboardService {
       const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
       // Platform-wide statistics
-      const totalAgencies = await prisma.agency.count({
+      const totalAgencies = await this.prisma.agency.count({
         where: { status: 'ACTIVE' },
       }).catch(() => 0);
 
-      const totalUsers = await prisma.user.count({
+      const totalUsers = await this.prisma.user.count({
         where: { status: 'ACTIVE' },
       }).catch(() => 0);
 
-      const totalProperties = await prisma.property.count({
+      const totalProperties = await this.prisma.property.count({
         where: { deleted: false },
       }).catch(() => 0);
 
-      const occupiedProperties = await prisma.property.count({
+      const occupiedProperties = await this.prisma.property.count({
         where: { deleted: false, status: 'ALUGADO' },
       }).catch(() => 0);
 
-      const availableProperties = await prisma.property.count({
+      const availableProperties = await this.prisma.property.count({
         where: { deleted: false, status: 'DISPONIVEL' },
       }).catch(() => 0);
 
-      const activeContracts = await prisma.contract.count({
+      const activeContracts = await this.prisma.contract.count({
         where: { deleted: false, status: 'ATIVO' },
       }).catch(() => 0);
 
-    // Calculate monthly revenue (all payments this month)
-    const paymentsThisMonth = await prisma.payment.findMany({
-      where: {
-        dataPagamento: {
-          gte: firstDayOfMonth,
-        },
-      },
-    }).catch(() => []);
-
-    const monthlyRevenue = paymentsThisMonth.reduce((sum, p) => {
-      const value = Number(p.valorPago) || 0;
-      return sum + value;
-    }, 0);
-
-    // Calculate MR3X platform fee (2% of revenue)
-    const platformFee = monthlyRevenue * 0.02;
-
-    // Get overdue properties
-    const overdueProperties = await prisma.property.findMany({
-      where: {
-        deleted: false,
-        status: 'ALUGADO',
-        nextDueDate: {
-          lt: now,
-        },
-      },
-    }).catch(() => []);
-
-    const overdueCount = overdueProperties.length;
-
-    // Calculate overdue revenue
-    const overdueRevenue = overdueProperties.reduce((sum, prop) => {
-      const rent = Number(prop.monthlyRent) || 0;
-      return sum + rent;
-    }, 0);
-
-    // Calculate received revenue (paid this month)
-    const receivedRevenue = monthlyRevenue;
-
-    // Get pending payments count
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const pendingPayments = await prisma.contract.count({
-      where: {
-        deleted: false,
-        status: 'ATIVO',
-        OR: [
-          { lastPaymentDate: null },
-          { lastPaymentDate: { lt: thirtyDaysAgo } },
-        ],
-      },
-    }).catch(() => 0);
-
-    // Get recent payments
-    const recentPayments = await prisma.payment.findMany({
-      orderBy: {
-        dataPagamento: 'desc',
-      },
-      take: 10,
-      include: {
-        property: {
-          select: {
-            id: true,
-            name: true,
-            address: true,
+      // Calculate monthly revenue (all payments this month)
+      const paymentsThisMonth = await this.prisma.payment.findMany({
+        where: {
+          dataPagamento: {
+            gte: firstDayOfMonth,
           },
         },
-        user: {
-          select: {
-            id: true,
-            name: true,
+      }).catch(() => []);
+
+      const monthlyRevenue = (paymentsThisMonth as any[]).reduce((sum: number, p: any) => {
+        const value = Number(p.valorPago) || 0;
+        return sum + value;
+      }, 0);
+
+      // Calculate MR3X platform fee (2% of revenue)
+      const platformFee = Number(monthlyRevenue) * 0.02;
+
+      // Get overdue properties
+      const overdueProperties = await this.prisma.property.findMany({
+        where: {
+          deleted: false,
+          status: 'ALUGADO',
+          nextDueDate: {
+            lt: now,
           },
         },
-        agency: {
-          select: {
-            id: true,
-            name: true,
+      }).catch(() => []);
+
+      const overdueCount = overdueProperties.length;
+
+      // Calculate overdue revenue
+      const overdueRevenue = (overdueProperties as any[]).reduce((sum: number, prop: any) => {
+        const rent = Number(prop.monthlyRent) || 0;
+        return sum + rent;
+      }, 0);
+
+      // Calculate received revenue (paid this month)
+      const receivedRevenue = monthlyRevenue;
+
+      // Get pending payments count
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const pendingPayments = await this.prisma.contract.count({
+        where: {
+          deleted: false,
+          status: 'ATIVO',
+          OR: [
+            { lastPaymentDate: null },
+            { lastPaymentDate: { lt: thirtyDaysAgo } },
+          ],
+        },
+      }).catch(() => 0);
+
+      // Get recent payments
+      const recentPayments = await this.prisma.payment.findMany({
+        orderBy: {
+          dataPagamento: 'desc',
+        },
+        take: 10,
+        include: {
+          property: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          agency: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-      },
-    }).catch(() => []);
+      }).catch(() => []);
 
-    // Get top agencies by property count
-    const agenciesWithStats = await prisma.agency.findMany({
-      where: { status: 'ACTIVE' },
-      include: {
-        _count: {
-          select: {
-            properties: true,
-            users: true,
-            contracts: true,
+      // Get top agencies by property count
+      const agenciesWithStats = await this.prisma.agency.findMany({
+        where: { status: 'ACTIVE' },
+        include: {
+          _count: {
+            select: {
+              properties: true,
+              users: true,
+              contracts: true,
+            },
           },
         },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: 5,
-    }).catch(() => []);
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 5,
+      }).catch(() => []);
 
-    // Calculate default rate
-    const totalDueProperties = await prisma.property.count({
-      where: {
-        deleted: false,
-        status: 'ALUGADO',
-        nextDueDate: { not: null },
-      },
-    }).catch(() => 0);
-    const defaultRate = totalDueProperties > 0 ? (overdueCount / totalDueProperties) * 100 : 0;
+      // Calculate default rate
+      const totalDueProperties = await this.prisma.property.count({
+        where: {
+          deleted: false,
+          status: 'ALUGADO',
+          nextDueDate: { not: null },
+        },
+      }).catch(() => 0);
+      const defaultRate = totalDueProperties > 0 ? (overdueCount / totalDueProperties) * 100 : 0;
 
-    // Property status breakdown
-    const maintenanceCount = await prisma.property.count({
-      where: { deleted: false, status: 'MANUTENCAO' },
-    }).catch(() => 0);
+      // Property status breakdown
+      const maintenanceCount = await this.prisma.property.count({
+        where: { deleted: false, status: 'MANUTENCAO' },
+      }).catch(() => 0);
 
-    const propertyStatusCounts = {
-      available: availableProperties,
-      occupied: occupiedProperties,
-      overdue: overdueCount,
-      maintenance: maintenanceCount,
-    };
+      const propertyStatusCounts = {
+        available: availableProperties,
+        occupied: occupiedProperties,
+        overdue: overdueCount,
+        maintenance: maintenanceCount,
+      };
 
-    return {
-      overview: {
-        totalAgencies,
-        totalUsers,
-        totalProperties,
-        occupiedProperties,
-        availableProperties,
-        activeContracts,
-        monthlyRevenue,
-        platformFee,
-        overdueCount,
-        overdueRevenue,
-        receivedRevenue,
-        pendingPayments,
-        defaultRate: parseFloat(defaultRate.toFixed(2)),
-      },
-      propertyStatus: propertyStatusCounts,
-      topAgencies: agenciesWithStats.map(agency => ({
-        id: agency.id.toString(),
-        name: agency.name,
-        propertyCount: agency._count.properties,
-        userCount: agency._count.users,
-        contractCount: agency._count.contracts,
-        plan: agency.plan,
-      })),
-      recentPayments: recentPayments.map(payment => ({
-        id: payment.id.toString(),
-        amount: payment.valorPago,
-        date: payment.dataPagamento,
-        type: payment.tipo,
-        property: payment.property || null,
-        tenant: payment.user || null,
-        agency: payment.agency || null,
-      })),
-      pendingPayments: await this.getPendingPaymentsForCEO().catch(() => []),
-    };
+      return {
+        overview: {
+          totalAgencies,
+          totalUsers,
+          totalProperties,
+          occupiedProperties,
+          availableProperties,
+          activeContracts,
+          monthlyRevenue,
+          platformFee,
+          overdueCount,
+          overdueRevenue,
+          receivedRevenue,
+          pendingPayments,
+          defaultRate: parseFloat(defaultRate.toFixed(2)),
+        },
+        propertyStatus: propertyStatusCounts,
+        topAgencies: agenciesWithStats.map((agency: any) => ({
+          id: agency.id.toString(),
+          name: agency.name,
+          propertyCount: agency._count.properties,
+          userCount: agency._count.users,
+          contractCount: agency._count.contracts,
+          plan: agency.plan,
+        })),
+        recentPayments: recentPayments.map((payment: any) => ({
+          id: payment.id.toString(),
+          amount: payment.valorPago,
+          date: payment.dataPagamento,
+          type: payment.tipo,
+          property: payment.property || null,
+          tenant: payment.user || null,
+          agency: payment.agency || null,
+        })),
+        pendingPayments: await this.getPendingPaymentsForCEO().catch(() => []),
+      };
     } catch (error: any) {
       console.error('Error in getCEODashboard:', error);
       throw error;
@@ -300,8 +304,8 @@ export class DashboardService {
     try {
       const now = new Date();
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      
-      const pendingContracts = await prisma.contract.findMany({
+
+      const pendingContracts = await this.prisma.contract.findMany({
         where: {
           deleted: false,
           status: 'ATIVO',
@@ -311,7 +315,7 @@ export class DashboardService {
           ],
         },
         include: {
-        property: {
+          property: {
             select: {
               id: true,
               name: true,
@@ -336,14 +340,14 @@ export class DashboardService {
         take: 10,
       });
 
-      return pendingContracts.map(contract => ({
+      return pendingContracts.map((contract: any) => ({
         contractId: contract.id.toString(),
         property: contract.property || null,
         tenant: contract.tenantUser || null,
         agency: contract.agency || null,
         monthlyRent: contract.monthlyRent,
         lastPaymentDate: contract.lastPaymentDate,
-        daysOverdue: contract.lastPaymentDate 
+        daysOverdue: contract.lastPaymentDate
           ? Math.floor((now.getTime() - contract.lastPaymentDate.getTime()) / (1000 * 60 * 60 * 24))
           : null,
       }));
@@ -359,7 +363,7 @@ export class DashboardService {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const [properties, contracts, paymentsThisMonth, recentPayments] = await Promise.all([
-      prisma.property.findMany({
+      this.prisma.property.findMany({
         where: {
           ownerId: BigInt(userId),
           deleted: false,
@@ -374,7 +378,7 @@ export class DashboardService {
           dueDay: true,
         },
       }),
-      prisma.contract.findMany({
+      this.prisma.contract.findMany({
         where: {
           deleted: false,
           property: {
@@ -401,7 +405,7 @@ export class DashboardService {
           },
         },
       }),
-      prisma.payment.findMany({
+      this.prisma.payment.findMany({
         where: {
           property: {
             ownerId: BigInt(userId),
@@ -414,38 +418,38 @@ export class DashboardService {
           valorPago: true,
         },
       }),
-      prisma.payment.findMany({
+      this.prisma.payment.findMany({
         where: {
           property: {
-          ownerId: BigInt(userId),
-        },
-        dataPagamento: {
-          gte: thirtyDaysAgo,
-        },
-      },
-      orderBy: {
-        dataPagamento: 'desc',
-      },
-      take: 10,
-      include: {
-        property: {
-          select: {
-            id: true,
-            name: true,
-            address: true,
+            ownerId: BigInt(userId),
+          },
+          dataPagamento: {
+            gte: thirtyDaysAgo,
           },
         },
-        user: {
-          select: {
-            id: true,
-            name: true,
+        orderBy: {
+          dataPagamento: 'desc',
+        },
+        take: 10,
+        include: {
+          property: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-      },
       }),
     ]);
 
-    const pendingContracts = contracts.filter(contract => {
+    const pendingContracts = contracts.filter((contract: any) => {
       if (contract.status !== 'ATIVO') return false;
       if (!contract.lastPaymentDate) return true;
       return contract.lastPaymentDate < thirtyDaysAgo;
@@ -456,7 +460,7 @@ export class DashboardService {
 
   async getTenantDashboard(userId: string) {
     // Get tenant's property
-    const property = await prisma.property.findFirst({
+    const property = await this.prisma.property.findFirst({
       where: {
         tenantId: BigInt(userId),
         deleted: false,
@@ -474,7 +478,7 @@ export class DashboardService {
     });
 
     // Get active contract
-    const contract = await prisma.contract.findFirst({
+    const contract = await this.prisma.contract.findFirst({
       where: {
         tenantId: BigInt(userId),
         status: 'ATIVO',
@@ -483,7 +487,7 @@ export class DashboardService {
     });
 
     // Get payment history
-    const payments = await prisma.payment.findMany({
+    const payments = await this.prisma.payment.findMany({
       where: {
         userId: BigInt(userId),
       },
@@ -494,9 +498,9 @@ export class DashboardService {
     });
 
     // Calculate next due date
-    let nextDueDate = null;
-    let daysUntilDue = null;
-    
+    let nextDueDate: Date | null = null;
+    let daysUntilDue: number | null = null;
+
     if (property?.nextDueDate) {
       nextDueDate = property.nextDueDate;
       const now = new Date();
@@ -521,7 +525,7 @@ export class DashboardService {
         status: contract.status,
         lastPaymentDate: contract.lastPaymentDate,
       } : null,
-      paymentHistory: payments.map(payment => ({
+      paymentHistory: payments.map((payment: any) => ({
         id: payment.id.toString(),
         amount: payment.valorPago,
         date: payment.dataPagamento,
@@ -532,7 +536,7 @@ export class DashboardService {
 
   async getTenantDocuments(userId: string) {
     // Get tenant's property
-    const property = await prisma.property.findFirst({
+    const property = await this.prisma.property.findFirst({
       where: {
         tenantId: BigInt(userId),
         deleted: false,
@@ -544,7 +548,7 @@ export class DashboardService {
     }
 
     // Get documents associated with the property
-    const documents = await prisma.document.findMany({
+    const documents = await this.prisma.document.findMany({
       where: {
         propertyId: property.id,
       },
@@ -553,7 +557,7 @@ export class DashboardService {
       },
     });
 
-    return documents.map(doc => ({
+    return documents.map((doc: any) => ({
       id: doc.id.toString(),
       name: doc.name,
       url: doc.url,
@@ -564,11 +568,11 @@ export class DashboardService {
   async getDueDates(userId: string, role?: string, userAgencyId?: string | null, userBrokerId?: string | null) {
     // CEO and ADMIN should see all properties, others see only their own
     const whereClause: any = {
-        deleted: false,
-        status: 'ALUGADO',
-        nextDueDate: { not: null },
+      deleted: false,
+      status: 'ALUGADO',
+      nextDueDate: { not: null },
     };
-    
+
     if (role === 'CEO' || role === 'ADMIN') {
       // no extra filter
     } else if (role === 'AGENCY_ADMIN') {
@@ -587,16 +591,16 @@ export class DashboardService {
     } else {
       whereClause.ownerId = BigInt(userId);
     }
-    
+
     const includeClause: any = {
-        tenant: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
+      tenant: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
         },
+      },
     };
 
     // Include agency for CEO/ADMIN
@@ -608,8 +612,8 @@ export class DashboardService {
         },
       };
     }
-    
-    const properties = await prisma.property.findMany({
+
+    const properties = await this.prisma.property.findMany({
       where: whereClause,
       include: includeClause,
       orderBy: {
@@ -618,9 +622,9 @@ export class DashboardService {
     });
 
     const now = new Date();
-    
-    return properties.map(property => {
-      const daysUntilDue = property.nextDueDate 
+
+    return properties.map((property: any) => {
+      const daysUntilDue = property.nextDueDate
         ? Math.ceil((property.nextDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
         : null;
 
@@ -629,13 +633,13 @@ export class DashboardService {
         propertyName: property.name,
         propertyAddress: property.address,
         tenant: property.tenant,
-        agency: (property as any).agency || null,
+        agency: property.agency || null,
         nextDueDate: property.nextDueDate,
         dueDay: property.dueDay,
         daysUntilDue,
-        status: daysUntilDue !== null 
-          ? daysUntilDue < 0 ? 'overdue' 
-          : daysUntilDue <= 7 ? 'upcoming' 
+        status: daysUntilDue !== null
+          ? daysUntilDue < 0 ? 'overdue'
+          : daysUntilDue <= 7 ? 'upcoming'
           : 'ok'
           : 'unknown',
         monthlyRent: property.monthlyRent,
@@ -643,7 +647,7 @@ export class DashboardService {
     });
   }
 
-  async getAgencyAdminDashboard(userId: string, userAgencyId?: string | null) {
+  async getAgencyAdminDashboard(_userId: string, userAgencyId?: string | null) {
     if (!userAgencyId) {
       return this.emptyDashboard();
     }
@@ -654,7 +658,7 @@ export class DashboardService {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const [properties, contracts, paymentsThisMonth, recentPayments] = await Promise.all([
-      prisma.property.findMany({
+      this.prisma.property.findMany({
         where: {
           deleted: false,
           agencyId,
@@ -669,7 +673,7 @@ export class DashboardService {
           dueDay: true,
         },
       }),
-      prisma.contract.findMany({
+      this.prisma.contract.findMany({
         where: {
           deleted: false,
           agencyId,
@@ -694,7 +698,7 @@ export class DashboardService {
           },
         },
       }),
-      prisma.payment.findMany({
+      this.prisma.payment.findMany({
         where: {
           agencyId,
           dataPagamento: {
@@ -705,7 +709,7 @@ export class DashboardService {
           valorPago: true,
         },
       }),
-      prisma.payment.findMany({
+      this.prisma.payment.findMany({
         where: {
           agencyId,
         },
@@ -737,7 +741,7 @@ export class DashboardService {
       }),
     ]);
 
-    const pendingContracts = contracts.filter(contract => {
+    const pendingContracts = contracts.filter((contract: any) => {
       if (contract.status !== 'ATIVO') return false;
       if (!contract.lastPaymentDate) return true;
       return contract.lastPaymentDate < thirtyDaysAgo;
@@ -791,7 +795,7 @@ export class DashboardService {
     }
 
     const [properties, contracts, paymentsThisMonth, recentPayments] = await Promise.all([
-      prisma.property.findMany({
+      this.prisma.property.findMany({
         where: propertyWhere,
         select: {
           id: true,
@@ -803,7 +807,7 @@ export class DashboardService {
           dueDay: true,
         },
       }),
-      prisma.contract.findMany({
+      this.prisma.contract.findMany({
         where: contractWhere,
         include: {
           property: {
@@ -825,13 +829,13 @@ export class DashboardService {
           },
         },
       }),
-      prisma.payment.findMany({
+      this.prisma.payment.findMany({
         where: paymentWhere,
         select: {
           valorPago: true,
         },
       }),
-      prisma.payment.findMany({
+      this.prisma.payment.findMany({
         where: recentPaymentWhere,
         orderBy: {
           dataPagamento: 'desc',
@@ -855,7 +859,7 @@ export class DashboardService {
       }),
     ]);
 
-    const pendingContracts = contracts.filter(contract => {
+    const pendingContracts = contracts.filter((contract: any) => {
       if (contract.status !== 'ATIVO') return false;
       if (!contract.lastPaymentDate) return true;
       return contract.lastPaymentDate < thirtyDaysAgo;
@@ -900,7 +904,7 @@ export class DashboardService {
     }
 
     const [properties, contracts, paymentsThisMonth, recentPayments] = await Promise.all([
-      prisma.property.findMany({
+      this.prisma.property.findMany({
         where: propertyWhere,
         select: {
           id: true,
@@ -912,7 +916,7 @@ export class DashboardService {
           dueDay: true,
         },
       }),
-      prisma.contract.findMany({
+      this.prisma.contract.findMany({
         where: {
           deleted: false,
           property: {
@@ -940,13 +944,13 @@ export class DashboardService {
           },
         },
       }),
-      prisma.payment.findMany({
+      this.prisma.payment.findMany({
         where: paymentWhere,
         select: {
           valorPago: true,
         },
       }),
-      prisma.payment.findMany({
+      this.prisma.payment.findMany({
         where: recentPaymentWhere,
         orderBy: {
           dataPagamento: 'desc',
@@ -970,7 +974,7 @@ export class DashboardService {
       }),
     ]);
 
-    const pendingContracts = contracts.filter(contract => {
+    const pendingContracts = contracts.filter((contract: any) => {
       if (contract.status !== 'ATIVO') return false;
       if (!contract.lastPaymentDate) return true;
       return contract.lastPaymentDate < thirtyDaysAgo;
@@ -979,4 +983,3 @@ export class DashboardService {
     return this.buildDashboardResponse(properties, contracts, paymentsThisMonth, pendingContracts, recentPayments);
   }
 }
-

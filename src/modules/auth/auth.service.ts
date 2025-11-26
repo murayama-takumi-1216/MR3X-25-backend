@@ -1,31 +1,142 @@
-import bcrypt from 'bcrypt';
-import { prisma } from '../../config/database';
-import { generateToken, JwtPayload } from '../../config/jwt';
-import { AppError, UnauthorizedError } from '../../shared/errors/AppError';
-import { env } from '../../config/env';
-import { LoginDTO, RegisterDTO, ForgotPasswordDTO, ResetPasswordDTO, RequestEmailCodeDTO, ConfirmEmailCodeDTO, CompleteRegisterDTO } from './auth.dto';
-import crypto from 'crypto';
-import { sendEmail } from '../../config/mail';
+import { Injectable, UnauthorizedException, BadRequestException, ConflictException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
+import { PrismaService } from '../../config/prisma.service';
+import { RegisterDto, LoginDto, VerifyEmailRequestDto, VerifyEmailConfirmDto, ForgotPasswordDto, ResetPasswordDto, CompleteRegisterDto } from './dto/auth.dto';
+import { UserRole } from '@prisma/client';
 
 const EMAIL_CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const EMAIL_CODE_COOLDOWN_MS = 60 * 1000; // 60 seconds
-const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
-const PASSWORD_RESET_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes between e-mails
 
+@Injectable()
 export class AuthService {
-  private hash(value: string) {
-    return crypto.createHash('sha256').update(value).digest('hex');
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService,
+    private configService: ConfigService,
+  ) {}
+
+  async register(dto: RegisterDto) {
+    // Check if email already exists
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('Email already registered');
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    // Create user
+    const user = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        password: hashedPassword,
+        name: dto.name,
+        document: dto.document,
+        phone: dto.phone,
+        role: dto.role || UserRole.PROPRIETARIO,
+        plan: 'FREE',
+        emailVerified: false,
+      },
+    });
+
+    // Generate verification code
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeHash = await bcrypt.hash(verificationCode, 10);
+
+    await this.prisma.emailVerification.create({
+      data: {
+        requestId: uuidv4(),
+        email: dto.email,
+        codeHash,
+        purpose: 'register',
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+      },
+    });
+
+    // TODO: Send email with verification code
+    console.log(`Verification code for ${dto.email}: ${verificationCode}`);
+
+    return {
+      message: 'Registration successful. Please verify your email.',
+      userId: user.id.toString(),
+      email: user.email,
+    };
   }
 
-  private generateNumericCode(): string {
-    return (Math.floor(100000 + Math.random() * 900000)).toString();
+  async login(dto: LoginDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+      include: { agency: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const isPasswordValid = await bcrypt.compare(dto.password, user.password);
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.status !== 'ACTIVE') {
+      throw new UnauthorizedException('Account is inactive');
+    }
+
+    // Update last login
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() },
+    });
+
+    // Generate tokens
+    const payload = {
+      sub: user.id.toString(),
+      email: user.email,
+      role: user.role,
+      agencyId: user.agencyId?.toString(),
+    };
+
+    const accessToken = this.jwtService.sign(payload);
+    const refreshToken = uuidv4();
+
+    // Store refresh token
+    await this.prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      },
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id.toString(),
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        plan: user.plan,
+        emailVerified: user.emailVerified,
+        agencyId: user.agencyId?.toString(),
+        agencyName: user.agency?.name,
+      },
+    };
   }
 
-  async requestEmailCode(data: RequestEmailCodeDTO) {
-    const email = data.email.toLowerCase();
+  async verifyEmailRequest(dto: VerifyEmailRequestDto) {
+    const email = dto.email.toLowerCase();
 
     // Cooldown: if a recent record exists, block
-    const recent = await prisma.emailVerification.findFirst({
+    const recent = await this.prisma.emailVerification.findFirst({
       where: {
         email,
         purpose: 'register',
@@ -33,15 +144,20 @@ export class AuthService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
     if (recent) {
-      return { cooldownSeconds: Math.ceil((EMAIL_CODE_COOLDOWN_MS - (Date.now() - recent.createdAt.getTime())) / 1000) };
+      return {
+        requestId: recent.requestId,
+        cooldownSeconds: Math.ceil((EMAIL_CODE_COOLDOWN_MS - (Date.now() - recent.createdAt.getTime())) / 1000)
+      };
     }
 
+    // Generate new verification code
     const code = this.generateNumericCode();
-    const requestId = crypto.randomUUID();
+    const requestId = uuidv4();
     const expiresAt = new Date(Date.now() + EMAIL_CODE_TTL_MS);
 
-    await prisma.emailVerification.create({
+    await this.prisma.emailVerification.create({
       data: {
         requestId,
         email,
@@ -51,105 +167,226 @@ export class AuthService {
       },
     });
 
-    await sendEmail({
-      to: email,
-      subject: 'MR3X - Código de verificação',
-      html: `<p>Seu código de verificação é <strong>${code}</strong>.</p><p>Ele expira em 10 minutos.</p>`,
-      text: `Seu código de verificação é ${code}. Ele expira em 10 minutos.`,
-    });
+    // TODO: Send email with verification code
+    console.log(`Verification code for ${email}: ${code}`);
 
     return { requestId, expiresAt, cooldownSeconds: Math.ceil(EMAIL_CODE_COOLDOWN_MS / 1000) };
   }
 
-  async confirmEmailCode(data: ConfirmEmailCodeDTO) {
-    const record = await prisma.emailVerification.findUnique({ where: { requestId: data.requestId } });
+  async verifyEmailConfirm(dto: VerifyEmailConfirmDto) {
+    const record = await this.prisma.emailVerification.findUnique({
+      where: { requestId: dto.requestId },
+    });
+
     if (!record || record.usedAt || record.expiresAt < new Date()) {
-      throw new AppError('Invalid or expired code', 400);
-    }
-    if (record.attempts >= record.maxAttempts) {
-      throw new AppError('Too many attempts', 429);
+      throw new BadRequestException('Invalid or expired code');
     }
 
-    const isValid = this.hash(data.code) === record.codeHash;
-    await prisma.emailVerification.update({
+    if (record.attempts >= record.maxAttempts) {
+      throw new BadRequestException('Too many attempts');
+    }
+
+    const isValid = this.hash(dto.code) === record.codeHash;
+
+    await this.prisma.emailVerification.update({
       where: { id: record.id },
       data: {
-        attempts: { increment: 1 },
+        attempts: record.attempts + 1,
         usedAt: isValid ? new Date() : undefined,
       },
     });
 
     if (!isValid) {
-      throw new AppError('Invalid code', 400);
+      throw new BadRequestException('Invalid code');
     }
 
-    // issue short-lived registration token embedding the verified email
-    const registrationToken = generateToken({
-      userId: '0',
+    // Issue short-lived registration token embedding the verified email
+    const payload = {
+      sub: '0',
       email: record.email,
-      role: 'API_CLIENT' as any, // unused here
-    });
+      type: 'registration',
+    };
+
+    const registrationToken = this.jwtService.sign(payload, { expiresIn: '30m' });
 
     return { registrationToken, email: record.email, expiresInSeconds: 30 * 60 };
   }
 
-  async completeRegistration(data: CompleteRegisterDTO) {
-    // verify registration token by reading email from it
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (!user) {
+      // Return success even if email not found (security)
+      return { message: 'If the email exists, a reset code has been sent' };
+    }
+
+    // Generate reset code
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeHash = await bcrypt.hash(resetCode, 10);
+
+    // Delete old reset codes
+    await this.prisma.emailVerification.deleteMany({
+      where: { email: dto.email, purpose: 'password-reset' },
+    });
+
+    await this.prisma.emailVerification.create({
+      data: {
+        requestId: uuidv4(),
+        email: dto.email,
+        codeHash,
+        purpose: 'password-reset',
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+
+    // TODO: Send email with reset code
+    console.log(`Password reset code for ${dto.email}: ${resetCode}`);
+
+    return { message: 'If the email exists, a reset code has been sent' };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const verification = await this.prisma.emailVerification.findFirst({
+      where: {
+        email: dto.email,
+        purpose: 'password-reset',
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!verification) {
+      throw new BadRequestException('Invalid or expired reset code');
+    }
+
+    const isCodeValid = await bcrypt.compare(dto.code, verification.codeHash);
+
+    if (!isCodeValid) {
+      throw new BadRequestException('Invalid reset code');
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
+
+    // Update password
+    await this.prisma.user.update({
+      where: { email: dto.email },
+      data: { password: hashedPassword },
+    });
+
+    // Mark verification as used
+    await this.prisma.emailVerification.update({
+      where: { id: verification.id },
+      data: { usedAt: new Date() },
+    });
+
+    // Revoke all refresh tokens for security
+    await this.prisma.refreshToken.updateMany({
+      where: { user: { email: dto.email } },
+      data: { isRevoked: true },
+    });
+
+    return { message: 'Password reset successfully' };
+  }
+
+  async logout(userId: bigint, token?: string) {
+    if (token) {
+      await this.prisma.refreshToken.updateMany({
+        where: { token, userId },
+        data: { isRevoked: true },
+      });
+    }
+
+    return { message: 'Logged out successfully' };
+  }
+
+  async logoutAll(userId: bigint) {
+    await this.prisma.refreshToken.updateMany({
+      where: { userId },
+      data: { isRevoked: true },
+    });
+
+    return { message: 'Logged out from all devices' };
+  }
+
+  private hash(value: string): string {
+    return crypto.createHash('sha256').update(value).digest('hex');
+  }
+
+  private generateNumericCode(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
+  async completeRegistration(dto: CompleteRegisterDto) {
+    // Verify registration token by reading email from it
     let email: string | undefined;
     try {
-      const payload = JSON.parse(Buffer.from(data.registrationToken.split('.')[1], 'base64').toString());
+      const payload = JSON.parse(
+        Buffer.from(dto.registrationToken.split('.')[1], 'base64').toString()
+      );
       email = payload.email;
     } catch {
-      throw new AppError('Invalid registration token', 400);
+      throw new BadRequestException('Invalid registration token');
     }
-    if (!email) throw new AppError('Invalid registration token', 400);
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) throw new AppError('User already exists', 400);
+    if (!email) {
+      throw new BadRequestException('Invalid registration token');
+    }
 
-    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('User already exists');
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     // For AGENCY_ADMIN: Create agency first, then link user to it
     let agencyId: bigint | undefined = undefined;
-    
-    if (data.role === 'AGENCY_ADMIN') {
-      if (!data.agencyName || !data.agencyCnpj) {
-        throw new AppError('Agency name and CNPJ are required for agency owners', 400);
+
+    if (dto.role === UserRole.AGENCY_ADMIN) {
+      if (!dto.agencyName || !dto.agencyCnpj) {
+        throw new BadRequestException('Agency name and CNPJ are required for agency owners');
       }
 
       // Check if agency with this CNPJ already exists
-      const cleanCnpj = data.agencyCnpj.replace(/\D/g, '');
-      const existingAgency = await prisma.agency.findUnique({
+      const cleanCnpj = dto.agencyCnpj.replace(/\D/g, '');
+      const existingAgency = await this.prisma.agency.findUnique({
         where: { cnpj: cleanCnpj },
       });
 
       if (existingAgency) {
-        throw new AppError('Agency with this CNPJ already exists', 400);
+        throw new ConflictException('Agency with this CNPJ already exists');
       }
 
       // Determine plan-based limits
       const planLimits: Record<string, { maxProperties: number; maxUsers: number }> = {
-        'FREE': { maxProperties: 5, maxUsers: 3 },
-        'ESSENTIAL': { maxProperties: 50, maxUsers: 10 },
-        'PROFESSIONAL': { maxProperties: 100, maxUsers: 20 },
-        'ENTERPRISE': { maxProperties: 500, maxUsers: 100 },
+        FREE: { maxProperties: 5, maxUsers: 3 },
+        ESSENTIAL: { maxProperties: 50, maxUsers: 10 },
+        PROFESSIONAL: { maxProperties: 100, maxUsers: 20 },
+        ENTERPRISE: { maxProperties: 500, maxUsers: 100 },
       };
 
-      const limits = planLimits[data.plan] || planLimits['FREE'];
+      const limits = planLimits[dto.plan] || planLimits['FREE'];
 
       // Create agency using user's information
-      const agency = await prisma.agency.create({
+      const agency = await this.prisma.agency.create({
         data: {
-          name: data.agencyName,
+          name: dto.agencyName,
           cnpj: cleanCnpj,
-          email: email, // Agency email = owner's email
-          phone: data.phone || null,
-          address: data.address || null,
-          city: data.city || null,
-          state: data.state || null,
-          zipCode: data.cep || null,
+          email: email,
+          phone: dto.phone || null,
+          address: dto.address || null,
+          city: dto.city || null,
+          state: dto.state || null,
+          zipCode: dto.cep || null,
           status: 'ACTIVE',
-          plan: data.plan,
+          plan: dto.plan,
           maxProperties: limits.maxProperties,
           maxUsers: limits.maxUsers,
         },
@@ -159,124 +396,25 @@ export class AuthService {
     }
 
     // Create user account
-    const user = await prisma.user.create({
+    const user = await this.prisma.user.create({
       data: {
         email,
         password: hashedPassword,
-        role: data.role,
-        plan: data.plan,
-        name: data.name,
-        phone: data.phone,
-        document: data.document,
-        birthDate: data.birthDate ? new Date(data.birthDate) : null,
-        address: data.address,
-        cep: data.cep,
-        neighborhood: data.neighborhood,
-        number: data.number,
-        city: data.city,
-        state: data.state,
+        role: dto.role,
+        plan: dto.plan,
+        name: dto.name,
+        phone: dto.phone,
+        document: dto.document,
+        birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
+        address: dto.address,
+        cep: dto.cep,
+        neighborhood: dto.neighborhood,
+        number: dto.number,
+        city: dto.city,
+        state: dto.state,
         status: 'ACTIVE',
         emailVerified: true,
-        agencyId: agencyId, // Link to agency if AGENCY_ADMIN
-      },
-      select: { id: true, email: true, role: true, plan: true, name: true, createdAt: true },
-    });
-    return user;
-  }
-  async login(data: LoginDTO) {
-    const rawEmail = (data.email || '').trim();
-    const emailLower = rawEmail.toLowerCase();
-    // Be resilient to case differences stored historically
-    const user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { email: rawEmail },
-          { email: emailLower },
-        ],
-      },
-    });
-
-    if (!user) {
-      throw new UnauthorizedError('Invalid credentials');
-    }
-
-    if (user.status === 'SUSPENDED') {
-      throw new AppError('Conta suspensa. Entre em contato com o suporte.', 403);
-    }
-
-    const isPasswordValid = await bcrypt.compare((data.password || '').trim(), user.password);
-
-    if (!isPasswordValid) {
-      throw new UnauthorizedError('Invalid credentials');
-    }
-
-    // Update last login
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLogin: new Date() },
-    });
-
-    const payload: JwtPayload = {
-      userId: user.id.toString(),
-      email: user.email,
-      role: user.role as any,
-      plan: user.plan,
-      companyId: user.companyId?.toString(),
-      ownerId: user.ownerId?.toString(),
-      agencyId: user.agencyId?.toString(),
-      brokerId: user.brokerId?.toString(),
-    };
-
-    // Generate access token only (no refresh token needed)
-    const accessToken = generateToken(payload);
-
-    return { 
-      accessToken,
-      user: {
-        id: user.id.toString(),
-        email: user.email,
-        role: user.role,
-        plan: user.plan,
-          name: user.name,
-          agencyId: user.agencyId?.toString(),
-          brokerId: user.brokerId?.toString(),
-      }
-    };
-  }
-
-  async register(data: RegisterDTO) {
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: data.email },
-    });
-
-    if (existingUser) {
-      throw new AppError('User already exists', 400);
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(data.password, 10);
-
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email: data.email,
-        password: hashedPassword,
-        role: data.role,
-        plan: data.plan,
-        name: data.name,
-        phone: data.phone,
-        document: data.document,
-        birthDate: data.birthDate ? new Date(data.birthDate) : null,
-        address: data.address,
-        cep: data.cep,
-        neighborhood: data.neighborhood,
-        number: data.number,
-        city: data.city,
-        state: data.state,
-        companyId: data.companyId ? BigInt(data.companyId) : null,
-        ownerId: data.ownerId ? BigInt(data.ownerId) : null,
-        status: 'ACTIVE',
+        agencyId: agencyId,
       },
       select: {
         id: true,
@@ -288,144 +426,26 @@ export class AuthService {
       },
     });
 
-    return user;
+    return {
+      id: user.id.toString(),
+      email: user.email,
+      role: user.role,
+      plan: user.plan,
+      name: user.name,
+      createdAt: user.createdAt,
+    };
   }
 
-  async forgotPassword(data: ForgotPasswordDTO) {
-    const email = data.email.toLowerCase();
-    const user = await prisma.user.findUnique({
+  async validateUser(email: string, password: string) {
+    const user = await this.prisma.user.findUnique({
       where: { email },
     });
 
-    if (!user) {
-      // Don't reveal if user exists
-      return { message: 'If the email exists, a reset link will be sent' };
+    if (user && (await bcrypt.compare(password, user.password))) {
+      const { password: _, ...result } = user;
+      return result;
     }
 
-    // Enforce cooldown to avoid spamming
-    const recentRequest = await prisma.emailVerification.findFirst({
-      where: {
-        email,
-        purpose: 'password_reset',
-        createdAt: { gt: new Date(Date.now() - PASSWORD_RESET_COOLDOWN_MS) },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (recentRequest) {
-      const secondsRemaining = Math.ceil(
-        (PASSWORD_RESET_COOLDOWN_MS - (Date.now() - recentRequest.createdAt.getTime())) / 1000,
-      );
-      return { cooldownSeconds: secondsRemaining };
-    }
-
-    await prisma.emailVerification.deleteMany({
-      where: {
-        email,
-        purpose: 'password_reset',
-      },
-    });
-
-    const requestId = crypto.randomUUID();
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = this.hash(rawToken);
-    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
-
-    await prisma.emailVerification.create({
-      data: {
-        requestId,
-        email,
-        codeHash: tokenHash,
-        purpose: 'password_reset',
-        expiresAt,
-        attempts: 0,
-        maxAttempts: 5,
-      },
-    });
-
-    const frontendUrl = (env.APP_RESET_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-    const compositeToken = `${requestId}.${rawToken}`;
-    const resetLink = `${frontendUrl}/reset-password?token=${encodeURIComponent(compositeToken)}`;
-
-    await sendEmail({
-      to: email,
-      subject: 'MR3X - Redefinição de Senha',
-      html: `
-        <p>Olá ${user.name || ''},</p>
-        <p>Recebemos uma solicitação para redefinir a senha da sua conta MR3X.</p>
-        <p>Para escolher uma nova senha, clique no botão abaixo:</p>
-        <p>
-          <a href="${resetLink}" style="display:inline-block;padding:10px 18px;background:#f97316;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">
-            Redefinir senha
-          </a>
-        </p>
-        <p>Este link é válido por 1 hora. Se você não solicitou esta alteração, ignore este e-mail.</p>
-        <p>Equipe MR3X</p>
-      `,
-      text: `Recebemos uma solicitação para redefinir sua senha MR3X. Utilize o link abaixo (válido por 1 hora):\n${resetLink}\nSe não foi você, ignore este e-mail.`,
-    });
-
-    return { message: 'If the email exists, a reset link will be sent' };
-  }
-
-  async resetPassword(data: ResetPasswordDTO) {
-    const tokenParts = data.token.split('.');
-    if (tokenParts.length !== 2) {
-      throw new AppError('Invalid token', 400);
-    }
-
-    const [requestId, rawToken] = tokenParts;
-
-    const record = await prisma.emailVerification.findUnique({ where: { requestId } });
-
-    if (!record || record.purpose !== 'password_reset') {
-      throw new AppError('Invalid token', 400);
-    }
-
-    if (record.usedAt) {
-      throw new AppError('Token already used', 400);
-    }
-
-    if (record.expiresAt < new Date()) {
-      throw new AppError('Token expired', 400);
-    }
-
-    if (this.hash(rawToken) !== record.codeHash) {
-      throw new AppError('Invalid token', 400);
-    }
-
-    const user = await prisma.user.findUnique({ where: { email: record.email } });
-    if (!user) {
-      throw new AppError('User not found', 404);
-    }
-
-    const hashedPassword = await bcrypt.hash(data.newPassword, 10);
-
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: user.id },
-        data: { password: hashedPassword },
-      }),
-      prisma.emailVerification.update({
-        where: { id: record.id },
-        data: {
-          usedAt: new Date(),
-          attempts: { increment: 1 },
-        },
-      }),
-    ]);
-
-    return { message: 'Password reset successfully' };
-  }
-
-  async logout(_refreshToken?: string) {
-    // No refresh token needed - tokens expire naturally
-    return { message: 'Logged out successfully' };
-  }
-
-  async logoutAll(_userId: string) {
-    // No refresh tokens to revoke - tokens expire naturally
-    return { message: 'Logged out from all devices successfully' };
+    return null;
   }
 }
-

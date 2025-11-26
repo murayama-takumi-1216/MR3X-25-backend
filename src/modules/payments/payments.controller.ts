@@ -1,79 +1,80 @@
-import { Request, Response } from 'express';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
-import { paymentCreateSchema, paymentUpdateSchema } from './payments.dto';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CreatePaymentDto } from './dto/create-payment.dto';
+import { UpdatePaymentDto } from './dto/update-payment.dto';
 
+@ApiTags('Payments')
+@Controller('payments')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class PaymentsController {
-  private paymentsService: PaymentsService;
+  constructor(private readonly paymentsService: PaymentsService) {}
 
-  constructor() {
-    this.paymentsService = new PaymentsService();
+  @Get()
+  @ApiOperation({ summary: 'List all payments' })
+  async findAll(
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('role') role: string,
+    @CurrentUser('agencyId') agencyId?: string,
+    @CurrentUser('brokerId') brokerId?: string,
+  ) {
+    return this.paymentsService.findAll(userId, role, agencyId, brokerId);
   }
 
-  getPayments = async (req: Request, res: Response) => {
-    try {
-      const userId = req.user!.userId;
-      const role = req.user!.role;
-      const agencyId = req.user!.agencyId;
-      const brokerId = req.user!.brokerId;
-      const result = await this.paymentsService.getPayments(userId, role, agencyId, brokerId);
-      res.json(result);
-    } catch (error: any) {
-      console.error('Error in getPayments:', error);
-      res.status(500).json({
-        status: 'error',
-        message: error.message || 'Internal server error',
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      });
-    }
-  };
+  @Get('reports/annual')
+  @ApiOperation({ summary: 'Get annual payment report' })
+  @ApiQuery({ name: 'year', required: false, type: Number })
+  async getAnnualReport(
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('role') role: string,
+    @CurrentUser('agencyId') agencyId?: string,
+    @Query('year') year?: string,
+  ) {
+    const yearNum = year ? parseInt(year) : undefined;
+    return this.paymentsService.getAnnualReport(userId, role, yearNum, agencyId);
+  }
 
-  getPaymentById = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const userId = req.user!.userId;
-    const role = req.user!.role;
-    const result = await this.paymentsService.getPaymentById(id, userId, role);
-    res.json(result);
-  };
+  @Get(':id')
+  @ApiOperation({ summary: 'Get payment by ID' })
+  async findOne(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.paymentsService.findOne(id, userId, role);
+  }
 
-  createPayment = async (req: Request, res: Response) => {
-    const userId = req.user!.userId;
-    const data = paymentCreateSchema.parse(req.body);
-    const result = await this.paymentsService.createPayment(userId, data);
-    res.json(result);
-  };
+  @Post()
+  @ApiOperation({ summary: 'Create a new payment' })
+  async create(
+    @Body() data: CreatePaymentDto,
+    @CurrentUser('sub') userId: string,
+  ) {
+    return this.paymentsService.create(userId, data);
+  }
 
-  updatePayment = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const userId = req.user!.userId;
-    const role = req.user!.role;
-    const data = paymentUpdateSchema.parse(req.body);
-    const result = await this.paymentsService.updatePayment(id, userId, role, data);
-    res.json(result);
-  };
+  @Put(':id')
+  @ApiOperation({ summary: 'Update payment' })
+  async update(
+    @Param('id') id: string,
+    @Body() data: UpdatePaymentDto,
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.paymentsService.update(id, userId, role, data);
+  }
 
-  deletePayment = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const userId = req.user!.userId;
-    const role = req.user!.role;
-    await this.paymentsService.deletePayment(id, userId, role);
-    res.status(204).send();
-  };
-
-  getAnnualReport = async (req: Request, res: Response) => {
-    try {
-      const userId = req.user!.userId;
-      const role = req.user!.role;
-      const year = req.query.year ? parseInt(req.query.year as string) : undefined;
-      const result = await this.paymentsService.getAnnualReport(userId, role, year);
-      res.json(result);
-    } catch (error: any) {
-      console.error('Error in getAnnualReport:', error);
-      res.status(500).json({
-        status: 'error',
-        message: error.message || 'Internal server error',
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      });
-    }
-  };
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete payment' })
+  async remove(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.paymentsService.remove(id, userId, role);
+  }
 }
-

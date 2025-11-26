@@ -1,5 +1,5 @@
-import { prisma } from '../../config/database';
-import { AppError, NotFoundError } from '../../shared/errors/AppError';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { PrismaService } from '../../config/prisma.service';
 
 export interface AgencyCreateDTO {
   name: string;
@@ -28,31 +28,34 @@ export interface AgencyUpdateDTO {
   status?: string;
   maxProperties?: number;
   maxUsers?: number;
-  agencyFee?: number; // Commission percentage for this agency (0-100)
+  agencyFee?: number;
 }
 
+@Injectable()
 export class AgenciesService {
+  constructor(private prisma: PrismaService) {}
+
   async createAgency(data: AgencyCreateDTO) {
     // Check if agency with this CNPJ already exists
     const cleanCnpj = data.cnpj.replace(/\D/g, '');
-    const existingAgency = await prisma.agency.findUnique({
+    const existingAgency = await this.prisma.agency.findUnique({
       where: { cnpj: cleanCnpj },
     });
 
     if (existingAgency) {
-      throw new AppError('Agency with this CNPJ already exists', 400);
+      throw new BadRequestException('Agency with this CNPJ already exists');
     }
 
     // Check if agency with this email already exists
-    const existingEmail = await prisma.agency.findFirst({
+    const existingEmail = await this.prisma.agency.findFirst({
       where: { email: data.email },
     });
 
     if (existingEmail) {
-      throw new AppError('Agency with this email already exists', 400);
+      throw new BadRequestException('Agency with this email already exists');
     }
 
-    const agency = await prisma.agency.create({
+    const agency = await this.prisma.agency.create({
       data: {
         name: data.name,
         cnpj: cleanCnpj,
@@ -94,11 +97,30 @@ export class AgenciesService {
       },
     });
 
-    return agency;
+    return {
+      id: agency.id.toString(),
+      name: agency.name,
+      cnpj: agency.cnpj,
+      email: agency.email,
+      phone: agency.phone || '',
+      address: agency.address || '',
+      city: agency.city || '',
+      state: agency.state || '',
+      zipCode: agency.zipCode || '',
+      status: agency.status,
+      plan: agency.plan,
+      maxProperties: agency.maxProperties || 0,
+      maxUsers: agency.maxUsers || 0,
+      agencyFee: agency.agencyFee ?? 8,
+      userCount: agency._count.users,
+      propertyCount: agency._count.properties,
+      createdAt: agency.createdAt,
+      updatedAt: agency.updatedAt,
+    };
   }
 
   async getAgencies() {
-    const agencies = await prisma.agency.findMany({
+    const agencies = await this.prisma.agency.findMany({
       select: {
         id: true,
         name: true,
@@ -146,7 +168,7 @@ export class AgenciesService {
   }
 
   async getAgencyById(id: string) {
-    const agency = await prisma.agency.findUnique({
+    const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(id) },
       select: {
         id: true,
@@ -187,7 +209,7 @@ export class AgenciesService {
     });
 
     if (!agency) {
-      throw new NotFoundError('Agency not found');
+      throw new NotFoundException('Agency not found');
     }
 
     return {
@@ -225,26 +247,26 @@ export class AgenciesService {
   }
 
   async updateAgency(id: string, data: AgencyUpdateDTO) {
-    const agency = await prisma.agency.findUnique({
+    const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(id) },
     });
 
     if (!agency) {
-      throw new NotFoundError('Agency not found');
+      throw new NotFoundException('Agency not found');
     }
 
     // If email is being updated, check for duplicates
     if (data.email && data.email !== agency.email) {
-      const existingEmail = await prisma.agency.findFirst({
+      const existingEmail = await this.prisma.agency.findFirst({
         where: { email: data.email },
       });
 
       if (existingEmail) {
-        throw new AppError('Agency with this email already exists', 400);
+        throw new BadRequestException('Agency with this email already exists');
       }
     }
 
-    const updated = await prisma.agency.update({
+    const updated = await this.prisma.agency.update({
       where: { id: BigInt(id) },
       data: {
         name: data.name,
@@ -309,7 +331,7 @@ export class AgenciesService {
   }
 
   async deleteAgency(id: string) {
-    const agency = await prisma.agency.findUnique({
+    const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(id) },
       include: {
         users: true,
@@ -318,22 +340,21 @@ export class AgenciesService {
     });
 
     if (!agency) {
-      throw new NotFoundError('Agency not found');
+      throw new NotFoundException('Agency not found');
     }
 
     if (agency.users.length > 0) {
-      throw new AppError('Cannot delete agency with associated users', 400);
+      throw new BadRequestException('Cannot delete agency with associated users');
     }
 
     if (agency.properties.length > 0) {
-      throw new AppError('Cannot delete agency with associated properties', 400);
+      throw new BadRequestException('Cannot delete agency with associated properties');
     }
 
-    await prisma.agency.delete({
+    await this.prisma.agency.delete({
       where: { id: BigInt(id) },
     });
 
     return { message: 'Agency deleted successfully' };
   }
 }
-

@@ -1,31 +1,44 @@
-import { Request, Response } from 'express';
-import { AuditLogsService } from './audit.service';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { AuditService } from './audit.service';
 
-export class AuditLogsController {
-  private auditLogsService: AuditLogsService;
-  
-  constructor() {
-    this.auditLogsService = new AuditLogsService();
+@ApiTags('Audit')
+@Controller('audit')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
+export class AuditController {
+  constructor(private readonly auditService: AuditService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Get audit logs' })
+  @ApiQuery({ name: 'entity', required: false })
+  @ApiQuery({ name: 'entityId', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'pageSize', required: false })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  async getAuditLogs(
+    @Query('entity') entity?: string,
+    @Query('entityId') entityId?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.auditService.getAuditLogs({
+      entity,
+      entityId,
+      page: page ? parseInt(page) : undefined,
+      pageSize: pageSize ? parseInt(pageSize) : undefined,
+      startDate,
+      endDate,
+    });
   }
-  
-  getAuditLogs = async (req: Request, res: Response) => {
-    const params = {
-      entity: req.query.entity as string,
-      entityId: req.query.entityId as string,
-      page: req.query.page ? parseInt(req.query.page as string) : undefined,
-      pageSize: req.query.pageSize ? parseInt(req.query.pageSize as string) : undefined,
-      startDate: req.query.startDate as string,
-      endDate: req.query.endDate as string,
-    };
-    
-    const result = await this.auditLogsService.getAuditLogs(params);
-    res.json(result);
-  };
-  
-  getAuditLogById = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const result = await this.auditLogsService.getAuditLogById(id);
-    res.json(result);
-  };
-}
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Get audit log by ID' })
+  async getAuditLogById(@Param('id') id: string) {
+    return this.auditService.getAuditLogById(id);
+  }
+}

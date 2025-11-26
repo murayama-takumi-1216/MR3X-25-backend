@@ -1,68 +1,59 @@
-import { Request, Response } from 'express';
+import { Controller, Get, UseGuards, Req } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { DashboardService } from './dashboard.service';
 
+@ApiTags('Dashboard')
+@Controller('dashboard')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class DashboardController {
-  private dashboardService: DashboardService;
+  constructor(private readonly dashboardService: DashboardService) {}
 
-  constructor() {
-    this.dashboardService = new DashboardService();
+  @Get()
+  @ApiOperation({ summary: 'Get dashboard data based on user role' })
+  async getDashboard(@Req() req: any) {
+    const userId = req.user.sub;
+    const role = req.user.role;
+    const agencyId = req.user.agencyId;
+    const brokerId = req.user.brokerId;
+
+    if (role === 'CEO' || role === 'ADMIN') {
+      return this.dashboardService.getCEODashboard();
+    } else if (role === 'INQUILINO') {
+      return this.dashboardService.getTenantDashboard(userId);
+    } else if (role === 'AGENCY_ADMIN') {
+      return this.dashboardService.getAgencyAdminDashboard(userId, agencyId);
+    } else if (role === 'AGENCY_MANAGER') {
+      return this.dashboardService.getManagerDashboard(userId, agencyId);
+    } else if (role === 'BROKER') {
+      return this.dashboardService.getBrokerDashboard(userId, agencyId, brokerId);
+    } else {
+      return this.dashboardService.getOwnerDashboard(userId);
+    }
   }
 
-  getDashboard = async (req: Request, res: Response) => {
-    try {
-    const userId = req.user!.userId;
-    const role = req.user!.role;
-      const agencyId = req.user!.agencyId;
-      const brokerId = req.user!.brokerId;
+  @Get('due-dates')
+  @ApiOperation({ summary: 'Get upcoming due dates' })
+  async getDueDates(@Req() req: any) {
+    const userId = req.user.sub;
+    const role = req.user.role;
+    const agencyId = req.user.agencyId;
+    const brokerId = req.user.brokerId;
+    return this.dashboardService.getDueDates(userId, role, agencyId, brokerId);
+  }
 
-      if (role === 'CEO' || role === 'ADMIN') {
-        const result = await this.dashboardService.getCEODashboard();
-        res.json(result);
-      } else if (role === 'INQUILINO') {
-      const result = await this.dashboardService.getTenantDashboard(userId);
-      res.json(result);
-      } else if (role === 'AGENCY_ADMIN') {
-        const result = await this.dashboardService.getAgencyAdminDashboard(userId, agencyId);
-        res.json(result);
-      } else if (role === 'AGENCY_MANAGER') {
-        const result = await this.dashboardService.getManagerDashboard(userId, agencyId);
-        res.json(result);
-      } else if (role === 'BROKER') {
-        const result = await this.dashboardService.getBrokerDashboard(userId, agencyId, brokerId);
-        res.json(result);
-    } else {
-      const result = await this.dashboardService.getOwnerDashboard(userId);
-      res.json(result);
-      }
-    } catch (error: any) {
-      console.error('Dashboard error:', error);
-      res.status(500).json({
-        status: 'error',
-        message: error.message || 'Internal server error',
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      });
-    }
-  };
+  @Get('tenant/documents')
+  @ApiOperation({ summary: 'Get tenant documents' })
+  async getTenantDocuments(@Req() req: any) {
+    const userId = req.user.sub;
+    return this.dashboardService.getTenantDocuments(userId);
+  }
 
-  getTenantDocuments = async (req: Request, res: Response) => {
-    const userId = req.user!.userId;
-    const result = await this.dashboardService.getTenantDocuments(userId);
-    res.json(result);
-  };
-
-  getTenantStatus = async (req: Request, res: Response) => {
-    const userId = req.user!.userId;
-    const result = await this.dashboardService.getTenantDashboard(userId);
-    res.json(result);
-  };
-
-  getDueDates = async (req: Request, res: Response) => {
-    const userId = req.user!.userId;
-    const role = req.user!.role;
-    const agencyId = req.user!.agencyId;
-    const brokerId = req.user!.brokerId;
-    const result = await this.dashboardService.getDueDates(userId, role, agencyId, brokerId);
-    res.json(result);
-  };
+  @Get('tenant/status')
+  @ApiOperation({ summary: 'Get tenant status' })
+  async getTenantStatus(@Req() req: any) {
+    const userId = req.user.sub;
+    return this.dashboardService.getTenantDashboard(userId);
+  }
 }
-
