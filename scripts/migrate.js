@@ -1,40 +1,21 @@
 #!/usr/bin/env node
 
 /**
- * Script to create Prisma migrations with automatic naming
- * Usage: node scripts/migrate.js [migration-name]
- * If no name is provided, it will use a timestamp-based name
+ * Script to push Prisma schema changes directly to database (no migration files)
+ * Usage: node scripts/migrate.js
+ * This uses 'prisma db push' which applies schema changes without creating migration files
  */
 
 const { execSync } = require('child_process');
 const path = require('path');
 
-// Get migration name from command line argument or generate one
-const customName = process.argv[2];
-let migrationName;
-
-if (customName) {
-  // Use custom name if provided
-  migrationName = customName;
-} else {
-  // Generate automatic name with timestamp
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
-  migrationName = `auto_${year}${month}${day}_${hours}${minutes}${seconds}`;
-}
-
-console.log(`Creating migration: ${migrationName}`);
+console.log('Pushing schema changes to database (no migration files)...');
+console.log('💡 Tip: Stop your backend server before running this to avoid file lock errors\n');
 
 try {
-  // Run prisma migrate dev with the generated name
-  // Use spawn-like approach for better error handling
-  const command = `npx prisma migrate dev --name "${migrationName}"`;
-  console.log(`Running: ${command}`);
+  // Run prisma db push - applies schema directly without migration files
+  const command = `npx prisma db push`;
+  console.log(`Running: ${command}\n`);
   
   execSync(command, {
     stdio: 'inherit',
@@ -43,22 +24,55 @@ try {
     shell: true,
   });
   
-  console.log(`✅ Migration "${migrationName}" created successfully!`);
+  console.log(`\n✅ Schema changes applied successfully!`);
+  
+  // Try to generate Prisma client (may fail if server is running)
+  console.log('\nGenerating Prisma Client...');
+  try {
+    execSync('npx prisma generate', {
+      stdio: 'pipe', // Use pipe to capture output
+      cwd: path.join(__dirname, '..'),
+      env: { ...process.env },
+      shell: true,
+    });
+    console.log('✅ Prisma Client generated successfully!');
+  } catch (generateError) {
+    const errorOutput = generateError.stderr?.toString() || generateError.stdout?.toString() || generateError.message || '';
+    
+    // Check if it's an EPERM error (file lock)
+    if (errorOutput.includes('EPERM') || errorOutput.includes('operation not permitted')) {
+      console.log('\n⚠️  Warning: Could not regenerate Prisma Client (file is locked)');
+      console.log('   This usually means your backend server is running.');
+      console.log('   Solution: Stop the server, then run: npx prisma generate');
+      console.log('   Or restart the server - it will regenerate automatically.');
+      console.log('\n✅ Migration completed successfully (schema changes applied to database)');
+      // Don't exit with error - the schema push succeeded
+      process.exit(0);
+    } else {
+      // Some other error occurred
+      console.error('\n⚠️  Warning: Prisma Client generation failed');
+      if (errorOutput) {
+        console.error(errorOutput);
+      }
+      console.log('\n✅ Migration completed successfully (schema changes applied to database)');
+      console.log('   You may need to run "npx prisma generate" manually later.');
+      // Don't exit with error - the schema push succeeded
+      process.exit(0);
+    }
+  }
+  
 } catch (error) {
-  console.error('\n❌ Migration failed!');
-  if (error.stdout) {
-    console.error('STDOUT:', error.stdout.toString());
-  }
-  if (error.stderr) {
-    console.error('STDERR:', error.stderr.toString());
-  }
-  if (error.message) {
-    console.error('Error:', error.message);
+  // This catch only handles the db push failure
+  console.error('\n❌ Schema push failed!');
+  const errorOutput = error.stderr?.toString() || error.stdout?.toString() || error.message || '';
+  if (errorOutput) {
+    console.error(errorOutput);
   }
   console.error('\n💡 Make sure:');
   console.error('   1. Your database is running and accessible');
   console.error('   2. DATABASE_URL is set correctly in .env');
-  console.error('   3. You have pending schema changes');
+  console.error('   3. Your Prisma schema is valid');
+  console.error('   4. Stop your backend server before running migrations');
   process.exit(1);
 }
 
