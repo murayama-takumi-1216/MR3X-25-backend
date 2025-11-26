@@ -6,12 +6,10 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Global prefix
-  app.setGlobalPrefix('api');
-
-  // CORS - Allow all origins
+  // CORS must be enabled BEFORE global prefix and other middleware
+  // CORS - Allow all origins with proper preflight handling
   app.enableCors({
-    origin: true, // Allow all origins (equivalent to '*', but works with credentials)
+    origin: true, // Allow all origins
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
     allowedHeaders: [
       'Content-Type',
@@ -28,6 +26,9 @@ async function bootstrap() {
     preflightContinue: false,
     optionsSuccessStatus: 204,
   });
+
+  // Global prefix
+  app.setGlobalPrefix('api');
 
   // Global validation pipe
   app.useGlobalPipes(
