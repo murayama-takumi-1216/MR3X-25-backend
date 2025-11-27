@@ -552,6 +552,9 @@ export class UsersService {
 
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.phone !== undefined) updateData.phone = dto.phone;
+    if (dto.password !== undefined && dto.password.length > 0) {
+      updateData.password = await bcrypt.hash(dto.password, 10);
+    }
     if (dto.address !== undefined) updateData.address = dto.address;
     if (dto.cep !== undefined) updateData.cep = dto.cep;
     if (dto.neighborhood !== undefined) updateData.neighborhood = dto.neighborhood;

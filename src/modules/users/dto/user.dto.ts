@@ -172,6 +172,12 @@ export class UpdateTenantDto {
   @IsString()
   phone?: string;
 
+  @ApiPropertyOptional({ example: 'newpassword123', minLength: 6 })
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  password?: string;
+
   @ApiPropertyOptional({ example: '1990-01-01' })
   @IsOptional()
   birthDate?: string;
