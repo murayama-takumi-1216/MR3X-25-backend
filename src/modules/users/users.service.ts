@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
-import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
+import { CreateUserDto, UpdateUserDto, CreateTenantDto, UpdateTenantDto } from './dto/user.dto';
 import * as bcrypt from 'bcryptjs';
 import { UserRole } from '@prisma/client';
 
@@ -104,6 +104,18 @@ export class UsersService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
+    // For BROKER role, get the agencyId from the creator (manager)
+    let finalAgencyId: bigint | null = dto.agencyId ? BigInt(dto.agencyId) : null;
+
+    if (dto.role === 'BROKER' && dto.managerId && !finalAgencyId) {
+      // Get manager's agencyId
+      const manager = await this.prisma.user.findUnique({
+        where: { id: BigInt(dto.managerId) },
+        select: { agencyId: true },
+      });
+      finalAgencyId = manager?.agencyId ?? null;
+    }
+
     const user = await this.prisma.user.create({
       data: {
         email: dto.email,
@@ -113,9 +125,17 @@ export class UsersService {
         plan: dto.plan || 'FREE',
         phone: dto.phone,
         document: dto.document,
-        agencyId: dto.agencyId ? BigInt(dto.agencyId) : null,
+        agencyId: finalAgencyId,
         companyId: dto.companyId ? BigInt(dto.companyId) : null,
         createdBy: creatorId ? BigInt(creatorId) : null,
+        address: dto.address,
+        cep: dto.cep,
+        neighborhood: dto.neighborhood,
+        city: dto.city,
+        state: dto.state,
+        birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
+        brokerId: dto.managerId ? BigInt(dto.managerId) : null,
+        status: 'ACTIVE',
       },
     });
 
@@ -123,8 +143,13 @@ export class UsersService {
     return {
       ...result,
       id: result.id.toString(),
-      agencyId: result.agencyId?.toString(),
-      companyId: result.companyId?.toString(),
+      agencyId: result.agencyId?.toString() || null,
+      companyId: result.companyId?.toString() || null,
+      brokerId: result.brokerId?.toString() || null,
+      createdBy: result.createdBy?.toString() || null,
+      ownerId: result.ownerId?.toString() || null,
+      birthDate: result.birthDate?.toISOString() || null,
+      createdAt: result.createdAt?.toISOString() || null,
     };
   }
 
@@ -137,18 +162,38 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    const updateData: any = { ...dto };
+    const updateData: any = {};
+
+    // Only update fields that are provided
+    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.email !== undefined) updateData.email = dto.email;
+    if (dto.phone !== undefined) updateData.phone = dto.phone;
+    if (dto.document !== undefined) updateData.document = dto.document;
+    if (dto.role !== undefined) updateData.role = dto.role;
+    if (dto.plan !== undefined) updateData.plan = dto.plan;
+    if (dto.address !== undefined) updateData.address = dto.address;
+    if (dto.cep !== undefined) updateData.cep = dto.cep;
+    if (dto.neighborhood !== undefined) updateData.neighborhood = dto.neighborhood;
+    if (dto.city !== undefined) updateData.city = dto.city;
+    if (dto.state !== undefined) updateData.state = dto.state;
+    if (dto.birthDate !== undefined) {
+      updateData.birthDate = dto.birthDate ? new Date(dto.birthDate) : null;
+    }
 
     if (dto.password) {
       updateData.password = await bcrypt.hash(dto.password, 10);
     }
 
-    if (dto.agencyId) {
-      updateData.agencyId = BigInt(dto.agencyId);
+    if (dto.agencyId !== undefined) {
+      updateData.agencyId = dto.agencyId ? BigInt(dto.agencyId) : null;
     }
 
-    if (dto.companyId) {
-      updateData.companyId = BigInt(dto.companyId);
+    if (dto.companyId !== undefined) {
+      updateData.companyId = dto.companyId ? BigInt(dto.companyId) : null;
+    }
+
+    if (dto.managerId !== undefined) {
+      updateData.brokerId = dto.managerId ? BigInt(dto.managerId) : null;
     }
 
     const updated = await this.prisma.user.update({
@@ -160,8 +205,13 @@ export class UsersService {
     return {
       ...result,
       id: result.id.toString(),
-      agencyId: result.agencyId?.toString(),
-      companyId: result.companyId?.toString(),
+      agencyId: result.agencyId?.toString() || null,
+      companyId: result.companyId?.toString() || null,
+      brokerId: result.brokerId?.toString() || null,
+      createdBy: result.createdBy?.toString() || null,
+      ownerId: result.ownerId?.toString() || null,
+      birthDate: result.birthDate?.toISOString() || null,
+      createdAt: result.createdAt?.toISOString() || null,
     };
   }
 
@@ -356,5 +406,172 @@ export class UsersService {
       console.error('[UsersService.getTenantsByScope] Error stack:', error?.stack);
       throw error;
     }
+  }
+
+  async createTenant(requestingUserId: string, dto: CreateTenantDto, requestingUserRole?: string) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('Este email já está sendo usado por outro usuário');
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    // Determine the correct agencyId and ownerId based on the requesting user role
+    let finalAgencyId: bigint | null = null;
+    let finalOwnerId: bigint | null = null;
+
+    if (requestingUserRole === 'AGENCY_ADMIN') {
+      const adminRecord = await this.prisma.user.findUnique({
+        where: { id: BigInt(requestingUserId) },
+        select: { agencyId: true },
+      });
+      finalAgencyId = adminRecord?.agencyId ?? null;
+      finalOwnerId = null;
+    } else if (requestingUserRole === 'AGENCY_MANAGER') {
+      const managerRecord = await this.prisma.user.findUnique({
+        where: { id: BigInt(requestingUserId) },
+        select: { agencyId: true },
+      });
+      finalAgencyId = managerRecord?.agencyId ?? null;
+      finalOwnerId = null;
+    } else if (requestingUserRole === 'BROKER') {
+      const brokerRecord = await this.prisma.user.findUnique({
+        where: { id: BigInt(requestingUserId) },
+        select: { agencyId: true },
+      });
+      finalOwnerId = null;
+      finalAgencyId = brokerRecord?.agencyId ?? null;
+    } else if (requestingUserRole === 'PROPRIETARIO' || requestingUserRole === 'INDEPENDENT_OWNER') {
+      finalOwnerId = BigInt(requestingUserId);
+      finalAgencyId = null;
+    } else {
+      finalOwnerId = dto.agencyId ? null : BigInt(requestingUserId);
+      finalAgencyId = dto.agencyId ? BigInt(dto.agencyId) : null;
+    }
+
+    const tenant = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        password: hashedPassword,
+        name: dto.name,
+        role: UserRole.INQUILINO,
+        plan: dto.plan || 'FREE',
+        phone: dto.phone,
+        document: dto.document,
+        address: dto.address,
+        cep: dto.cep,
+        neighborhood: dto.neighborhood,
+        city: dto.city,
+        state: dto.state,
+        birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
+        status: 'ACTIVE',
+        ownerId: finalOwnerId,
+        agencyId: finalAgencyId,
+        createdBy: BigInt(requestingUserId),
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        document: true,
+        birthDate: true,
+        address: true,
+        cep: true,
+        neighborhood: true,
+        city: true,
+        state: true,
+        createdAt: true,
+        createdBy: true,
+        agencyId: true,
+      },
+    });
+
+    return {
+      ...tenant,
+      id: tenant.id.toString(),
+      agencyId: tenant.agencyId?.toString() || null,
+      createdBy: tenant.createdBy?.toString() || null,
+      birthDate: tenant.birthDate?.toISOString() || null,
+      createdAt: tenant.createdAt?.toISOString() || null,
+    };
+  }
+
+  async updateTenant(requestingUserId: string, tenantId: string, dto: UpdateTenantDto, requestingUserRole?: string) {
+    const tenant = await this.prisma.user.findUnique({
+      where: { id: BigInt(tenantId) },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    if (tenant.role !== UserRole.INQUILINO) {
+      throw new BadRequestException('User is not a tenant');
+    }
+
+    const updateData: any = {};
+
+    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.phone !== undefined) updateData.phone = dto.phone;
+    if (dto.address !== undefined) updateData.address = dto.address;
+    if (dto.cep !== undefined) updateData.cep = dto.cep;
+    if (dto.neighborhood !== undefined) updateData.neighborhood = dto.neighborhood;
+    if (dto.city !== undefined) updateData.city = dto.city;
+    if (dto.state !== undefined) updateData.state = dto.state;
+    if (dto.birthDate !== undefined) {
+      updateData.birthDate = dto.birthDate ? new Date(dto.birthDate) : null;
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: BigInt(tenantId) },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        document: true,
+        birthDate: true,
+        address: true,
+        cep: true,
+        neighborhood: true,
+        city: true,
+        state: true,
+        createdAt: true,
+        agencyId: true,
+      },
+    });
+
+    return {
+      ...updated,
+      id: updated.id.toString(),
+      agencyId: updated.agencyId?.toString() || null,
+      birthDate: updated.birthDate?.toISOString() || null,
+      createdAt: updated.createdAt?.toISOString() || null,
+    };
+  }
+
+  async deleteTenant(requestingUserId: string, tenantId: string) {
+    const tenant = await this.prisma.user.findUnique({
+      where: { id: BigInt(tenantId) },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    if (tenant.role !== UserRole.INQUILINO) {
+      throw new BadRequestException('User is not a tenant');
+    }
+
+    await this.prisma.user.delete({
+      where: { id: BigInt(tenantId) },
+    });
+
+    return { message: 'Tenant deleted successfully' };
   }
 }

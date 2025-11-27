@@ -1,12 +1,22 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFiles, Res } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Put,
+  UseGuards,
+  UseInterceptors,
+  UploadedFiles,
+  Res,
+} from '@nestjs/common';
+import { FileFieldsInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { Response } from 'express';
 import { diskStorage } from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
 import * as fs from 'fs';
-import { PropertiesService } from './properties.service';
 import { PropertyImagesService } from './property-images.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -35,35 +45,12 @@ const imageFileFilter = (_req: any, file: any, cb: any) => {
   }
 };
 
-@ApiTags('Properties')
+@ApiTags('Property Images')
 @Controller('properties')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
-export class PropertiesController {
-  constructor(
-    private readonly propertiesService: PropertiesService,
-    private readonly propertyImagesService: PropertyImagesService,
-  ) {}
-
-  @Get()
-  @ApiOperation({ summary: 'List all properties' })
-  @ApiQuery({ name: 'skip', required: false })
-  @ApiQuery({ name: 'take', required: false })
-  @ApiQuery({ name: 'agencyId', required: false })
-  @ApiQuery({ name: 'status', required: false })
-  @ApiQuery({ name: 'ownerId', required: false })
-  async findAll(
-    @Query('skip') skip?: number,
-    @Query('take') take?: number,
-    @Query('agencyId') agencyId?: string,
-    @Query('status') status?: string,
-    @Query('ownerId') ownerId?: string,
-  ) {
-    return this.propertiesService.findAll({ skip, take, agencyId, status, ownerId });
-  }
-
-  // ==================== Property Images Routes ====================
-  // These must come BEFORE the generic :id route to avoid conflicts
+export class PropertyImagesController {
+  constructor(private readonly propertyImagesService: PropertyImagesService) {}
 
   @Post(':propertyId/images')
   @ApiOperation({ summary: 'Upload images for a property' })
@@ -74,7 +61,10 @@ export class PropertiesController {
       properties: {
         images: {
           type: 'array',
-          items: { type: 'string', format: 'binary' },
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
         },
       },
     },
@@ -83,7 +73,9 @@ export class PropertiesController {
     FilesInterceptor('images', 20, {
       storage,
       fileFilter: imageFileFilter,
-      limits: { fileSize: 10 * 1024 * 1024 },
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB
+      },
     }),
   )
   async uploadImages(
@@ -94,7 +86,13 @@ export class PropertiesController {
     if (!files || files.length === 0) {
       return { success: false, error: 'No files uploaded' };
     }
-    const uploadedImages = await this.propertyImagesService.uploadImages(propertyId, user, files);
+
+    const uploadedImages = await this.propertyImagesService.uploadImages(
+      propertyId,
+      user,
+      files,
+    );
+
     return {
       success: true,
       images: uploadedImages,
@@ -120,9 +118,11 @@ export class PropertiesController {
   ) {
     const images = await this.propertyImagesService.getPropertyImages(propertyId, user);
     const primaryImage = images.find((img: any) => img.isPrimary) || images[0];
+
     if (!primaryImage) {
       return res.status(404).json({ error: 'No images found' });
     }
+
     if (fs.existsSync(primaryImage.path)) {
       res.sendFile(path.resolve(primaryImage.path));
     } else {
@@ -137,8 +137,17 @@ export class PropertiesController {
     @Param('imageId') imageId: string,
     @CurrentUser() user: any,
   ) {
-    const updatedImage = await this.propertyImagesService.setPrimaryImage(propertyId, imageId, user);
-    return { success: true, image: updatedImage, message: 'Primary image updated successfully' };
+    const updatedImage = await this.propertyImagesService.setPrimaryImage(
+      propertyId,
+      imageId,
+      user,
+    );
+
+    return {
+      success: true,
+      image: updatedImage,
+      message: 'Primary image updated successfully',
+    };
   }
 
   @Delete(':propertyId/images/:imageId')
@@ -149,32 +158,10 @@ export class PropertiesController {
     @CurrentUser() user: any,
   ) {
     await this.propertyImagesService.deleteImage(propertyId, imageId, user);
-    return { success: true, message: 'Image deleted successfully' };
-  }
 
-  // ==================== End Property Images Routes ====================
-
-  @Get(':id')
-  @ApiOperation({ summary: 'Get property by ID' })
-  async findOne(@Param('id') id: string) {
-    return this.propertiesService.findOne(id);
-  }
-
-  @Post()
-  @ApiOperation({ summary: 'Create a new property' })
-  async create(@Body() data: any, @CurrentUser('sub') userId: string) {
-    return this.propertiesService.create(data, userId);
-  }
-
-  @Put(':id')
-  @ApiOperation({ summary: 'Update property' })
-  async update(@Param('id') id: string, @Body() data: any) {
-    return this.propertiesService.update(id, data);
-  }
-
-  @Delete(':id')
-  @ApiOperation({ summary: 'Delete property' })
-  async remove(@Param('id') id: string, @CurrentUser('sub') userId: string) {
-    return this.propertiesService.remove(id, userId);
+    return {
+      success: true,
+      message: 'Image deleted successfully',
+    };
   }
 }

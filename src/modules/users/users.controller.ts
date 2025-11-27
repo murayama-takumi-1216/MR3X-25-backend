@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto, ChangePasswordDto } from './dto/user.dto';
+import { CreateUserDto, UpdateUserDto, ChangePasswordDto, CreateTenantDto, UpdateTenantDto } from './dto/user.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -45,18 +45,18 @@ export class UsersController {
   async getTenants(@CurrentUser() user: any) {
     try {
       console.log('[UsersController.getTenants] User:', JSON.stringify(user, null, 2));
-      
+
       // CEO and ADMIN see all tenants (no scope filtering)
       if (user?.role === UserRole.CEO || user?.role === UserRole.ADMIN) {
         return await this.usersService.getTenantsByScope({});
       }
-      
+
       const scope: any = {};
-      
+
       if (user?.role === UserRole.PROPRIETARIO || user?.role === UserRole.INDEPENDENT_OWNER) {
         scope.ownerId = user.sub;
       }
-      
+
       if (user?.role === UserRole.AGENCY_ADMIN) {
         if (user.agencyId) {
           scope.agencyId = user.agencyId;
@@ -64,21 +64,21 @@ export class UsersController {
           return [];
         }
       }
-      
+
       if (user?.role === UserRole.AGENCY_MANAGER) {
         scope.managerId = user.sub;
         if (user.agencyId) {
           scope.agencyId = user.agencyId;
         }
       }
-      
+
       if (user?.role === UserRole.BROKER) {
         scope.brokerId = user.sub;
         if (user.agencyId) {
           scope.agencyId = user.agencyId;
         }
       }
-      
+
       console.log('[UsersController.getTenants] Scope:', JSON.stringify(scope, null, 2));
       return await this.usersService.getTenantsByScope(scope);
     } catch (error) {
@@ -86,6 +86,27 @@ export class UsersController {
       console.error('[UsersController.getTenants] Error stack:', error?.stack);
       throw error;
     }
+  }
+
+  @Post('tenants')
+  @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.PROPRIETARIO, UserRole.INDEPENDENT_OWNER, UserRole.AGENCY_ADMIN, UserRole.AGENCY_MANAGER, UserRole.BROKER)
+  @ApiOperation({ summary: 'Create a new tenant' })
+  async createTenant(@Body() dto: CreateTenantDto, @CurrentUser() user: any) {
+    return this.usersService.createTenant(user?.sub, dto, user?.role);
+  }
+
+  @Put('tenants/:tenantId')
+  @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.PROPRIETARIO, UserRole.INDEPENDENT_OWNER, UserRole.AGENCY_ADMIN, UserRole.AGENCY_MANAGER, UserRole.BROKER)
+  @ApiOperation({ summary: 'Update a tenant' })
+  async updateTenant(@Param('tenantId') tenantId: string, @Body() dto: UpdateTenantDto, @CurrentUser() user: any) {
+    return this.usersService.updateTenant(user?.sub, tenantId, dto, user?.role);
+  }
+
+  @Delete('tenants/:tenantId')
+  @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.PROPRIETARIO, UserRole.INDEPENDENT_OWNER, UserRole.AGENCY_ADMIN, UserRole.AGENCY_MANAGER)
+  @ApiOperation({ summary: 'Delete a tenant' })
+  async deleteTenant(@Param('tenantId') tenantId: string, @CurrentUser() user: any) {
+    return this.usersService.deleteTenant(user?.sub, tenantId);
   }
 
   @Get('document/validate/:document')

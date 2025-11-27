@@ -113,16 +113,84 @@ export class ContractsService {
   }
 
   private serializeContract(contract: any) {
-    return {
+    const serialized: any = {
       ...contract,
       id: contract.id.toString(),
       propertyId: contract.propertyId.toString(),
       tenantId: contract.tenantId.toString(),
-      ownerId: contract.ownerId?.toString(),
-      agencyId: contract.agencyId?.toString(),
-      deletedBy: contract.deletedBy?.toString(),
-      monthlyRent: contract.monthlyRent?.toString(),
-      deposit: contract.deposit?.toString(),
+      ownerId: contract.ownerId?.toString() || null,
+      agencyId: contract.agencyId?.toString() || null,
+      deletedBy: contract.deletedBy?.toString() || null,
+      monthlyRent: contract.monthlyRent?.toString() || null,
+      deposit: contract.deposit?.toString() || null,
+      createdAt: contract.createdAt?.toISOString() || null,
+      updatedAt: contract.updatedAt?.toISOString() || null,
+      startDate: contract.startDate?.toISOString() || null,
+      endDate: contract.endDate?.toISOString() || null,
+      deletedAt: contract.deletedAt?.toISOString() || null,
     };
+
+    // Serialize nested property object
+    if (contract.property) {
+      serialized.property = {
+        ...contract.property,
+        id: contract.property.id?.toString() || null,
+        ownerId: contract.property.ownerId?.toString() || null,
+        agencyId: contract.property.agencyId?.toString() || null,
+        brokerId: contract.property.brokerId?.toString() || null,
+        createdBy: contract.property.createdBy?.toString() || null,
+      };
+    }
+
+    // Serialize nested tenantUser object
+    if (contract.tenantUser) {
+      serialized.tenantUser = {
+        ...contract.tenantUser,
+        id: contract.tenantUser.id?.toString() || null,
+        agencyId: contract.tenantUser.agencyId?.toString() || null,
+        companyId: contract.tenantUser.companyId?.toString() || null,
+        brokerId: contract.tenantUser.brokerId?.toString() || null,
+        createdBy: contract.tenantUser.createdBy?.toString() || null,
+        ownerId: contract.tenantUser.ownerId?.toString() || null,
+      };
+    }
+
+    // Serialize nested ownerUser object
+    if (contract.ownerUser) {
+      serialized.ownerUser = {
+        ...contract.ownerUser,
+        id: contract.ownerUser.id?.toString() || null,
+        agencyId: contract.ownerUser.agencyId?.toString() || null,
+        companyId: contract.ownerUser.companyId?.toString() || null,
+        brokerId: contract.ownerUser.brokerId?.toString() || null,
+        createdBy: contract.ownerUser.createdBy?.toString() || null,
+        ownerId: contract.ownerUser.ownerId?.toString() || null,
+      };
+    }
+
+    // Serialize nested agency object
+    if (contract.agency) {
+      serialized.agency = {
+        ...contract.agency,
+        id: contract.agency.id?.toString() || null,
+        companyId: contract.agency.companyId?.toString() || null,
+        createdBy: contract.agency.createdBy?.toString() || null,
+      };
+    }
+
+    // Serialize nested payments array
+    if (contract.payments && Array.isArray(contract.payments)) {
+      serialized.payments = contract.payments.map((payment: any) => ({
+        ...payment,
+        id: payment.id?.toString() || null,
+        contratoId: payment.contratoId?.toString() || null,
+        createdBy: payment.createdBy?.toString() || null,
+        dataPagamento: payment.dataPagamento?.toISOString() || null,
+        createdAt: payment.createdAt?.toISOString() || null,
+        updatedAt: payment.updatedAt?.toISOString() || null,
+      }));
+    }
+
+    return serialized;
   }
 }
