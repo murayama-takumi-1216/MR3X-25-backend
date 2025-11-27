@@ -29,8 +29,15 @@ export class UsersController {
     @Query('role') role?: UserRole,
     @Query('agencyId') agencyId?: string,
     @Query('status') status?: string,
+    @CurrentUser() user?: any,
   ) {
-    return this.usersService.findAll({ skip, take, role, agencyId, status });
+    // ADMIN sees only users they created (each admin is independent)
+    // CEO sees all users
+    let createdById: string | undefined;
+    if (user?.role === UserRole.ADMIN) {
+      createdById = user.sub;
+    }
+    return this.usersService.findAll({ skip, take, role, agencyId, status, createdById });
   }
 
   @Get('details')
@@ -46,12 +53,17 @@ export class UsersController {
     try {
       console.log('[UsersController.getTenants] User:', JSON.stringify(user, null, 2));
 
-      // CEO and ADMIN see all tenants (no scope filtering)
-      if (user?.role === UserRole.CEO || user?.role === UserRole.ADMIN) {
+      const scope: any = {};
+
+      // CEO sees all tenants (platform-wide view)
+      if (user?.role === UserRole.CEO) {
         return await this.usersService.getTenantsByScope({});
       }
 
-      const scope: any = {};
+      // ADMIN sees only tenants they created (each admin is independent)
+      if (user?.role === UserRole.ADMIN) {
+        scope.createdById = user.sub;
+      }
 
       if (user?.role === UserRole.PROPRIETARIO || user?.role === UserRole.INDEPENDENT_OWNER) {
         scope.ownerId = user.sub;

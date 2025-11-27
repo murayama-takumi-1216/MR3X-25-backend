@@ -357,6 +357,93 @@ export class DashboardService {
     }
   }
 
+  // Dashboard for ADMIN users - shows only data they created (each admin is independent)
+  async getAdminDashboard(userId: string) {
+    try {
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const adminId = BigInt(userId);
+
+      // Properties created by this admin
+      const [properties, contracts, paymentsThisMonth, recentPayments] = await Promise.all([
+        this.prisma.property.findMany({
+          where: {
+            deleted: false,
+            createdBy: adminId,
+          },
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            status: true,
+            monthlyRent: true,
+            nextDueDate: true,
+            dueDay: true,
+          },
+        }),
+        this.prisma.contract.findMany({
+          where: {
+            deleted: false,
+            property: { createdBy: adminId },
+          },
+          include: {
+            property: {
+              select: {
+                id: true,
+                name: true,
+                address: true,
+                status: true,
+                nextDueDate: true,
+              },
+            },
+            tenantUser: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        }),
+        this.prisma.payment.findMany({
+          where: {
+            property: { createdBy: adminId },
+            dataPagamento: { gte: firstDayOfMonth },
+          },
+          select: { valorPago: true },
+        }),
+        this.prisma.payment.findMany({
+          where: {
+            property: { createdBy: adminId },
+          },
+          orderBy: { dataPagamento: 'desc' },
+          take: 10,
+          include: {
+            property: {
+              select: { id: true, name: true, address: true },
+            },
+            user: {
+              select: { id: true, name: true },
+            },
+          },
+        }),
+      ]);
+
+      const pendingContracts = contracts.filter((contract: any) => {
+        if (contract.status !== 'ATIVO') return false;
+        if (!contract.lastPaymentDate) return true;
+        return contract.lastPaymentDate < thirtyDaysAgo;
+      });
+
+      return this.buildDashboardResponse(properties, contracts, paymentsThisMonth, pendingContracts, recentPayments);
+    } catch (error: any) {
+      console.error('Error in getAdminDashboard:', error);
+      return this.emptyDashboard();
+    }
+  }
+
   async getOwnerDashboard(userId: string) {
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -566,15 +653,18 @@ export class DashboardService {
   }
 
   async getDueDates(userId: string, role?: string, userAgencyId?: string | null, userBrokerId?: string | null) {
-    // CEO and ADMIN should see all properties, others see only their own
+    // CEO should see all properties, ADMIN sees only properties they created
     const whereClause: any = {
       deleted: false,
       status: 'ALUGADO',
       nextDueDate: { not: null },
     };
 
-    if (role === 'CEO' || role === 'ADMIN') {
-      // no extra filter
+    if (role === 'CEO') {
+      // no extra filter - sees all
+    } else if (role === 'ADMIN') {
+      // ADMIN sees only properties they created
+      whereClause.createdBy = BigInt(userId);
     } else if (role === 'AGENCY_ADMIN') {
       if (!userAgencyId) {
         return [];

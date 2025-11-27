@@ -14,13 +14,15 @@ export class UsersService {
     role?: UserRole;
     agencyId?: string;
     status?: string;
+    createdById?: string;
   }) {
-    const { skip = 0, take = 20, role, agencyId, status } = params;
+    const { skip = 0, take = 20, role, agencyId, status, createdById } = params;
 
     const where: any = {};
     if (role) where.role = role;
     if (agencyId) where.agencyId = BigInt(agencyId);
     if (status) where.status = status;
+    if (createdById) where.createdBy = BigInt(createdById);
 
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
@@ -36,6 +38,11 @@ export class UsersService {
           status: true,
           phone: true,
           document: true,
+          address: true,
+          neighborhood: true,
+          city: true,
+          state: true,
+          cep: true,
           agencyId: true,
           createdAt: true,
           lastLogin: true,
@@ -287,12 +294,12 @@ export class UsersService {
     };
   }
 
-  async getTenantsByScope(scope: { ownerId?: string; agencyId?: string; brokerId?: string; managerId?: string }) {
+  async getTenantsByScope(scope: { ownerId?: string; agencyId?: string; brokerId?: string; managerId?: string; createdById?: string }) {
     try {
       console.log('[UsersService.getTenantsByScope] Scope:', JSON.stringify(scope, null, 2));
-      
-      // If no scope is provided (CEO/ADMIN), return all tenants
-      if (!scope.ownerId && !scope.agencyId && !scope.brokerId && !scope.managerId) {
+
+      // If no scope is provided (CEO), return all tenants
+      if (!scope.ownerId && !scope.agencyId && !scope.brokerId && !scope.managerId && !scope.createdById) {
         const tenants = await this.prisma.user.findMany({
           where: { role: UserRole.INQUILINO },
           orderBy: { createdAt: 'desc' },
@@ -321,14 +328,20 @@ export class UsersService {
       }
 
     let where: any = { role: UserRole.INQUILINO };
-    
+
+    // ADMIN: sees only tenants they created (each admin is independent)
+    if (scope.createdById) {
+      where.createdBy = BigInt(scope.createdById);
+      console.log('[UsersService.getTenantsByScope] Filtering by createdBy:', scope.createdById);
+    }
+
     // Owner sees only own tenants
     if (scope.ownerId) {
       where.ownerId = BigInt(scope.ownerId);
     }
 
     // AGENCY_ADMIN: sees all tenants in their agency
-    if (scope.agencyId && !scope.ownerId && !scope.managerId && !scope.brokerId) {
+    if (scope.agencyId && !scope.ownerId && !scope.managerId && !scope.brokerId && !scope.createdById) {
       where.agencyId = BigInt(scope.agencyId);
     }
 
@@ -337,40 +350,51 @@ export class UsersService {
       where.createdBy = BigInt(scope.brokerId);
     }
 
-    // AGENCY_MANAGER: sees tenants created by themselves AND tenants created by brokers they manage
+    // AGENCY_MANAGER: sees tenants in their agency
+    // This includes:
+    // 1. Tenants created by the manager themselves
+    // 2. Tenants created by brokers in their agency
+    // 3. Tenants created by ADMIN/CEO that belong to the same agency
     if (scope.managerId) {
-      // Find all brokers managed by this manager (brokers created by this manager)
-      const managedBrokers = await this.prisma.user.findMany({
+      // Find all brokers in the same agency
+      const agencyBrokers = await this.prisma.user.findMany({
         where: {
           role: UserRole.BROKER,
-          createdBy: BigInt(scope.managerId),
           ...(scope.agencyId ? { agencyId: BigInt(scope.agencyId) } : {}),
         },
         select: { id: true },
       });
-      
-      const managedBrokerIds = managedBrokers.map(b => b.id);
-      
-      // Manager sees:
-      // 1. Tenants created by the manager themselves
-      // 2. Tenants created by brokers managed by this manager
-      where = {
-        AND: [
-          { role: UserRole.INQUILINO },
-          {
-            OR: [
-              { createdBy: BigInt(scope.managerId) },
-              ...(managedBrokerIds.length > 0 ? [{ createdBy: { in: managedBrokerIds } }] : []),
-            ],
-          },
-        ],
-      };
-      
-      // Also filter by agencyId if provided (to ensure tenants belong to the same agency)
+
+      const agencyBrokerIds = agencyBrokers.map(b => b.id);
+
+      // Manager sees all tenants in their agency
       if (scope.agencyId) {
-        where.AND.push({ agencyId: BigInt(scope.agencyId) });
+        // If manager has an agencyId, show all tenants in that agency
+        where = {
+          AND: [
+            { role: UserRole.INQUILINO },
+            { agencyId: BigInt(scope.agencyId) },
+          ],
+        };
+      } else {
+        // Fallback: only show tenants created by manager or their brokers
+        where = {
+          AND: [
+            { role: UserRole.INQUILINO },
+            {
+              OR: [
+                { createdBy: BigInt(scope.managerId) },
+                ...(agencyBrokerIds.length > 0 ? [{ createdBy: { in: agencyBrokerIds } }] : []),
+              ],
+            },
+          ],
+        };
       }
     }
+
+    console.log('[UsersService.getTenantsByScope] Final where clause:', JSON.stringify(where, (key, value) =>
+      typeof value === 'bigint' ? value.toString() : value
+    ));
 
     const tenants = await this.prisma.user.findMany({
       where,
@@ -388,17 +412,28 @@ export class UsersService {
         city: true,
         state: true,
         createdAt: true,
+        createdBy: true,
       },
     });
 
+      // Log tenant createdBy info for debugging
+      console.log('[UsersService.getTenantsByScope] Tenants found:', tenants.map(t => ({
+        id: t.id.toString(),
+        name: t.name,
+        createdBy: t.createdBy?.toString() || 'null'
+      })));
+
       // Serialize BigInt fields
-      const result = tenants.map(tenant => ({
-        ...tenant,
-        id: tenant.id.toString(),
-        birthDate: tenant.birthDate?.toISOString() || null,
-        createdAt: tenant.createdAt?.toISOString() || null,
-      }));
-      
+      const result = tenants.map(tenant => {
+        const { createdBy, ...rest } = tenant;
+        return {
+          ...rest,
+          id: tenant.id.toString(),
+          birthDate: tenant.birthDate?.toISOString() || null,
+          createdAt: tenant.createdAt?.toISOString() || null,
+        };
+      });
+
       console.log('[UsersService.getTenantsByScope] Result count:', result.length);
       return result;
     } catch (error) {

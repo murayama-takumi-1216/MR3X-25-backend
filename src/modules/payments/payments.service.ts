@@ -11,9 +11,15 @@ export class PaymentsService {
     try {
       const where: any = {};
 
-      // CEO and ADMIN can see all payments
-      if (role === 'CEO' || role === 'ADMIN') {
+      // CEO can see all payments
+      if (role === 'CEO') {
         // No additional filtering - can see all payments
+      }
+      // ADMIN sees only payments for properties they created (each admin is independent)
+      else if (role === 'ADMIN') {
+        where.property = {
+          createdBy: BigInt(userId),
+        };
       }
       // AGENCY_MANAGER can see all payments in their agency
       else if (role === 'AGENCY_MANAGER' && userAgencyId) {
@@ -361,9 +367,15 @@ export class PaymentsService {
         },
       };
 
-      // CEO and ADMIN can see all payments
-      if (role === 'CEO' || role === 'ADMIN' || role === 'LEGAL_AUDITOR') {
+      // CEO and LEGAL_AUDITOR can see all payments
+      if (role === 'CEO' || role === 'LEGAL_AUDITOR') {
         // No additional filtering - can see all payments
+      }
+      // ADMIN sees only payments for properties they created
+      else if (role === 'ADMIN') {
+        where.property = {
+          createdBy: BigInt(userId),
+        };
       }
       // PROPRIETARIO can only see payments for their properties
       else if (role === 'PROPRIETARIO' || role === 'INDEPENDENT_OWNER' || role === 'GESTOR') {

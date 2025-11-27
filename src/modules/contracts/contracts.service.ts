@@ -5,12 +5,16 @@ import { PrismaService } from '../../config/prisma.service';
 export class ContractsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(params: { skip?: number; take?: number; agencyId?: string; status?: string }) {
-    const { skip = 0, take = 20, agencyId, status } = params;
+  async findAll(params: { skip?: number; take?: number; agencyId?: string; status?: string; createdById?: string }) {
+    const { skip = 0, take = 20, agencyId, status, createdById } = params;
 
     const where: any = { deleted: false };
     if (agencyId) where.agencyId = BigInt(agencyId);
     if (status) where.status = status;
+    // Filter by property creator for ADMIN users
+    if (createdById) {
+      where.property = { createdBy: BigInt(createdById) };
+    }
 
     const [contracts, total] = await Promise.all([
       this.prisma.contract.findMany({

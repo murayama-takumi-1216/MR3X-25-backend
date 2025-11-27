@@ -18,8 +18,15 @@ export class ContractsController {
     @Query('take') take?: number,
     @Query('agencyId') agencyId?: string,
     @Query('status') status?: string,
+    @CurrentUser() user?: any,
   ) {
-    return this.contractsService.findAll({ skip, take, agencyId, status });
+    // ADMIN sees only contracts for properties they created (each admin is independent)
+    // CEO sees all contracts
+    let createdById: string | undefined;
+    if (user?.role === 'ADMIN') {
+      createdById = user.sub;
+    }
+    return this.contractsService.findAll({ skip, take, agencyId, status, createdById });
   }
 
   @Get(':id')

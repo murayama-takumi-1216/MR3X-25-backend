@@ -1,17 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class PropertiesService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(params: { skip?: number; take?: number; agencyId?: string; status?: string; ownerId?: string }) {
-    const { skip = 0, take = 20, agencyId, status, ownerId } = params;
+  async findAll(params: { skip?: number; take?: number; agencyId?: string; status?: string; ownerId?: string; createdById?: string }) {
+    const { skip = 0, take = 20, agencyId, status, ownerId, createdById } = params;
 
     const where: any = { deleted: false };
     if (agencyId) where.agencyId = BigInt(agencyId);
     if (status) where.status = status;
     if (ownerId) where.ownerId = BigInt(ownerId);
+    if (createdById) where.createdBy = BigInt(createdById);
 
     const [properties, total] = await Promise.all([
       this.prisma.property.findMany({
@@ -111,6 +114,28 @@ export class PropertiesService {
       throw new NotFoundException('Property not found');
     }
 
+    // Get all images for this property to delete from filesystem
+    const images = await this.prisma.propertyImage.findMany({
+      where: { propertyId: BigInt(id) },
+    });
+
+    // Delete image files from filesystem
+    for (const image of images) {
+      try {
+        if (image.path && fs.existsSync(image.path)) {
+          fs.unlinkSync(image.path);
+        }
+      } catch (error) {
+        console.error(`Error deleting image file ${image.path}:`, error);
+      }
+    }
+
+    // Delete property images from database
+    await this.prisma.propertyImage.deleteMany({
+      where: { propertyId: BigInt(id) },
+    });
+
+    // Soft delete the property
     await this.prisma.property.update({
       where: { id: BigInt(id) },
       data: {

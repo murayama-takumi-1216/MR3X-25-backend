@@ -58,8 +58,15 @@ export class PropertiesController {
     @Query('agencyId') agencyId?: string,
     @Query('status') status?: string,
     @Query('ownerId') ownerId?: string,
+    @CurrentUser() user?: any,
   ) {
-    return this.propertiesService.findAll({ skip, take, agencyId, status, ownerId });
+    // ADMIN sees only properties they created (each admin is independent)
+    // CEO sees all properties
+    let createdById: string | undefined;
+    if (user?.role === 'ADMIN') {
+      createdById = user.sub;
+    }
+    return this.propertiesService.findAll({ skip, take, agencyId, status, ownerId, createdById });
   }
 
   // ==================== Property Images Routes ====================

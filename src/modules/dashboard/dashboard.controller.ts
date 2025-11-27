@@ -18,8 +18,11 @@ export class DashboardController {
     const agencyId = req.user.agencyId;
     const brokerId = req.user.brokerId;
 
-    if (role === 'CEO' || role === 'ADMIN') {
+    if (role === 'CEO') {
       return this.dashboardService.getCEODashboard();
+    } else if (role === 'ADMIN') {
+      // ADMIN sees only their own data (each admin is independent)
+      return this.dashboardService.getAdminDashboard(userId);
     } else if (role === 'INQUILINO') {
       return this.dashboardService.getTenantDashboard(userId);
     } else if (role === 'AGENCY_ADMIN') {
