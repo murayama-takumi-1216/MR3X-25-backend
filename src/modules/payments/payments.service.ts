@@ -187,88 +187,101 @@ export class PaymentsService {
   }
 
   async create(userId: string, data: CreatePaymentDto) {
-    // Verify property exists
-    const property = await this.prisma.property.findUnique({
-      where: { id: BigInt(data.propertyId) },
-    });
+    try {
+      console.log('Creating payment with data:', JSON.stringify(data));
+      console.log('User ID:', userId);
 
-    if (!property) {
-      throw new NotFoundException('Property not found');
+      // Verify property exists
+      const property = await this.prisma.property.findUnique({
+        where: { id: BigInt(data.propertyId) },
+      });
+
+      if (!property) {
+        throw new NotFoundException('Property not found');
+      }
+
+      // Verify contract exists
+      const contract = await this.prisma.contract.findUnique({
+        where: { id: BigInt(data.contratoId) },
+      });
+
+      if (!contract) {
+        throw new NotFoundException('Contract not found');
+      }
+
+      const payment = await this.prisma.payment.create({
+        data: {
+          valorPago: data.valorPago,
+          dataPagamento: new Date(data.dataPagamento),
+          contratoId: BigInt(data.contratoId),
+          propertyId: BigInt(data.propertyId),
+          userId: BigInt(userId),
+          agencyId: property.agencyId,
+          tipo: data.tipo,
+          comprovante: data.comprovante ? Buffer.from(data.comprovante, 'base64') : null,
+        },
+        include: {
+          property: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+            },
+          },
+          contract: {
+            select: {
+              id: true,
+              startDate: true,
+              endDate: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      // Update contract's last payment date
+      await this.prisma.contract.update({
+        where: { id: BigInt(data.contratoId) },
+        data: {
+          lastPaymentDate: new Date(data.dataPagamento),
+        },
+      });
+
+      return {
+        id: payment.id.toString(),
+        valorPago: payment.valorPago?.toString(),
+        dataPagamento: payment.dataPagamento?.toISOString(),
+        contratoId: payment.contratoId?.toString(),
+        propertyId: payment.propertyId?.toString(),
+        userId: payment.userId?.toString(),
+        agencyId: payment.agencyId?.toString() || null,
+        tipo: payment.tipo,
+        property: payment.property ? {
+          id: payment.property.id.toString(),
+          name: payment.property.name,
+          address: payment.property.address,
+        } : null,
+        contract: payment.contract ? {
+          id: payment.contract.id.toString(),
+          startDate: payment.contract.startDate?.toISOString(),
+          endDate: payment.contract.endDate?.toISOString(),
+        } : null,
+        user: payment.user ? {
+          id: payment.user.id.toString(),
+          name: payment.user.name,
+          email: payment.user.email,
+        } : null,
+      };
+    } catch (error: any) {
+      console.error('Error creating payment:', error);
+      throw error;
     }
-
-    // Verify contract exists
-    const contract = await this.prisma.contract.findUnique({
-      where: { id: BigInt(data.contratoId) },
-    });
-
-    if (!contract) {
-      throw new NotFoundException('Contract not found');
-    }
-
-    const payment = await this.prisma.payment.create({
-      data: {
-        valorPago: data.valorPago,
-        dataPagamento: new Date(data.dataPagamento),
-        contratoId: BigInt(data.contratoId),
-        propertyId: BigInt(data.propertyId),
-        userId: BigInt(userId),
-        agencyId: property.agencyId,
-        tipo: data.tipo,
-        comprovante: data.comprovante ? Buffer.from(data.comprovante, 'base64') : null,
-      },
-      include: {
-        property: {
-          select: {
-            id: true,
-            name: true,
-            address: true,
-          },
-        },
-        contract: {
-          select: {
-            id: true,
-            startDate: true,
-            endDate: true,
-          },
-        },
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-    // Update contract's last payment date
-    await this.prisma.contract.update({
-      where: { id: BigInt(data.contratoId) },
-      data: {
-        lastPaymentDate: new Date(data.dataPagamento),
-      },
-    });
-
-    return {
-      ...payment,
-      id: payment.id.toString(),
-      propertyId: payment.propertyId?.toString(),
-      contractId: payment.contratoId?.toString(),
-      userId: payment.userId?.toString(),
-      agencyId: payment.agencyId?.toString() || null,
-      property: payment.property ? {
-        ...payment.property,
-        id: payment.property.id.toString(),
-      } : null,
-      contract: payment.contract ? {
-        ...payment.contract,
-        id: payment.contract.id.toString(),
-      } : null,
-      user: payment.user ? {
-        ...payment.user,
-        id: payment.user.id.toString(),
-      } : null,
-    };
   }
 
   async update(paymentId: string, userId: string, role: string, data: UpdatePaymentDto) {

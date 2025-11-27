@@ -4,6 +4,12 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { Request, Response, NextFunction } from 'express';
 
+// Add BigInt serialization support for JSON.stringify
+// This is needed because Prisma returns BigInt for MySQL BIGINT columns
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
