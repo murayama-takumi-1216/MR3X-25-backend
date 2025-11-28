@@ -658,8 +658,10 @@ export class UsersService {
   }
 
   async deleteTenant(requestingUserId: string, tenantId: string) {
+    const tenantBigInt = BigInt(tenantId);
+
     const tenant = await this.prisma.user.findUnique({
-      where: { id: BigInt(tenantId) },
+      where: { id: tenantBigInt },
     });
 
     if (!tenant) {
@@ -670,8 +672,118 @@ export class UsersService {
       throw new BadRequestException('User is not a tenant');
     }
 
-    await this.prisma.user.delete({
-      where: { id: BigInt(tenantId) },
+    // Check if tenant has active contracts
+    const activeContracts = await this.prisma.contract.findFirst({
+      where: {
+        tenantId: tenantBigInt,
+        status: { in: ['ACTIVE', 'PENDING'] },
+      },
+    });
+
+    if (activeContracts) {
+      throw new BadRequestException('Não é possível excluir inquilino com contratos ativos. Cancele ou finalize os contratos primeiro.');
+    }
+
+    // Delete related records in a transaction
+    await this.prisma.$transaction(async (tx) => {
+      // Delete refresh tokens
+      await tx.refreshToken.deleteMany({
+        where: { userId: tenantBigInt },
+      });
+
+      // Delete notifications where tenant is involved
+      await tx.notification.deleteMany({
+        where: {
+          OR: [
+            { tenantId: tenantBigInt },
+            { ownerId: tenantBigInt },
+          ],
+        },
+      });
+
+      // Delete active chats
+      await tx.activeChat.deleteMany({
+        where: { userId: tenantBigInt },
+      });
+
+      // Delete messages sent or received by tenant
+      await tx.message.deleteMany({
+        where: {
+          OR: [
+            { senderId: tenantBigInt },
+            { receiverId: tenantBigInt },
+          ],
+        },
+      });
+
+      // Delete chats where tenant is a participant
+      await tx.chat.deleteMany({
+        where: {
+          OR: [
+            { participant1Id: tenantBigInt },
+            { participant2Id: tenantBigInt },
+          ],
+        },
+      });
+
+      // Delete audit logs for this tenant
+      await tx.auditLog.deleteMany({
+        where: { userId: tenantBigInt },
+      });
+
+      // Nullify tenant references in properties
+      await tx.property.updateMany({
+        where: { tenantId: tenantBigInt },
+        data: { tenantId: null },
+      });
+
+      // Delete payments made by tenant
+      await tx.payment.deleteMany({
+        where: { userId: tenantBigInt },
+      });
+
+      // Delete transfers where tenant is the recipient
+      await tx.transfer.deleteMany({
+        where: { recipientId: tenantBigInt },
+      });
+
+      // Delete inspections where tenant is the inspector
+      await tx.inspection.deleteMany({
+        where: { inspectorId: tenantBigInt },
+      });
+
+      // Get inactive/cancelled contracts for this tenant
+      const inactiveContracts = await tx.contract.findMany({
+        where: {
+          tenantId: tenantBigInt,
+          status: { notIn: ['ACTIVE', 'PENDING'] },
+        },
+        select: { id: true },
+      });
+
+      const contractIds = inactiveContracts.map(c => c.id);
+
+      if (contractIds.length > 0) {
+        // Delete contract audits for these contracts
+        await tx.contractAudit.deleteMany({
+          where: { contractId: { in: contractIds } },
+        });
+
+        // Delete invoices for these contracts
+        await tx.invoice.deleteMany({
+          where: { contractId: { in: contractIds } },
+        });
+
+        // Delete inactive/cancelled contracts
+        await tx.contract.deleteMany({
+          where: { id: { in: contractIds } },
+        });
+      }
+
+      // Finally delete the tenant user
+      await tx.user.delete({
+        where: { id: tenantBigInt },
+      });
     });
 
     return { message: 'Tenant deleted successfully' };

@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
 import { DEFAULT_PLANS, Plan, getPlanUpdates, setPlanUpdate } from './plans.data';
+import { UserRole } from '@prisma/client';
 
 export interface PlanUpdateDTO {
   price?: number;
@@ -9,6 +10,31 @@ export interface PlanUpdateDTO {
   features?: string[];
   description?: string;
   isActive?: boolean;
+}
+
+export interface PlanModificationRequestDTO {
+  id: string;
+  planName: string;
+  requestedBy: { id: string; name: string; email: string };
+  status: string;
+  currentValues: {
+    price?: number;
+    propertyLimit?: number;
+    userLimit?: number;
+    features?: string[];
+    description?: string;
+  };
+  requestedValues: {
+    price?: number;
+    propertyLimit?: number;
+    userLimit?: number;
+    features?: string[];
+    description?: string;
+  };
+  reviewedBy?: { id: string; name: string; email: string };
+  reviewedAt?: string;
+  rejectionReason?: string;
+  createdAt: string;
 }
 
 @Injectable()
@@ -103,40 +129,312 @@ export class PlansService {
     };
   }
 
-  async updatePlan(id: string, data: PlanUpdateDTO) {
+  async updatePlan(id: string, data: PlanUpdateDTO, userId: string, userRole: UserRole) {
     const plans = this.getPlansWithUpdates();
     const plan = plans.find(p => p.id === id);
-    
+
     if (!plan) {
       throw new NotFoundException('Plan not found');
     }
 
-    // Store update in memory
-    setPlanUpdate(plan.name, {
-      ...data,
-      updatedAt: new Date(),
-    });
+    // CEO can update directly
+    if (userRole === UserRole.CEO) {
+      setPlanUpdate(plan.name, {
+        ...data,
+        updatedAt: new Date(),
+      });
+      return this.getPlanByName(plan.name);
+    }
 
-    // Return updated plan
-    return this.getPlanByName(plan.name);
+    // ADMIN creates a modification request
+    if (userRole === UserRole.ADMIN) {
+      return this.createModificationRequest(plan.name, data, userId);
+    }
+
+    throw new ForbiddenException('You do not have permission to modify plans');
   }
 
-  async updatePlanByName(name: string, data: PlanUpdateDTO) {
+  async updatePlanByName(name: string, data: PlanUpdateDTO, userId: string, userRole: UserRole) {
     const plans = this.getPlansWithUpdates();
     const plan = plans.find(p => p.name === name);
-    
+
     if (!plan) {
       throw new NotFoundException('Plan not found');
     }
 
-    // Store update in memory
-    setPlanUpdate(name, {
-      ...data,
+    // CEO can update directly
+    if (userRole === UserRole.CEO) {
+      setPlanUpdate(name, {
+        ...data,
+        updatedAt: new Date(),
+      });
+      return this.getPlanByName(name);
+    }
+
+    // ADMIN creates a modification request
+    if (userRole === UserRole.ADMIN) {
+      return this.createModificationRequest(name, data, userId);
+    }
+
+    throw new ForbiddenException('You do not have permission to modify plans');
+  }
+
+  // Create a modification request for ADMIN users
+  private async createModificationRequest(planName: string, data: PlanUpdateDTO, requestedById: string) {
+    const currentPlan = await this.getPlanByName(planName);
+
+    const request = await this.prisma.planModificationRequest.create({
+      data: {
+        planName,
+        requestedById: BigInt(requestedById),
+        status: 'PENDING',
+        currentPrice: currentPlan.price,
+        currentPropertyLimit: currentPlan.propertyLimit,
+        currentUserLimit: currentPlan.userLimit,
+        currentFeatures: JSON.stringify(currentPlan.features),
+        currentDescription: currentPlan.description,
+        requestedPrice: data.price,
+        requestedPropertyLimit: data.propertyLimit,
+        requestedUserLimit: data.userLimit,
+        requestedFeatures: data.features ? JSON.stringify(data.features) : undefined,
+        requestedDescription: data.description,
+      },
+      include: {
+        requestedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    // Send notification to CEO users
+    await this.notifyCEOAboutRequest(request.id, planName, requestedById);
+
+    return {
+      message: 'Solicitação de modificação criada. Aguardando aprovação do CEO.',
+      requestId: request.id.toString(),
+      status: 'PENDING',
+    };
+  }
+
+  // Notify CEO users about new modification request
+  private async notifyCEOAboutRequest(requestId: bigint, planName: string, requestedById: string) {
+    // Find all CEO users
+    const ceoUsers = await this.prisma.user.findMany({
+      where: { role: UserRole.CEO, status: 'ACTIVE' },
+      select: { id: true },
+    });
+
+    const requester = await this.prisma.user.findUnique({
+      where: { id: BigInt(requestedById) },
+      select: { name: true },
+    });
+
+    // Create in-app notification (we'll store in audit log for now, or you can create a proper notification table)
+    for (const ceo of ceoUsers) {
+      await this.prisma.auditLog.create({
+        data: {
+          event: 'PLAN_MODIFICATION_REQUEST',
+          userId: ceo.id,
+          entity: 'PlanModificationRequest',
+          entityId: requestId,
+          dataAfter: JSON.stringify({
+            message: `${requester?.name || 'Um administrador'} solicitou modificação no plano ${planName}. Aguardando sua aprovação.`,
+            requestId: requestId.toString(),
+            planName,
+            requestedBy: requestedById,
+          }),
+        },
+      });
+    }
+  }
+
+  // Get all pending modification requests (for CEO)
+  async getPendingModificationRequests(): Promise<PlanModificationRequestDTO[]> {
+    const requests = await this.prisma.planModificationRequest.findMany({
+      where: { status: 'PENDING' },
+      include: {
+        requestedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return requests.map(r => this.formatModificationRequest(r));
+  }
+
+  // Get all modification requests (for history)
+  async getAllModificationRequests(): Promise<PlanModificationRequestDTO[]> {
+    const requests = await this.prisma.planModificationRequest.findMany({
+      include: {
+        requestedBy: {
+          select: { id: true, name: true, email: true },
+        },
+        reviewedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return requests.map(r => this.formatModificationRequest(r));
+  }
+
+  // Approve a modification request (CEO only)
+  async approveModificationRequest(requestId: string, reviewerId: string) {
+    const request = await this.prisma.planModificationRequest.findUnique({
+      where: { id: BigInt(requestId) },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Modification request not found');
+    }
+
+    if (request.status !== 'PENDING') {
+      throw new ForbiddenException('This request has already been processed');
+    }
+
+    // Apply the changes to the plan
+    const updateData: any = {};
+    if (request.requestedPrice !== null) updateData.price = Number(request.requestedPrice);
+    if (request.requestedPropertyLimit !== null) updateData.propertyLimit = request.requestedPropertyLimit;
+    if (request.requestedUserLimit !== null) updateData.userLimit = request.requestedUserLimit;
+    if (request.requestedFeatures) updateData.features = JSON.parse(request.requestedFeatures);
+    if (request.requestedDescription !== null) updateData.description = request.requestedDescription;
+
+    setPlanUpdate(request.planName, {
+      ...updateData,
       updatedAt: new Date(),
     });
 
-    // Return updated plan
-    return this.getPlanByName(name);
+    // Update the request status
+    const updatedRequest = await this.prisma.planModificationRequest.update({
+      where: { id: BigInt(requestId) },
+      data: {
+        status: 'APPROVED',
+        reviewedById: BigInt(reviewerId),
+        reviewedAt: new Date(),
+      },
+      include: {
+        requestedBy: {
+          select: { id: true, name: true, email: true },
+        },
+        reviewedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    // Notify the admin who made the request
+    await this.prisma.auditLog.create({
+      data: {
+        event: 'PLAN_MODIFICATION_APPROVED',
+        userId: request.requestedById,
+        entity: 'PlanModificationRequest',
+        entityId: request.id,
+        dataAfter: JSON.stringify({
+          message: `Sua solicitação de modificação do plano ${request.planName} foi aprovada.`,
+          requestId: request.id.toString(),
+          planName: request.planName,
+        }),
+      },
+    });
+
+    return {
+      message: 'Solicitação aprovada. As alterações foram aplicadas ao plano.',
+      request: this.formatModificationRequest(updatedRequest),
+    };
+  }
+
+  // Reject a modification request (CEO only)
+  async rejectModificationRequest(requestId: string, reviewerId: string, reason?: string) {
+    const request = await this.prisma.planModificationRequest.findUnique({
+      where: { id: BigInt(requestId) },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Modification request not found');
+    }
+
+    if (request.status !== 'PENDING') {
+      throw new ForbiddenException('This request has already been processed');
+    }
+
+    // Update the request status
+    const updatedRequest = await this.prisma.planModificationRequest.update({
+      where: { id: BigInt(requestId) },
+      data: {
+        status: 'REJECTED',
+        reviewedById: BigInt(reviewerId),
+        reviewedAt: new Date(),
+        rejectionReason: reason,
+      },
+      include: {
+        requestedBy: {
+          select: { id: true, name: true, email: true },
+        },
+        reviewedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    // Notify the admin who made the request
+    await this.prisma.auditLog.create({
+      data: {
+        event: 'PLAN_MODIFICATION_REJECTED',
+        userId: request.requestedById,
+        entity: 'PlanModificationRequest',
+        entityId: request.id,
+        dataAfter: JSON.stringify({
+          message: `Sua solicitação de modificação do plano ${request.planName} foi rejeitada.${reason ? ` Motivo: ${reason}` : ''}`,
+          requestId: request.id.toString(),
+          planName: request.planName,
+          reason,
+        }),
+      },
+    });
+
+    return {
+      message: 'Solicitação rejeitada.',
+      request: this.formatModificationRequest(updatedRequest),
+    };
+  }
+
+  // Helper to format modification request
+  private formatModificationRequest(r: any): PlanModificationRequestDTO {
+    return {
+      id: r.id.toString(),
+      planName: r.planName,
+      requestedBy: {
+        id: r.requestedBy.id.toString(),
+        name: r.requestedBy.name || '',
+        email: r.requestedBy.email,
+      },
+      status: r.status,
+      currentValues: {
+        price: r.currentPrice ? Number(r.currentPrice) : undefined,
+        propertyLimit: r.currentPropertyLimit || undefined,
+        userLimit: r.currentUserLimit || undefined,
+        features: r.currentFeatures ? JSON.parse(r.currentFeatures) : undefined,
+        description: r.currentDescription || undefined,
+      },
+      requestedValues: {
+        price: r.requestedPrice ? Number(r.requestedPrice) : undefined,
+        propertyLimit: r.requestedPropertyLimit || undefined,
+        userLimit: r.requestedUserLimit || undefined,
+        features: r.requestedFeatures ? JSON.parse(r.requestedFeatures) : undefined,
+        description: r.requestedDescription || undefined,
+      },
+      reviewedBy: r.reviewedBy ? {
+        id: r.reviewedBy.id.toString(),
+        name: r.reviewedBy.name || '',
+        email: r.reviewedBy.email,
+      } : undefined,
+      reviewedAt: r.reviewedAt?.toISOString(),
+      rejectionReason: r.rejectionReason || undefined,
+      createdAt: r.createdAt.toISOString(),
+    };
   }
 
   async updateSubscriberCounts() {
