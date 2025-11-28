@@ -10,16 +10,38 @@ async function main() {
   console.log('🧹 Clearing existing data...');
 
   // Delete in correct order to respect foreign key constraints
+  // Start with tables that have no dependents
   await prisma.refreshToken.deleteMany();
   await prisma.auditLog.deleteMany();
+  await prisma.activeChat.deleteMany();
   await prisma.message.deleteMany();
   await prisma.chat.deleteMany();
   await prisma.notification.deleteMany();
+  await prisma.transfer.deleteMany();
+  await prisma.invoice.deleteMany();
   await prisma.payment.deleteMany();
+  await prisma.contractAudit.deleteMany();
   await prisma.contract.deleteMany();
+  await prisma.inspection.deleteMany();
+  await prisma.expense.deleteMany();
+  await prisma.document.deleteMany();
   await prisma.propertyImage.deleteMany();
   await prisma.property.deleteMany();
   await prisma.agency.deleteMany();
+  await prisma.company.deleteMany();
+
+  // Handle User self-referential foreign keys before deleting users
+  // User has: ownerId, brokerId, createdBy - all pointing to other users
+  await prisma.user.updateMany({
+    data: {
+      ownerId: null,
+      brokerId: null,
+      createdBy: null,
+      legalRepresentativeId: null,
+    },
+  });
+
+  await prisma.legalRepresentative.deleteMany();
   await prisma.user.deleteMany();
 
   // Create only CEO user
