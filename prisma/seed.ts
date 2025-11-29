@@ -6,31 +6,52 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting database seeding...');
 
-  // Clear existing data
-  console.log('🧹 Clearing existing data...');
+  // Clear existing data - DELETE ALL TABLES
+  console.log('🧹 Clearing ALL tables in database...');
 
   // Delete in correct order to respect foreign key constraints
-  // Start with tables that have no dependents
+  // Start with tables that have no dependents or only reference other tables
+
+  // Auth & Session tables
   await prisma.refreshToken.deleteMany();
+  await prisma.emailVerification.deleteMany();
+
+  // Audit & Logs
   await prisma.auditLog.deleteMany();
+
+  // Chat related
   await prisma.activeChat.deleteMany();
   await prisma.message.deleteMany();
   await prisma.chat.deleteMany();
+
+  // Notifications
   await prisma.notification.deleteMany();
+
+  // Financial tables
   await prisma.transfer.deleteMany();
   await prisma.invoice.deleteMany();
   await prisma.payment.deleteMany();
+  await prisma.expense.deleteMany();
+
+  // Contract related
   await prisma.contractAudit.deleteMany();
   await prisma.contract.deleteMany();
+
+  // Property related
   await prisma.inspection.deleteMany();
-  await prisma.expense.deleteMany();
   await prisma.document.deleteMany();
   await prisma.propertyImage.deleteMany();
   await prisma.property.deleteMany();
+
+  // Organization tables
   await prisma.agency.deleteMany();
   await prisma.company.deleteMany();
 
-  // Delete plan modification requests before users (foreign key constraint)
+  // Settings & indexes
+  await prisma.platformSettings.deleteMany();
+  await prisma.igpmIndex.deleteMany();
+
+  // Plan modification requests (references User)
   await prisma.planModificationRequest.deleteMany();
 
   // Handle User self-referential foreign keys before deleting users
@@ -44,8 +65,11 @@ async function main() {
     },
   });
 
+  // Legal representatives and Users
   await prisma.legalRepresentative.deleteMany();
   await prisma.user.deleteMany();
+
+  console.log('✅ All tables cleared successfully!');
 
   // Create only CEO user
   // Per MR3X Hierarchy Requirements:
