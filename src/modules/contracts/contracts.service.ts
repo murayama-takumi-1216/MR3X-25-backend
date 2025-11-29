@@ -1,9 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
+import { PlanEnforcementService, PLAN_MESSAGES } from '../plans/plan-enforcement.service';
 
 @Injectable()
 export class ContractsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private planEnforcement: PlanEnforcementService,
+  ) {}
 
   async findAll(params: { skip?: number; take?: number; agencyId?: string; status?: string; createdById?: string }) {
     const { skip = 0, take = 20, agencyId, status, createdById } = params;
@@ -59,6 +63,12 @@ export class ContractsService {
   }
 
   async create(data: any, userId: string) {
+    // Check if the property is frozen
+    const propertyCheck = await this.planEnforcement.checkContractOperationAllowed(data.propertyId);
+    if (!propertyCheck.allowed) {
+      throw new ForbiddenException(propertyCheck.message || PLAN_MESSAGES.CONTRACT_ON_FROZEN_PROPERTY);
+    }
+
     const contract = await this.prisma.contract.create({
       data: {
         propertyId: BigInt(data.propertyId),

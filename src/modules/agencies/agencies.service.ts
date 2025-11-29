@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
+import { PlanEnforcementService } from '../plans/plan-enforcement.service';
+import { getPlanLimitsForEntity } from '../plans/plans.data';
 
 export interface AgencyCreateDTO {
   name: string;
@@ -33,7 +35,10 @@ export interface AgencyUpdateDTO {
 
 @Injectable()
 export class AgenciesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private planEnforcement: PlanEnforcementService,
+  ) {}
 
   async createAgency(data: AgencyCreateDTO) {
     // Check if agency with this CNPJ already exists
@@ -55,6 +60,10 @@ export class AgenciesService {
       throw new BadRequestException('Agency with this email already exists');
     }
 
+    // Get plan limits for the selected plan
+    const planName = data.plan || 'FREE';
+    const planLimits = getPlanLimitsForEntity(planName, 'agency');
+
     const agency = await this.prisma.agency.create({
       data: {
         name: data.name,
@@ -65,11 +74,13 @@ export class AgenciesService {
         city: data.city || null,
         state: data.state || null,
         zipCode: data.zipCode || null,
-        plan: data.plan || 'FREE',
+        plan: planName,
         status: 'ACTIVE',
-        maxProperties: data.maxProperties || 5,
-        maxUsers: data.maxUsers || 3,
+        maxProperties: planLimits.properties, // Use plan limits
+        maxUsers: planLimits.users, // Use plan limits
         agencyFee: data.agencyFee ?? 8,
+        apiEnabled: planLimits.apiAccess,
+        lastPlanChange: new Date(),
       },
       select: {
         id: true,
@@ -86,6 +97,9 @@ export class AgenciesService {
         maxProperties: true,
         maxUsers: true,
         agencyFee: true,
+        apiEnabled: true,
+        frozenPropertiesCount: true,
+        frozenUsersCount: true,
         createdAt: true,
         updatedAt: true,
         _count: {
@@ -112,6 +126,9 @@ export class AgenciesService {
       maxProperties: agency.maxProperties || 0,
       maxUsers: agency.maxUsers || 0,
       agencyFee: agency.agencyFee ?? 8,
+      apiEnabled: agency.apiEnabled,
+      frozenPropertiesCount: agency.frozenPropertiesCount,
+      frozenUsersCount: agency.frozenUsersCount,
       userCount: agency._count.users,
       propertyCount: agency._count.properties,
       createdAt: agency.createdAt,
@@ -266,6 +283,101 @@ export class AgenciesService {
       }
     }
 
+    // Check if plan is being changed
+    const isPlanChange = data.plan && data.plan !== agency.plan;
+    let planEnforcementResult: Awaited<ReturnType<typeof this.planEnforcement.enforcePlanLimits>> | null = null;
+
+    // If plan is changing, enforce plan limits AFTER updating the agency
+    if (isPlanChange && data.plan) {
+      // Get new plan limits
+      const newPlanLimits = getPlanLimitsForEntity(data.plan, 'agency');
+
+      // Update agency with new plan and limits
+      const updated = await this.prisma.agency.update({
+        where: { id: BigInt(id) },
+        data: {
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          address: data.address,
+          city: data.city,
+          state: data.state,
+          zipCode: data.zipCode,
+          plan: data.plan,
+          status: data.status,
+          maxProperties: newPlanLimits.properties,
+          maxUsers: newPlanLimits.users,
+          agencyFee: data.agencyFee !== undefined ? Math.max(0, Math.min(100, data.agencyFee)) : undefined,
+          lastPlanChange: new Date(),
+        },
+        select: {
+          id: true,
+          name: true,
+          cnpj: true,
+          email: true,
+          phone: true,
+          address: true,
+          city: true,
+          state: true,
+          zipCode: true,
+          status: true,
+          plan: true,
+          maxProperties: true,
+          maxUsers: true,
+          agencyFee: true,
+          apiEnabled: true,
+          frozenPropertiesCount: true,
+          frozenUsersCount: true,
+          createdAt: true,
+          updatedAt: true,
+          _count: {
+            select: {
+              users: true,
+              properties: true,
+            },
+          },
+        },
+      });
+
+      // Now enforce plan limits (freeze/unfreeze as needed)
+      planEnforcementResult = await this.planEnforcement.enforcePlanLimits(id, data.plan!);
+
+      // Get updated frozen counts after enforcement
+      const updatedAgency = await this.prisma.agency.findUnique({
+        where: { id: BigInt(id) },
+        select: {
+          frozenPropertiesCount: true,
+          frozenUsersCount: true,
+        },
+      });
+
+      return {
+        id: updated.id.toString(),
+        name: updated.name,
+        cnpj: updated.cnpj,
+        email: updated.email,
+        phone: updated.phone || '',
+        address: updated.address || '',
+        city: updated.city || '',
+        state: updated.state || '',
+        zipCode: updated.zipCode || '',
+        status: updated.status,
+        plan: updated.plan,
+        maxProperties: updated.maxProperties,
+        maxUsers: updated.maxUsers,
+        agencyFee: updated.agencyFee,
+        apiEnabled: updated.apiEnabled,
+        frozenPropertiesCount: updatedAgency?.frozenPropertiesCount || 0,
+        frozenUsersCount: updatedAgency?.frozenUsersCount || 0,
+        propertyCount: updated._count.properties,
+        userCount: updated._count.users,
+        createdAt: updated.createdAt,
+        updatedAt: updated.updatedAt,
+        planEnforcement: planEnforcementResult,
+      };
+    }
+
+    // No plan change - normal update without enforcement
     const updated = await this.prisma.agency.update({
       where: { id: BigInt(id) },
       data: {
@@ -276,10 +388,7 @@ export class AgenciesService {
         city: data.city,
         state: data.state,
         zipCode: data.zipCode,
-        plan: data.plan,
         status: data.status,
-        maxProperties: data.maxProperties,
-        maxUsers: data.maxUsers,
         agencyFee: data.agencyFee !== undefined ? Math.max(0, Math.min(100, data.agencyFee)) : undefined,
       },
       select: {
@@ -297,6 +406,9 @@ export class AgenciesService {
         maxProperties: true,
         maxUsers: true,
         agencyFee: true,
+        apiEnabled: true,
+        frozenPropertiesCount: true,
+        frozenUsersCount: true,
         createdAt: true,
         updatedAt: true,
         _count: {
@@ -323,6 +435,9 @@ export class AgenciesService {
       maxProperties: updated.maxProperties,
       maxUsers: updated.maxUsers,
       agencyFee: updated.agencyFee,
+      apiEnabled: updated.apiEnabled,
+      frozenPropertiesCount: updated.frozenPropertiesCount,
+      frozenUsersCount: updated.frozenUsersCount,
       propertyCount: updated._count.properties,
       userCount: updated._count.users,
       createdAt: updated.createdAt,
@@ -356,5 +471,65 @@ export class AgenciesService {
     });
 
     return { message: 'Agency deleted successfully' };
+  }
+
+  // Plan enforcement methods
+
+  /**
+   * Get plan usage summary for an agency
+   */
+  async getPlanUsage(agencyId: string) {
+    return this.planEnforcement.getFrozenEntitiesSummary(agencyId);
+  }
+
+  /**
+   * Get list of frozen entities for an agency
+   */
+  async getFrozenEntities(agencyId: string) {
+    return this.planEnforcement.getFrozenEntitiesList(agencyId);
+  }
+
+  /**
+   * Preview what would happen if agency changes to a different plan
+   */
+  async previewPlanChange(agencyId: string, newPlan: string) {
+    return this.planEnforcement.previewPlanChange(agencyId, newPlan);
+  }
+
+  /**
+   * Switch active property for FREE plan (only 1 property allowed)
+   */
+  async switchActiveProperty(agencyId: string, newActivePropertyId: string) {
+    return this.planEnforcement.switchActiveProperty(agencyId, newActivePropertyId);
+  }
+
+  /**
+   * Manually enforce plan limits (admin operation)
+   */
+  async enforcePlanLimits(agencyId: string) {
+    const agency = await this.prisma.agency.findUnique({
+      where: { id: BigInt(agencyId) },
+      select: { plan: true },
+    });
+
+    if (!agency) {
+      throw new NotFoundException('Agency not found');
+    }
+
+    return this.planEnforcement.enforcePlanLimits(agencyId, agency.plan);
+  }
+
+  /**
+   * Check if property creation is allowed for the agency
+   */
+  async checkPropertyCreationAllowed(agencyId: string) {
+    return this.planEnforcement.checkPropertyOperationAllowed(agencyId, 'create');
+  }
+
+  /**
+   * Check if user creation is allowed for the agency
+   */
+  async checkUserCreationAllowed(agencyId: string) {
+    return this.planEnforcement.checkUserOperationAllowed(agencyId, 'create');
   }
 }

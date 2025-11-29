@@ -30,6 +30,9 @@ async function main() {
   await prisma.agency.deleteMany();
   await prisma.company.deleteMany();
 
+  // Delete plan modification requests before users (foreign key constraint)
+  await prisma.planModificationRequest.deleteMany();
+
   // Handle User self-referential foreign keys before deleting users
   // User has: ownerId, brokerId, createdBy - all pointing to other users
   await prisma.user.updateMany({

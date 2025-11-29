@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AgenciesService, AgencyCreateDTO, AgencyUpdateDTO } from './agencies.service';
 
@@ -38,5 +38,56 @@ export class AgenciesController {
   @ApiOperation({ summary: 'Delete an agency' })
   async deleteAgency(@Param('id') id: string) {
     return this.agenciesService.deleteAgency(id);
+  }
+
+  // Plan Enforcement Endpoints
+
+  @Get(':id/plan-usage')
+  @ApiOperation({ summary: 'Get plan usage summary (active vs frozen properties/users)' })
+  async getPlanUsage(@Param('id') id: string) {
+    return this.agenciesService.getPlanUsage(id);
+  }
+
+  @Get(':id/frozen-entities')
+  @ApiOperation({ summary: 'Get list of frozen properties and users' })
+  async getFrozenEntities(@Param('id') id: string) {
+    return this.agenciesService.getFrozenEntities(id);
+  }
+
+  @Get(':id/preview-plan-change')
+  @ApiOperation({ summary: 'Preview what would happen if agency changes to a different plan' })
+  @ApiQuery({ name: 'newPlan', required: true, description: 'The new plan name (FREE, ESSENTIAL, PROFESSIONAL, ENTERPRISE)' })
+  async previewPlanChange(
+    @Param('id') id: string,
+    @Query('newPlan') newPlan: string,
+  ) {
+    return this.agenciesService.previewPlanChange(id, newPlan);
+  }
+
+  @Post(':id/switch-active-property')
+  @ApiOperation({ summary: 'Switch which property is active (for FREE plan with 1 property limit)' })
+  async switchActiveProperty(
+    @Param('id') id: string,
+    @Body() data: { newActivePropertyId: string },
+  ) {
+    return this.agenciesService.switchActiveProperty(id, data.newActivePropertyId);
+  }
+
+  @Post(':id/enforce-plan')
+  @ApiOperation({ summary: 'Manually enforce plan limits (admin operation)' })
+  async enforcePlanLimits(@Param('id') id: string) {
+    return this.agenciesService.enforcePlanLimits(id);
+  }
+
+  @Get(':id/check-property-creation')
+  @ApiOperation({ summary: 'Check if property creation is allowed for the agency' })
+  async checkPropertyCreationAllowed(@Param('id') id: string) {
+    return this.agenciesService.checkPropertyCreationAllowed(id);
+  }
+
+  @Get(':id/check-user-creation')
+  @ApiOperation({ summary: 'Check if user creation is allowed for the agency' })
+  async checkUserCreationAllowed(@Param('id') id: string) {
+    return this.agenciesService.checkUserCreationAllowed(id);
   }
 }

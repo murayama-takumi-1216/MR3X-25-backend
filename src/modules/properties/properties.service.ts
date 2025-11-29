@@ -1,11 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
+import { PlansService } from '../plans/plans.service';
+import { PlanEnforcementService, PLAN_MESSAGES } from '../plans/plan-enforcement.service';
 import * as fs from 'fs';
 import * as path from 'path';
 
 @Injectable()
 export class PropertiesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private plansService: PlansService,
+    private planEnforcement: PlanEnforcementService,
+  ) {}
 
   async findAll(params: { skip?: number; take?: number; agencyId?: string; status?: string; ownerId?: string; createdById?: string }) {
     const { skip = 0, take = 20, agencyId, status, ownerId, createdById } = params;
@@ -62,6 +68,23 @@ export class PropertiesService {
   }
 
   async create(data: any, userId: string) {
+    // Check plan limits for INDEPENDENT_OWNER users
+    const planCheck = await this.plansService.checkPlanLimits(userId, 'property');
+    if (!planCheck.allowed) {
+      throw new ForbiddenException(planCheck.message || 'Você atingiu o limite de propriedades do seu plano.');
+    }
+
+    // Check agency plan limits if agencyId is provided
+    if (data.agencyId) {
+      const agencyCheck = await this.planEnforcement.checkPropertyOperationAllowed(
+        data.agencyId,
+        'create',
+      );
+      if (!agencyCheck.allowed) {
+        throw new ForbiddenException(agencyCheck.message || 'A agência atingiu o limite de propriedades do plano.');
+      }
+    }
+
     const property = await this.prisma.property.create({
       data: {
         address: data.address,
@@ -72,7 +95,7 @@ export class PropertiesService {
         status: data.status || 'DISPONIVEL',
         name: data.name,
         dueDay: data.dueDay,
-        ownerId: data.ownerId ? BigInt(data.ownerId) : null,
+        ownerId: data.ownerId ? BigInt(data.ownerId) : BigInt(userId),
         agencyId: data.agencyId ? BigInt(data.agencyId) : null,
         brokerId: data.brokerId ? BigInt(data.brokerId) : null,
         createdBy: BigInt(userId),
@@ -85,10 +108,24 @@ export class PropertiesService {
   async update(id: string, data: any) {
     const property = await this.prisma.property.findUnique({
       where: { id: BigInt(id) },
+      select: {
+        id: true,
+        deleted: true,
+        isFrozen: true,
+        frozenReason: true,
+        agencyId: true,
+      },
     });
 
     if (!property || property.deleted) {
       throw new NotFoundException('Property not found');
+    }
+
+    // Check if property is frozen
+    if (property.isFrozen) {
+      throw new ForbiddenException(
+        property.frozenReason || PLAN_MESSAGES.EDIT_FROZEN_PROPERTY
+      );
     }
 
     const updateData: any = { ...data };
@@ -161,10 +198,21 @@ export class PropertiesService {
       monthlyRent: property.monthlyRent?.toString(),
       nextDueDate: property.nextDueDate?.toISOString() || null,
       createdAt: property.createdAt?.toISOString() || null,
+      frozenAt: property.frozenAt?.toISOString() || null,
+      isFrozen: property.isFrozen || false,
+      frozenReason: property.frozenReason || null,
+      previousStatus: property.previousStatus || null,
       owner: property.owner ? { ...property.owner, id: property.owner.id.toString() } : null,
       tenant: property.tenant ? { ...property.tenant, id: property.tenant.id.toString() } : null,
       broker: property.broker ? { ...property.broker, id: property.broker.id.toString() } : null,
       agency: property.agency ? { ...property.agency, id: property.agency.id.toString() } : null,
     };
+  }
+
+  /**
+   * Check if a property is frozen
+   */
+  async isPropertyFrozen(propertyId: string): Promise<boolean> {
+    return this.planEnforcement.isPropertyFrozen(propertyId);
   }
 }

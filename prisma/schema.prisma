@@ -71,11 +71,20 @@ model Agency {
   zipCode       String?  @map("zip_code") @db.VarChar(20)
   status        String   @default("ACTIVE") @db.VarChar(20)
   plan          String   @default("FREE") @db.VarChar(20)
-  maxProperties Int?     @default(5) @map("max_properties")
-  maxUsers      Int?     @default(3) @map("max_users")
+  maxProperties Int?     @default(1) @map("max_properties") // FREE plan: 1 property for agencies
+  maxUsers      Int?     @default(5) @map("max_users") // FREE plan: 5 users for agencies
   agencyFee     Float    @default(8.0) @map("agency_fee") // Percentage fee for this agency (0-100)
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(0)
   updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  // Plan enforcement tracking
+  lastPlanChange        DateTime? @map("last_plan_change") @db.Timestamp(0)
+  frozenPropertiesCount Int       @default(0) @map("frozen_properties_count")
+  frozenUsersCount      Int       @default(0) @map("frozen_users_count")
+
+  // API access control (disabled on FREE plan)
+  apiEnabled            Boolean   @default(false) @map("api_enabled")
+  apiKey                String?   @map("api_key") @db.VarChar(255)
 
   // Relations
   users         User[]
@@ -118,6 +127,10 @@ model User {
   notificationPreferences String?   @map("notification_preferences") @db.Text
   refreshToken            String?   @map("refresh_token") @db.Text
   refreshTokenExpires     DateTime? @map("refresh_token_expires") @db.Timestamp(0)
+  // Frozen status for plan limit enforcement
+  isFrozen                Boolean   @default(false) @map("is_frozen")
+  frozenAt                DateTime? @map("frozen_at") @db.Timestamp(0)
+  frozenReason            String?   @map("frozen_reason") @db.VarChar(255)
   createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
 
   // Relations
@@ -212,27 +225,32 @@ model RefreshToken {
 }
 
 model Property {
-  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  ownerId      BigInt?   @map("owner_id") @db.UnsignedBigInt
-  agencyId     BigInt?   @map("agency_id") @db.UnsignedBigInt
-  brokerId     BigInt?   @map("broker_id") @db.UnsignedBigInt
-  createdBy    BigInt?   @map("created_by") @db.UnsignedBigInt
-  address      String    @db.VarChar(255)
-  monthlyRent  Decimal?  @map("monthly_rent") @db.Decimal(12, 2)
-  status       String    @db.VarChar(50)
-  tenantId     BigInt?   @map("tenant_id") @db.UnsignedBigInt
-  neighborhood String    @default("") @db.VarChar(255)
-  city         String    @default("") @db.VarChar(255)
-  cep          String    @default("") @db.VarChar(20)
-  name         String?   @db.VarChar(255)
-  nextDueDate  DateTime? @map("next_due_date") @db.Date
-  dueDay       Int?      @map("due_day")
-  stateNumber  String?   @map("state_number") @db.VarChar(50)
-  agencyFee    Float?    @map("agency_fee") // Property-specific agency fee (overrides agency fee if set)
-  deleted      Boolean   @default(false)
-  deletedAt    DateTime? @map("deleted_at") @db.DateTime(0)
-  deletedBy    BigInt?   @map("deleted_by") @db.UnsignedBigInt
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
+  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  ownerId        BigInt?   @map("owner_id") @db.UnsignedBigInt
+  agencyId       BigInt?   @map("agency_id") @db.UnsignedBigInt
+  brokerId       BigInt?   @map("broker_id") @db.UnsignedBigInt
+  createdBy      BigInt?   @map("created_by") @db.UnsignedBigInt
+  address        String    @db.VarChar(255)
+  monthlyRent    Decimal?  @map("monthly_rent") @db.Decimal(12, 2)
+  status         String    @db.VarChar(50)
+  tenantId       BigInt?   @map("tenant_id") @db.UnsignedBigInt
+  neighborhood   String    @default("") @db.VarChar(255)
+  city           String    @default("") @db.VarChar(255)
+  cep            String    @default("") @db.VarChar(20)
+  name           String?   @db.VarChar(255)
+  nextDueDate    DateTime? @map("next_due_date") @db.Date
+  dueDay         Int?      @map("due_day")
+  stateNumber    String?   @map("state_number") @db.VarChar(50)
+  agencyFee      Float?    @map("agency_fee") // Property-specific agency fee (overrides agency fee if set)
+  deleted        Boolean   @default(false)
+  deletedAt      DateTime? @map("deleted_at") @db.DateTime(0)
+  deletedBy      BigInt?   @map("deleted_by") @db.UnsignedBigInt
+  // Frozen status for plan limit enforcement
+  isFrozen       Boolean   @default(false) @map("is_frozen")
+  frozenAt       DateTime? @map("frozen_at") @db.Timestamp(0)
+  frozenReason   String?   @map("frozen_reason") @db.VarChar(255)
+  previousStatus String?   @map("previous_status") @db.VarChar(50) // Status before freezing
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
 
   // Relations
   owner         User?   @relation("PropertyOwner", fields: [ownerId], references: [id])

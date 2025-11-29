@@ -12,14 +12,101 @@ export interface Plan {
   updatedAt: Date;
 }
 
+// Entity type for plan limits differentiation
+export type EntityType = 'agency' | 'independent_owner';
+
+// Plan limits structure for different entity types
+export interface PlanLimits {
+  properties: number;
+  users: number;
+  apiAccess: boolean;
+  advancedReports: boolean;
+  automations: boolean;
+}
+
+// Plan limits by entity type - FREE plan has different limits for agencies vs independent owners
+export const PLAN_LIMITS: Record<string, Record<EntityType, PlanLimits>> = {
+  FREE: {
+    agency: {
+      properties: 1,      // Agencies on FREE get only 1 active property
+      users: 5,           // Agencies on FREE get 5 users
+      apiAccess: false,
+      advancedReports: false,
+      automations: false,
+    },
+    independent_owner: {
+      properties: 5,      // Independent owners on FREE get 5 properties
+      users: 3,           // Independent owners on FREE get 3 tenants
+      apiAccess: false,
+      advancedReports: false,
+      automations: false,
+    },
+  },
+  ESSENTIAL: {
+    agency: {
+      properties: 50,
+      users: 10,
+      apiAccess: false,
+      advancedReports: true,
+      automations: false,
+    },
+    independent_owner: {
+      properties: 50,
+      users: 10,
+      apiAccess: false,
+      advancedReports: true,
+      automations: false,
+    },
+  },
+  PROFESSIONAL: {
+    agency: {
+      properties: 100,
+      users: 20,
+      apiAccess: true,
+      advancedReports: true,
+      automations: true,
+    },
+    independent_owner: {
+      properties: 100,
+      users: 20,
+      apiAccess: true,
+      advancedReports: true,
+      automations: true,
+    },
+  },
+  ENTERPRISE: {
+    agency: {
+      properties: 500,
+      users: 100,
+      apiAccess: true,
+      advancedReports: true,
+      automations: true,
+    },
+    independent_owner: {
+      properties: 500,
+      users: 100,
+      apiAccess: true,
+      advancedReports: true,
+      automations: true,
+    },
+  },
+};
+
+// Helper function to get plan limits for a specific entity type
+export function getPlanLimitsForEntity(planName: string, entityType: EntityType): PlanLimits {
+  const planLimits = PLAN_LIMITS[planName] || PLAN_LIMITS['FREE'];
+  return planLimits[entityType] || planLimits['agency'];
+}
+
+// Default plans for backward compatibility (uses agency limits as default display)
 export const DEFAULT_PLANS: Omit<Plan, 'id' | 'subscribers' | 'createdAt' | 'updatedAt'>[] = [
   {
     name: 'FREE',
     price: 0,
-    propertyLimit: 5,
-    userLimit: 3,
-    features: ['5 propriedades', '3 usuários', 'Suporte por email'],
-    description: 'Plano básico para começar',
+    propertyLimit: 1,     // Display agency limit (1 property)
+    userLimit: 5,         // Display agency limit (5 users)
+    features: ['1 propriedade ativa', '5 usuários', 'Suporte por email', 'Visualização de dados históricos'],
+    description: 'Plano gratuito para começar - Propriedades extras são congeladas, não excluídas',
     isActive: true,
   },
   {
@@ -36,7 +123,7 @@ export const DEFAULT_PLANS: Omit<Plan, 'id' | 'subscribers' | 'createdAt' | 'upd
     price: 199.90,
     propertyLimit: 100,
     userLimit: 20,
-    features: ['100 propriedades', '20 usuários', 'Suporte prioritário', 'Relatórios avançados', 'API access'],
+    features: ['100 propriedades', '20 usuários', 'Suporte prioritário', 'Relatórios avançados', 'API access', 'Automações'],
     description: 'Para agências em crescimento',
     isActive: true,
   },
@@ -45,7 +132,7 @@ export const DEFAULT_PLANS: Omit<Plan, 'id' | 'subscribers' | 'createdAt' | 'upd
     price: 499.90,
     propertyLimit: 500,
     userLimit: 100,
-    features: ['500 propriedades', '100 usuários', 'Suporte 24/7', 'API access', 'White-label', 'Analytics avançado'],
+    features: ['500 propriedades', '100 usuários', 'Suporte 24/7', 'API access', 'White-label', 'Analytics avançado', 'Automações ilimitadas'],
     description: 'Para grandes agências e empresas',
     isActive: true,
   },

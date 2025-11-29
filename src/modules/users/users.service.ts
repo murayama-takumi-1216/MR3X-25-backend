@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
+import { PlansService } from '../plans/plans.service';
+import { PlanEnforcementService, PLAN_MESSAGES } from '../plans/plan-enforcement.service';
 import { CreateUserDto, UpdateUserDto, CreateTenantDto, UpdateTenantDto } from './dto/user.dto';
 import * as bcrypt from 'bcryptjs';
 import { UserRole } from '@prisma/client';
@@ -38,7 +40,11 @@ const ROLE_CREATION_ALLOWED: Record<UserRole, UserRole[]> = {
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private plansService: PlansService,
+    private planEnforcement: PlanEnforcementService,
+  ) {}
 
   /**
    * Validates if a creator role can create a target role
@@ -98,6 +104,9 @@ export class UsersService {
           agencyId: true,
           createdAt: true,
           lastLogin: true,
+          isFrozen: true,
+          frozenAt: true,
+          frozenReason: true,
           agency: {
             select: { id: true, name: true },
           },
@@ -112,6 +121,7 @@ export class UsersService {
         ...u,
         id: u.id.toString(),
         agencyId: u.agencyId?.toString(),
+        frozenAt: u.frozenAt?.toISOString() || null,
         agency: u.agency ? { ...u.agency, id: u.agency.id.toString() } : null,
       })),
       total,
@@ -159,6 +169,25 @@ export class UsersService {
       this.validateRoleCreation(creatorRole, dto.role as UserRole);
     }
 
+    // Check plan limits for INDEPENDENT_OWNER creating INQUILINO (tenant)
+    if (creatorId && creatorRole === UserRole.INDEPENDENT_OWNER && dto.role === 'INQUILINO') {
+      const planCheck = await this.plansService.checkPlanLimits(creatorId, 'user');
+      if (!planCheck.allowed) {
+        throw new ForbiddenException(planCheck.message || 'Você atingiu o limite de inquilinos do seu plano.');
+      }
+    }
+
+    // Check agency plan limits if agencyId is provided
+    if (dto.agencyId) {
+      const agencyCheck = await this.planEnforcement.checkUserOperationAllowed(
+        dto.agencyId,
+        'create',
+      );
+      if (!agencyCheck.allowed) {
+        throw new ForbiddenException(agencyCheck.message || 'A agência atingiu o limite de usuários do plano.');
+      }
+    }
+
     const existingUser = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -181,6 +210,12 @@ export class UsersService {
       finalAgencyId = manager?.agencyId ?? null;
     }
 
+    // Set ownerId when INDEPENDENT_OWNER creates a tenant (for plan limit tracking)
+    let ownerId: bigint | null = null;
+    if (creatorRole === UserRole.INDEPENDENT_OWNER && dto.role === 'INQUILINO' && creatorId) {
+      ownerId = BigInt(creatorId);
+    }
+
     const user = await this.prisma.user.create({
       data: {
         email: dto.email,
@@ -194,6 +229,7 @@ export class UsersService {
         agencyId: finalAgencyId,
         companyId: dto.companyId ? BigInt(dto.companyId) : null,
         createdBy: creatorId ? BigInt(creatorId) : null,
+        ownerId: ownerId,
         address: dto.address,
         cep: dto.cep,
         neighborhood: dto.neighborhood,
@@ -222,10 +258,22 @@ export class UsersService {
   async update(id: string, dto: UpdateUserDto) {
     const user = await this.prisma.user.findUnique({
       where: { id: BigInt(id) },
+      select: {
+        id: true,
+        isFrozen: true,
+        frozenReason: true,
+      },
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
+    }
+
+    // Check if user is frozen
+    if (user.isFrozen) {
+      throw new ForbiddenException(
+        user.frozenReason || PLAN_MESSAGES.EDIT_FROZEN_USER
+      );
     }
 
     const updateData: any = {};
