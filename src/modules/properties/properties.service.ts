@@ -67,17 +67,22 @@ export class PropertiesService {
     return this.serializeProperty(property);
   }
 
-  async create(data: any, userId: string) {
+  async create(data: any, user: { sub: string; role: string; agencyId?: string | null }) {
+    const userId = user.sub;
+
+    // Determine the agencyId - use from data if provided, otherwise use user's agencyId
+    const agencyId = data.agencyId || user.agencyId || null;
+
     // Check plan limits for INDEPENDENT_OWNER users
     const planCheck = await this.plansService.checkPlanLimits(userId, 'property');
     if (!planCheck.allowed) {
       throw new ForbiddenException(planCheck.message || 'Você atingiu o limite de propriedades do seu plano.');
     }
 
-    // Check agency plan limits if agencyId is provided
-    if (data.agencyId) {
+    // Check agency plan limits if agencyId is available
+    if (agencyId) {
       const agencyCheck = await this.planEnforcement.checkPropertyOperationAllowed(
-        data.agencyId,
+        agencyId,
         'create',
       );
       if (!agencyCheck.allowed) {
@@ -96,7 +101,7 @@ export class PropertiesService {
         name: data.name,
         dueDay: data.dueDay,
         ownerId: data.ownerId ? BigInt(data.ownerId) : BigInt(userId),
-        agencyId: data.agencyId ? BigInt(data.agencyId) : null,
+        agencyId: agencyId ? BigInt(agencyId) : null,
         brokerId: data.brokerId ? BigInt(data.brokerId) : null,
         createdBy: BigInt(userId),
       },

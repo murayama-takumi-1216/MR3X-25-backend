@@ -236,24 +236,36 @@ export class PropertyImagesService {
   ): boolean {
     const hasPlatformAccess = user.role === 'CEO' || user.role === 'ADMIN';
 
-    const hasAgencyAdminAccess = Boolean(
+    // Check if user belongs to the same agency as the property
+    const isSameAgency = Boolean(
       property.agencyId &&
       user.agencyId &&
-      property.agencyId.toString() === user.agencyId &&
-      user.role === 'AGENCY_ADMIN'
+      property.agencyId.toString() === user.agencyId
     );
 
-    const hasManagerAccess = Boolean(
-      user.role === 'AGENCY_MANAGER' && property.createdBy?.toString() === user.sub
-    );
+    // Agency admin has full access to agency properties
+    const hasAgencyAdminAccess = isSameAgency && user.role === 'AGENCY_ADMIN';
 
+    // Agency manager has access to agency properties
+    const hasManagerAccess = isSameAgency && user.role === 'AGENCY_MANAGER';
+
+    // Broker has access to properties assigned to them OR properties in their agency
     const hasBrokerAccess = Boolean(
-      property.brokerId && user.role === 'BROKER' && property.brokerId.toString() === user.sub
+      user.role === 'BROKER' && (
+        (property.brokerId && property.brokerId.toString() === user.sub) ||
+        isSameAgency
+      )
     );
+
+    // Proprietario linked to agency has access to properties in their agency
+    const hasProprietarioAccess = isSameAgency && user.role === 'PROPRIETARIO';
+
+    // Independent owner has access to their own properties
+    const hasIndependentOwnerAccess = user.role === 'INDEPENDENT_OWNER' && property.ownerId?.toString() === user.sub;
 
     const isOwner = property.ownerId?.toString() === user.sub;
 
-    return isOwner || hasAgencyAdminAccess || hasManagerAccess || hasBrokerAccess || hasPlatformAccess;
+    return isOwner || hasAgencyAdminAccess || hasManagerAccess || hasBrokerAccess || hasProprietarioAccess || hasIndependentOwnerAccess || hasPlatformAccess;
   }
 
   private serializeImage(image: any) {

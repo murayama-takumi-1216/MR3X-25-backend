@@ -169,8 +169,8 @@ export class PropertiesController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new property' })
-  async create(@Body() data: any, @CurrentUser('sub') userId: string) {
-    return this.propertiesService.create(data, userId);
+  async create(@Body() data: any, @CurrentUser() user: any) {
+    return this.propertiesService.create(data, user);
   }
 
   @Put(':id')
