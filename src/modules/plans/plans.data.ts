@@ -24,7 +24,7 @@ export interface PlanLimits {
   automations: boolean;
 }
 
-// Plan limits by entity type - FREE plan has different limits for agencies vs independent owners
+// Plan limits by entity type - INDEPENDENT_OWNER has SAME limits as AGENCY (Director)
 export const PLAN_LIMITS: Record<string, Record<EntityType, PlanLimits>> = {
   FREE: {
     agency: {
@@ -35,8 +35,8 @@ export const PLAN_LIMITS: Record<string, Record<EntityType, PlanLimits>> = {
       automations: false,
     },
     independent_owner: {
-      properties: 5,      // Independent owners on FREE get 5 properties
-      users: 3,           // Independent owners on FREE get 3 tenants
+      properties: 1,      // Same as agency - 1 active property
+      users: 5,           // Same as agency - 5 users (tenants)
       apiAccess: false,
       advancedReports: false,
       automations: false,
