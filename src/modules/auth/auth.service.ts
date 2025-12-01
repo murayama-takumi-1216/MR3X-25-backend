@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
@@ -7,16 +7,20 @@ import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../../config/prisma.service';
 import { RegisterDto, LoginDto, VerifyEmailRequestDto, VerifyEmailConfirmDto, ForgotPasswordDto, ResetPasswordDto, CompleteRegisterDto } from './dto/auth.dto';
 import { UserRole } from '@prisma/client';
+import { EmailService } from '../../common/services/email.service';
 
 const EMAIL_CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const EMAIL_CODE_COOLDOWN_MS = 60 * 1000; // 60 seconds
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private emailService: EmailService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -60,8 +64,12 @@ export class AuthService {
       },
     });
 
-    // TODO: Send email with verification code
-    console.log(`Verification code for ${dto.email}: ${verificationCode}`);
+    // Send email with verification code
+    const emailSent = await this.emailService.sendVerificationCode(dto.email, verificationCode);
+    if (!emailSent) {
+      this.logger.warn(`Failed to send verification email to ${dto.email} during registration`);
+    }
+    this.logger.log(`Verification code for ${dto.email}: ${verificationCode}`);
 
     return {
       message: 'Registration successful. Please verify your email.',
@@ -167,8 +175,14 @@ export class AuthService {
       },
     });
 
-    // TODO: Send email with verification code
-    console.log(`Verification code for ${email}: ${code}`);
+    // Send email with verification code
+    const emailSent = await this.emailService.sendVerificationCode(email, code);
+    if (!emailSent) {
+      this.logger.warn(`Failed to send verification email to ${email}, but code was generated`);
+    }
+
+    // Also log to console for development/debugging
+    this.logger.log(`Verification code for ${email}: ${code}`);
 
     return { requestId, expiresAt, cooldownSeconds: Math.ceil(EMAIL_CODE_COOLDOWN_MS / 1000) };
   }
@@ -241,8 +255,14 @@ export class AuthService {
       },
     });
 
-    // TODO: Send email with reset code
-    console.log(`Password reset code for ${dto.email}: ${resetCode}`);
+    // Send email with reset code
+    const emailSent = await this.emailService.sendPasswordResetCode(dto.email, resetCode);
+    if (!emailSent) {
+      this.logger.warn(`Failed to send password reset email to ${dto.email}`);
+    }
+
+    // Also log to console for development/debugging
+    this.logger.log(`Password reset code for ${dto.email}: ${resetCode}`);
 
     return { message: 'If the email exists, a reset code has been sent' };
   }
