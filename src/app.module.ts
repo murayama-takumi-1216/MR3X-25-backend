@@ -23,6 +23,8 @@ import { TenantAnalysisModule } from './modules/tenant-analysis/tenant-analysis.
 import { InspectionsModule } from './modules/inspections/inspections.module';
 import { AgreementsModule } from './modules/agreements/agreements.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
+import { ApiClientModule } from './modules/api-client/api-client.module';
+import { SalesRepModule } from './modules/sales-rep/sales-rep.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -54,6 +56,8 @@ import { HealthController } from './health.controller';
     InspectionsModule,
     AgreementsModule,
     InvoicesModule,
+    ApiClientModule,
+    SalesRepModule,
   ],
   controllers: [HealthController],
 })
