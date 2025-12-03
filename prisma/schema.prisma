@@ -201,6 +201,13 @@ model User {
   salesMessageReplies   SalesMessageReply[] @relation("SalesMessageReplySender")
   salesNotifications    SalesNotification[] @relation("SalesNotificationUser")
 
+  // Sales Rep CRM relations
+  salesProspects        SalesProspect[]     @relation("SalesRepProspects")
+  salesProposals        SalesProposal[]     @relation("SalesRepProposals")
+  salesCommissions      SalesCommission[]   @relation("SalesRepCommissions")
+  salesActivities       SalesActivity[]     @relation("SalesRepActivities")
+  salesGoals            SalesGoal[]         @relation("SalesRepGoals")
+
   @@map("users")
 }
 
@@ -927,6 +934,149 @@ model SalesNotification {
 
   @@index([userId])
   @@map("sales_notifications")
+}
+
+/// Sales Representative Prospects (potential clients)
+model SalesProspect {
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  salesRepId      BigInt   @map("sales_rep_id") @db.UnsignedBigInt
+  name            String   @db.VarChar(255)
+  contactName     String   @map("contact_name") @db.VarChar(255)
+  contactEmail    String   @map("contact_email") @db.VarChar(191)
+  contactPhone    String?  @map("contact_phone") @db.VarChar(30)
+  address         String?  @db.VarChar(255)
+  city            String?  @db.VarChar(100)
+  state           String?  @db.VarChar(10)
+  cnpj            String?  @db.VarChar(20)
+  status          String   @default("prospecting") @db.VarChar(30) // prospecting, qualification, proposal_sent, negotiation, closed_won, closed_lost
+  stage           String   @default("prospecting") @db.VarChar(30) // Same as status, for pipeline visualization
+  source          String?  @db.VarChar(50) // Indicação, Site, LinkedIn, Eventos, Cold Call
+  estimatedValue  Decimal? @map("estimated_value") @db.Decimal(12, 2)
+  probability     Int?     @default(20) // 0-100
+  notes           String?  @db.Text
+  lastContactAt   DateTime? @map("last_contact_at") @db.Timestamp(0)
+  nextAction      String?  @map("next_action") @db.VarChar(255)
+  nextActionDate  DateTime? @map("next_action_date") @db.Date
+  convertedAt     DateTime? @map("converted_at") @db.Timestamp(0)
+  lostAt          DateTime? @map("lost_at") @db.Timestamp(0)
+  lostReason      String?  @map("lost_reason") @db.Text
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  // Relations
+  salesRep  User            @relation("SalesRepProspects", fields: [salesRepId], references: [id])
+  proposals SalesProposal[]
+  activities SalesActivity[]
+
+  @@index([salesRepId])
+  @@index([status])
+  @@map("sales_prospects")
+}
+
+/// Sales Representative Proposals
+model SalesProposal {
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  salesRepId      BigInt   @map("sales_rep_id") @db.UnsignedBigInt
+  prospectId      BigInt   @map("prospect_id") @db.UnsignedBigInt
+  title           String   @db.VarChar(255)
+  planType        String   @map("plan_type") @db.VarChar(50) // starter, business, premium, enterprise
+  value           Decimal  @db.Decimal(12, 2)
+  discount        Decimal? @default(0) @db.Decimal(5, 2) // percentage
+  finalValue      Decimal  @map("final_value") @db.Decimal(12, 2)
+  status          String   @default("draft") @db.VarChar(30) // draft, sent, viewed, accepted, rejected, expired
+  validUntil      DateTime @map("valid_until") @db.Date
+  sentAt          DateTime? @map("sent_at") @db.Timestamp(0)
+  viewedAt        DateTime? @map("viewed_at") @db.Timestamp(0)
+  respondedAt     DateTime? @map("responded_at") @db.Timestamp(0)
+  notes           String?  @db.Text
+  items           String?  @db.Text // JSON array of items
+  pdfUrl          String?  @map("pdf_url") @db.VarChar(500)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  // Relations
+  salesRep   User          @relation("SalesRepProposals", fields: [salesRepId], references: [id])
+  prospect   SalesProspect @relation(fields: [prospectId], references: [id])
+  commission SalesCommission?
+
+  @@index([salesRepId])
+  @@index([prospectId])
+  @@index([status])
+  @@map("sales_proposals")
+}
+
+/// Sales Representative Commissions
+model SalesCommission {
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  salesRepId      BigInt   @map("sales_rep_id") @db.UnsignedBigInt
+  proposalId      BigInt?  @unique @map("proposal_id") @db.UnsignedBigInt
+  agencyId        BigInt?  @map("agency_id") @db.UnsignedBigInt
+  agencyName      String   @map("agency_name") @db.VarChar(255)
+  planType        String   @map("plan_type") @db.VarChar(50)
+  dealValue       Decimal  @map("deal_value") @db.Decimal(12, 2)
+  commissionRate  Decimal  @map("commission_rate") @db.Decimal(5, 2) // percentage
+  commissionValue Decimal  @map("commission_value") @db.Decimal(12, 2)
+  status          String   @default("pending") @db.VarChar(30) // pending, processing, paid
+  closedAt        DateTime @map("closed_at") @db.Timestamp(0)
+  paidAt          DateTime? @map("paid_at") @db.Timestamp(0)
+  paymentMonth    String?  @map("payment_month") @db.VarChar(7) // YYYY-MM
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  // Relations
+  salesRep  User           @relation("SalesRepCommissions", fields: [salesRepId], references: [id])
+  proposal  SalesProposal? @relation(fields: [proposalId], references: [id])
+
+  @@index([salesRepId])
+  @@index([status])
+  @@index([paymentMonth])
+  @@map("sales_commissions")
+}
+
+/// Sales Representative Activities (for tracking interactions)
+model SalesActivity {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  salesRepId  BigInt   @map("sales_rep_id") @db.UnsignedBigInt
+  prospectId  BigInt?  @map("prospect_id") @db.UnsignedBigInt
+  type        String   @db.VarChar(50) // call, meeting, email, proposal, follow_up, note
+  title       String   @db.VarChar(255)
+  description String?  @db.Text
+  date        DateTime @db.Timestamp(0)
+  duration    Int?     // minutes
+  outcome     String?  @db.VarChar(100) // positive, neutral, negative
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+
+  // Relations
+  salesRep User           @relation("SalesRepActivities", fields: [salesRepId], references: [id])
+  prospect SalesProspect? @relation(fields: [prospectId], references: [id])
+
+  @@index([salesRepId])
+  @@index([prospectId])
+  @@index([date])
+  @@map("sales_activities")
+}
+
+/// Sales Representative Goals/Targets
+model SalesGoal {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  salesRepId  BigInt   @map("sales_rep_id") @db.UnsignedBigInt
+  month       String   @db.VarChar(7) // YYYY-MM
+  targetLeads Int      @default(0) @map("target_leads")
+  targetConversions Int @default(0) @map("target_conversions")
+  targetRevenue Decimal @default(0) @map("target_revenue") @db.Decimal(12, 2)
+  achievedLeads Int    @default(0) @map("achieved_leads")
+  achievedConversions Int @default(0) @map("achieved_conversions")
+  achievedRevenue Decimal @default(0) @map("achieved_revenue") @db.Decimal(12, 2)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  // Relations
+  salesRep User @relation("SalesRepGoals", fields: [salesRepId], references: [id])
+
+  @@unique([salesRepId, month])
+  @@index([salesRepId])
+  @@map("sales_goals")
 }
 
 /// Plan modification requests from ADMIN users that require CEO approval
