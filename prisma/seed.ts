@@ -54,6 +54,9 @@ async function main() {
   // Plan modification requests (references User)
   await prisma.planModificationRequest.deleteMany();
 
+  // Tenant analysis (references User)
+  await prisma.tenantAnalysis.deleteMany();
+
   // Handle User self-referential foreign keys before deleting users
   // User has: ownerId, brokerId, createdBy - all pointing to other users
   await prisma.user.updateMany({
