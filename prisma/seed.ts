@@ -57,6 +57,18 @@ async function main() {
   // Tenant analysis (references User)
   await prisma.tenantAnalysis.deleteMany();
 
+  // Sales Rep CRM tables (reference User)
+  await prisma.salesActivity.deleteMany();
+  await prisma.salesGoal.deleteMany();
+  await prisma.salesCommission.deleteMany();
+  await prisma.salesProposal.deleteMany();
+  await prisma.salesProspect.deleteMany();
+
+  // Sales Inbox tables (reference User)
+  await prisma.salesMessageReply.deleteMany();
+  await prisma.salesNotification.deleteMany();
+  await prisma.salesMessage.deleteMany();
+
   // Handle User self-referential foreign keys before deleting users
   // User has: ownerId, brokerId, createdBy - all pointing to other users
   await prisma.user.updateMany({
