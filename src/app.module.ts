@@ -25,6 +25,7 @@ import { AgreementsModule } from './modules/agreements/agreements.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { ApiClientModule } from './modules/api-client/api-client.module';
 import { SalesRepModule } from './modules/sales-rep/sales-rep.module';
+import { AuditorModule } from './modules/auditor/auditor.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -58,6 +59,7 @@ import { HealthController } from './health.controller';
     InvoicesModule,
     ApiClientModule,
     SalesRepModule,
+    AuditorModule,
   ],
   controllers: [HealthController],
 })
