@@ -18,7 +18,9 @@ export class TenantAnalysisService {
     private mockService: MockAnalysisService,
     private configService: ConfigService,
   ) {
-    this.useMockData = !this.configService.get<boolean>('TENANT_ANALYSIS_ENABLED', false);
+    // ConfigService returns strings from .env, need to parse boolean properly
+    const tenantAnalysisEnabled = this.configService.get<string>('TENANT_ANALYSIS_ENABLED', 'false');
+    this.useMockData = tenantAnalysisEnabled !== 'true';
     this.analysisValidityDays = this.configService.get<number>('TENANT_ANALYSIS_VALIDITY_DAYS', 30);
 
     if (this.useMockData) {
@@ -42,22 +44,10 @@ export class TenantAnalysisService {
       return this.formatAnalysisResponse(existingAnalysis);
     }
 
-    // Create pending analysis record
-    const analysis = await this.prisma.tenantAnalysis.create({
-      data: {
-        document,
-        documentType,
-        name,
-        requestedById: userId,
-        agencyId,
-        status: TenantAnalysisStatus.PENDING,
-      },
-    });
+    // Perform analysis FIRST - don't save to DB if it fails
+    let financial, background, documentValidation;
 
     try {
-      // Perform analysis based on type
-      let financial, background, documentValidation;
-
       if (analysisType === AnalysisType.FULL || analysisType === AnalysisType.FINANCIAL) {
         financial = await this.getFinancialAnalysis(document);
       }
@@ -69,94 +59,125 @@ export class TenantAnalysisService {
       if (analysisType === AnalysisType.FULL) {
         documentValidation = await this.getDocumentValidation(document);
       }
-
-      // Calculate risk score and level
-      const { riskScore, riskLevel } = this.calculateRiskScore(financial, background, documentValidation);
-      const recommendation = this.getRecommendation(riskScore, riskLevel, background);
-      const validUntil = new Date();
-      validUntil.setDate(validUntil.getDate() + this.analysisValidityDays);
-
-      // Update analysis record with results
-      const updatedAnalysis = await this.prisma.tenantAnalysis.update({
-        where: { id: analysis.id },
-        data: {
-          // Financial data
-          creditScore: financial?.creditScore,
-          totalDebts: financial?.totalDebts,
-          activeDebts: financial?.activeDebts,
-          hasNegativeRecords: financial?.hasNegativeRecords,
-          paymentDelays: financial?.paymentDelays,
-          averageDelayDays: financial?.averageDelayDays,
-          financialDetails: financial?.debtDetails ? JSON.stringify(financial.debtDetails) : null,
-          financialStatus: financial?.status,
-
-          // Criminal data
-          hasCriminalRecords: background?.hasCriminalRecords,
-          criminalRecordsCount: background?.criminalRecords?.length || 0,
-          criminalDetails: background?.criminalRecords ? JSON.stringify(background.criminalRecords) : null,
-          criminalStatus: background?.hasCriminalRecords ? 'WARNING' : 'CLEAR',
-
-          // Judicial data
-          hasJudicialRecords: background?.hasJudicialRecords,
-          judicialRecordsCount: background?.judicialRecords?.length || 0,
-          hasEvictions: background?.hasEvictions,
-          evictionsCount: background?.evictionsCount,
-          judicialDetails: background?.judicialRecords ? JSON.stringify(background.judicialRecords) : null,
-          judicialStatus: background?.hasEvictions ? 'CRITICAL' : (background?.hasJudicialRecords ? 'WARNING' : 'CLEAR'),
-
-          // Protest data
-          hasProtests: background?.hasProtests,
-          protestsCount: background?.protestRecords?.length || 0,
-          totalProtestValue: background?.totalProtestValue,
-          protestDetails: background?.protestRecords ? JSON.stringify(background.protestRecords) : null,
-          protestStatus: background?.hasProtests ? 'WARNING' : 'CLEAR',
-
-          // Document validation
-          documentValid: documentValidation?.documentValid,
-          documentActive: documentValidation?.documentActive,
-          documentOwnerMatch: documentValidation?.documentOwnerMatch,
-          hasFraudAlerts: documentValidation?.hasFraudAlerts,
-          documentStatus: documentValidation?.status,
-          name: documentValidation?.registrationName || name,
-
-          // Risk assessment
-          riskScore,
-          riskLevel,
-          recommendation: recommendation.recommendation,
-          recommendationNotes: recommendation.notes,
-
-          // Status
-          status: TenantAnalysisStatus.COMPLETED,
-          analyzedAt: new Date(),
-          validUntil,
-
-          // Raw response for auditing
-          rawResponse: JSON.stringify({ financial, background, documentValidation }),
-        },
-        include: {
-          requestedBy: {
-            select: { id: true, name: true, email: true },
-          },
-        },
-      });
-
-      this.logger.log(`Analysis completed for ${this.maskDocument(document)} - Risk: ${riskLevel} (${riskScore})`);
-      return this.formatAnalysisResponse(updatedAnalysis);
-
     } catch (error) {
       this.logger.error(`Analysis failed for ${this.maskDocument(document)}: ${error.message}`);
 
-      // Update record with error
-      await this.prisma.tenantAnalysis.update({
-        where: { id: analysis.id },
-        data: {
-          status: TenantAnalysisStatus.FAILED,
-          errorMessage: error.message,
-        },
-      });
+      // Extract user-friendly error message
+      const errorMessage = this.extractErrorMessage(error);
 
-      throw error;
+      // Don't save to DB - just throw the error with clear message
+      throw new Error(errorMessage);
     }
+
+    // Calculate risk score and level
+    const { riskScore, riskLevel } = this.calculateRiskScore(financial, background, documentValidation);
+    const recommendation = this.getRecommendation(riskScore, riskLevel, background);
+    const validUntil = new Date();
+    validUntil.setDate(validUntil.getDate() + this.analysisValidityDays);
+
+    // Only save to DB after successful analysis
+    const analysis = await this.prisma.tenantAnalysis.create({
+      data: {
+        document,
+        documentType,
+        name: documentValidation?.registrationName || name,
+        requestedById: userId,
+        agencyId,
+
+        // Financial data
+        creditScore: financial?.creditScore,
+        totalDebts: financial?.totalDebts,
+        activeDebts: financial?.activeDebts,
+        hasNegativeRecords: financial?.hasNegativeRecords,
+        paymentDelays: financial?.paymentDelays,
+        averageDelayDays: financial?.averageDelayDays,
+        financialDetails: financial?.debtDetails ? JSON.stringify(financial.debtDetails) : null,
+        financialStatus: financial?.status,
+
+        // Criminal data
+        hasCriminalRecords: background?.hasCriminalRecords,
+        criminalRecordsCount: background?.criminalRecords?.length || 0,
+        criminalDetails: background?.criminalRecords ? JSON.stringify(background.criminalRecords) : null,
+        criminalStatus: background?.hasCriminalRecords ? 'WARNING' : 'CLEAR',
+
+        // Judicial data
+        hasJudicialRecords: background?.hasJudicialRecords,
+        judicialRecordsCount: background?.judicialRecords?.length || 0,
+        hasEvictions: background?.hasEvictions,
+        evictionsCount: background?.evictionsCount,
+        judicialDetails: background?.judicialRecords ? JSON.stringify(background.judicialRecords) : null,
+        judicialStatus: background?.hasEvictions ? 'CRITICAL' : (background?.hasJudicialRecords ? 'WARNING' : 'CLEAR'),
+
+        // Protest data
+        hasProtests: background?.hasProtests,
+        protestsCount: background?.protestRecords?.length || 0,
+        totalProtestValue: background?.totalProtestValue,
+        protestDetails: background?.protestRecords ? JSON.stringify(background.protestRecords) : null,
+        protestStatus: background?.hasProtests ? 'WARNING' : 'CLEAR',
+
+        // Document validation
+        documentValid: documentValidation?.documentValid,
+        documentActive: documentValidation?.documentActive,
+        documentOwnerMatch: documentValidation?.documentOwnerMatch,
+        hasFraudAlerts: documentValidation?.hasFraudAlerts,
+        documentStatus: documentValidation?.status,
+
+        // Risk assessment
+        riskScore,
+        riskLevel,
+        recommendation: recommendation.recommendation,
+        recommendationNotes: recommendation.notes,
+
+        // Status
+        status: TenantAnalysisStatus.COMPLETED,
+        analyzedAt: new Date(),
+        validUntil,
+
+        // Raw response for auditing
+        rawResponse: JSON.stringify({ financial, background, documentValidation }),
+      },
+      include: {
+        requestedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    this.logger.log(`Analysis completed for ${this.maskDocument(document)} - Risk: ${riskLevel} (${riskScore})`);
+    return this.formatAnalysisResponse(analysis);
+  }
+
+  /**
+   * Extract user-friendly error message from API errors
+   */
+  private extractErrorMessage(error: any): string {
+    const message = error.message || 'Unknown error';
+
+    // Map common error messages to user-friendly Portuguese messages
+    if (message.includes('Insufficient Cellere credits')) {
+      return 'Créditos insuficientes na API Cellere. Por favor, adicione mais créditos na sua conta.';
+    }
+    if (message.includes('invalidToken') || message.includes('401')) {
+      return 'Token da API Cellere inválido. Por favor, verifique a configuração do token.';
+    }
+    if (message.includes('timeout') || message.includes('ETIMEDOUT')) {
+      return 'Tempo limite excedido ao conectar com a API. Tente novamente.';
+    }
+    if (message.includes('ENOTFOUND') || message.includes('ECONNREFUSED')) {
+      return 'Não foi possível conectar com o serviço de análise. Verifique sua conexão.';
+    }
+    if (message.includes('Request failed with status code 400')) {
+      return 'Documento inválido ou formato incorreto. Verifique o CPF/CNPJ informado.';
+    }
+    if (message.includes('Request failed with status code 404')) {
+      return 'Documento não encontrado na base de dados.';
+    }
+    if (message.includes('Request failed with status code 500')) {
+      return 'Erro interno no serviço de análise. Tente novamente mais tarde.';
+    }
+
+    // Return original message if no mapping found
+    return `Erro na análise: ${message}`;
   }
 
   /**
@@ -371,16 +392,8 @@ export class TenantAnalysisService {
       return this.mockService.getDocumentValidation(document);
     }
 
-    // For real implementation, this would call Cellere API
-    // For now, return basic validation
-    return {
-      documentValid: true,
-      documentActive: true,
-      documentOwnerMatch: true,
-      hasFraudAlerts: false,
-      registrationName: null,
-      status: 'VALID' as const,
-    };
+    // Use real Cellere API for document validation
+    return this.cellereService.getDocumentValidation(document);
   }
 
   private calculateRiskScore(financial: any, background: any, documentValidation: any): { riskScore: number; riskLevel: RiskLevel } {

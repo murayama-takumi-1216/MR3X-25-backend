@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, Query, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Query, Param, HttpException, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { TenantAnalysisService } from './tenant-analysis.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -35,9 +35,21 @@ export class TenantAnalysisController {
     @Body() dto: AnalyzeTenantDto,
     @CurrentUser() user: any,
   ) {
-    const userId = BigInt(user.id);
-    const agencyId = user.agencyId ? BigInt(user.agencyId) : undefined;
-    return this.tenantAnalysisService.analyzeTenant(dto, userId, agencyId);
+    try {
+      const userId = BigInt(user.sub);
+      const agencyId = user.agencyId ? BigInt(user.agencyId) : undefined;
+      return await this.tenantAnalysisService.analyzeTenant(dto, userId, agencyId);
+    } catch (error) {
+      // Return user-friendly error response
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.BAD_REQUEST,
+          message: error.message || 'Erro ao realizar análise do inquilino',
+          error: 'Analysis Failed',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
   }
 
   @Get('history')
@@ -59,7 +71,7 @@ export class TenantAnalysisController {
     @Query() dto: GetAnalysisHistoryDto,
     @CurrentUser() user: any,
   ) {
-    const userId = BigInt(user.id);
+    const userId = BigInt(user.sub);
     const agencyId = user.agencyId ? BigInt(user.agencyId) : undefined;
     return this.tenantAnalysisService.getAnalysisHistory(dto, userId, user.role, agencyId);
   }
@@ -75,7 +87,7 @@ export class TenantAnalysisController {
   )
   @ApiOperation({ summary: 'Get analysis statistics for dashboard' })
   async getAnalysisStats(@CurrentUser() user: any) {
-    const userId = BigInt(user.id);
+    const userId = BigInt(user.sub);
     const agencyId = user.agencyId ? BigInt(user.agencyId) : undefined;
     return this.tenantAnalysisService.getAnalysisStats(userId, user.role, agencyId);
   }
@@ -95,7 +107,7 @@ export class TenantAnalysisController {
     @Param('id') id: string,
     @CurrentUser() user: any,
   ) {
-    const userId = BigInt(user.id);
+    const userId = BigInt(user.sub);
     const agencyId = user.agencyId ? BigInt(user.agencyId) : undefined;
     return this.tenantAnalysisService.getAnalysisById(BigInt(id), userId, user.role, agencyId);
   }
