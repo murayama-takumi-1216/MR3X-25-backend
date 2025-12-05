@@ -38,7 +38,11 @@ async function main() {
   await prisma.contract.deleteMany();
 
   // Property related
+  await prisma.inspectionItem.deleteMany();
   await prisma.inspection.deleteMany();
+  await prisma.inspectionTemplate.deleteMany();
+  await prisma.agreement.deleteMany();
+  await prisma.agreementTemplate.deleteMany();
   await prisma.document.deleteMany();
   await prisma.propertyImage.deleteMany();
   await prisma.property.deleteMany();

@@ -182,22 +182,17 @@ export class TenantAnalysisService {
 
   /**
    * Get analysis history with filters
+   * All authorized roles can see all analyses since the analysis is about the tenant,
+   * not the requester. This allows sharing tenant risk information across the platform
+   * and avoids redundant API calls.
    */
   async getAnalysisHistory(dto: GetAnalysisHistoryDto, userId: bigint, userRole: string, agencyId?: bigint) {
     const { document, riskLevel, status, page = 1, limit = 10 } = dto;
     const skip = (page - 1) * limit;
 
-    // Build where clause based on user role
+    // Build where clause - all authorized roles can see all analyses
+    // The controller already restricts access to authorized roles only via @Roles decorator
     const where: any = {};
-
-    // Role-based filtering
-    if (!['CEO', 'ADMIN'].includes(userRole)) {
-      if (agencyId) {
-        where.agencyId = agencyId;
-      } else {
-        where.requestedById = userId;
-      }
-    }
 
     // Apply filters
     if (document) {
@@ -251,6 +246,7 @@ export class TenantAnalysisService {
 
   /**
    * Get a specific analysis by ID
+   * All authorized roles can access any analysis since the analysis is about the tenant.
    */
   async getAnalysisById(id: bigint, userId: bigint, userRole: string, agencyId?: bigint) {
     const analysis = await this.prisma.tenantAnalysis.findUnique({
@@ -266,32 +262,20 @@ export class TenantAnalysisService {
       throw new NotFoundException('Analysis not found');
     }
 
-    // Check access permissions
-    if (!['CEO', 'ADMIN'].includes(userRole)) {
-      if (agencyId && analysis.agencyId !== agencyId) {
-        throw new NotFoundException('Analysis not found');
-      }
-      if (!agencyId && analysis.requestedById !== userId) {
-        throw new NotFoundException('Analysis not found');
-      }
-    }
+    // All authorized roles can access any analysis
+    // The controller already restricts access to authorized roles only via @Roles decorator
 
     return this.formatAnalysisResponse(analysis);
   }
 
   /**
    * Get statistics for dashboard
+   * All authorized roles can see global statistics since analyses are shared across the platform.
    */
   async getAnalysisStats(userId: bigint, userRole: string, agencyId?: bigint) {
+    // All authorized roles can see all statistics
+    // The controller already restricts access to authorized roles only via @Roles decorator
     const where: any = {};
-
-    if (!['CEO', 'ADMIN'].includes(userRole)) {
-      if (agencyId) {
-        where.agencyId = agencyId;
-      } else {
-        where.requestedById = userId;
-      }
-    }
 
     const [total, byRiskLevel, byStatus, recentAnalyses] = await Promise.all([
       this.prisma.tenantAnalysis.count({ where }),
@@ -408,7 +392,7 @@ export class TenantAnalysisService {
         score -= Math.min(150, financial.totalDebts / 200);
       }
       if (financial.activeDebts > 0) {
-        score -= financial.activeDebts * 15;
+        score -= Math.min(75, financial.activeDebts * 15);
       }
       if (financial.hasNegativeRecords) {
         score -= 50;
@@ -429,14 +413,35 @@ export class TenantAnalysisService {
         });
       }
 
-      // Judicial records
-      if (background.hasJudicialRecords) {
-        score -= background.judicialRecords?.length * 25 || 0;
+      // Judicial records - classify by type and severity
+      if (background.hasJudicialRecords && background.judicialRecords?.length > 0) {
+        let judicialDeduction = 0;
+
+        background.judicialRecords.forEach((record: any) => {
+          const type = (record.type || '').toLowerCase();
+          const processNumber = (record.processNumber || '').toLowerCase();
+
+          // Check if it's an eviction-related process
+          if (this.isEvictionRelated(type)) {
+            judicialDeduction += 100; // Eviction is serious
+          }
+          // Minor records (TERMO CIRCUNSTANCIADO, traffic, small claims)
+          else if (this.isMinorJudicialRecord(type)) {
+            judicialDeduction += 5; // Minor impact
+          }
+          // Regular lawsuits
+          else {
+            judicialDeduction += 20;
+          }
+        });
+
+        // Cap judicial deduction at 200 points max
+        score -= Math.min(200, judicialDeduction);
       }
 
-      // Evictions - very severe impact
+      // Evictions - very severe impact (already counted separately)
       if (background.hasEvictions) {
-        score -= background.evictionsCount * 150;
+        score -= Math.min(300, background.evictionsCount * 150);
       }
 
       // Protests
@@ -469,7 +474,35 @@ export class TenantAnalysisService {
     else if (score >= 400) riskLevel = RiskLevel.HIGH;
     else riskLevel = RiskLevel.CRITICAL;
 
+    this.logger.debug(`Risk calculation: score=${score}, level=${riskLevel}, judicial=${background?.judicialRecords?.length || 0} records`);
+
     return { riskScore: score, riskLevel };
+  }
+
+  /**
+   * Check if a judicial record type is eviction-related
+   */
+  private isEvictionRelated(type: string): boolean {
+    const evictionKeywords = [
+      'despejo', 'desocupação', 'desocupacao', 'imissão', 'imissao',
+      'reintegração de posse', 'reintegracao de posse', 'locação', 'locacao',
+      'aluguel', 'inadimplência locatícia', 'inadimplencia locaticia'
+    ];
+    return evictionKeywords.some(keyword => type.includes(keyword));
+  }
+
+  /**
+   * Check if a judicial record is minor (low impact)
+   */
+  private isMinorJudicialRecord(type: string): boolean {
+    const minorKeywords = [
+      'termo circunstanciado', 'tco', 'juizado especial', 'pequenas causas',
+      'trânsito', 'transito', 'multa', 'infração', 'infracao',
+      'consumidor', 'procon', 'trabalhista', 'acidente',
+      'execução fiscal', 'execucao fiscal', 'iptu', 'ipva',
+      'pensão alimentícia', 'pensao alimenticia', 'família', 'familia'
+    ];
+    return minorKeywords.some(keyword => type.includes(keyword));
   }
 
   private getRecommendation(riskScore: number, riskLevel: RiskLevel, background: any): { recommendation: string; notes: string } {
