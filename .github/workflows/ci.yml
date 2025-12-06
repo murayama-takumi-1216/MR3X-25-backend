@@ -1,18 +1,17 @@
-name: Backend CI/CD  
+name: Backend CI CD
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - main
+      - master
 
 env:
-  NODE_VERSION: '20.x'
+  NODE_VERSION: 20
 
 jobs:
-  # ============================================
-  # BUILD AND DEPLOY
-  # ============================================
   build-and-deploy:
-    name: Build & Deploy
+    name: Build and deploy backend
     runs-on: ubuntu-latest
 
     steps:
@@ -23,54 +22,54 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma Client
-        run: npx prisma generate
-
-      - name: Build project
+      - name: Build backend
         run: npm run build
+
+      # Optional: run tests
+      # - name: Run tests
+      #   run: npm test
 
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy to Server
+      - name: Deploy and restart on server
         run: |
-          # Create deployment package
-          tar -czf deploy.tar.gz dist/ prisma/ package*.json
-
-          # Copy to server
-          scp deploy.tar.gz ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }}:/tmp/
-
-          # Execute deployment on server
-          ssh ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no "${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }}" << 'ENDSSH'
             set -e
-            cd ${{ secrets.PRODUCTION_PATH }}
 
-            # Extract new files
-            tar -xzf /tmp/deploy.tar.gz
+            cd /var/www/html/vps/MR3X-25-backend
 
-            # Install production dependencies
-            npm ci --only=production
+            echo 'Pulling latest backend code'
+            git pull
 
-            # Generate Prisma client
-            npx prisma generate
+            echo 'Installing dependencies'
+            npm ci
 
-            # Run database migrations
-            npx prisma db push --accept-data-loss || true
+            echo 'Building backend'
+            npm run build
 
-            # Restart the application with PM2
-            pm2 restart backend || pm2 start dist/main.js --name backend
+            # Optional: run migrations
+            # echo 'Running migrations'
+            # npm run migrate
 
-            # Cleanup
-            rm /tmp/deploy.tar.gz
+            echo 'Restarting backend with pm2'
+            if pm2 list | grep -q mr3x-backend; then
+              pm2 restart mr3x-backend
+            else
+              pm2 start dist/main.js --name mr3x-backend
+            fi
 
-            echo "✅ Backend deployment completed!"
+            pm2 save
+
+            echo 'Backend deployment completed'
+            pm2 status mr3x-backend
           ENDSSH

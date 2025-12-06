@@ -170,7 +170,13 @@ export class AuthService {
     // TODO: Send email with verification code
     console.log(`Verification code for ${email}: ${code}`);
 
-    return { requestId, expiresAt, cooldownSeconds: Math.ceil(EMAIL_CODE_COOLDOWN_MS / 1000) };
+    // DEV ONLY: Include code in response for testing (REMOVE IN PRODUCTION)
+    return {
+      requestId,
+      expiresAt,
+      cooldownSeconds: Math.ceil(EMAIL_CODE_COOLDOWN_MS / 1000),
+      ...(process.env.NODE_ENV !== 'production' && { debugCode: code }),
+    };
   }
 
   async verifyEmailConfirm(dto: VerifyEmailConfirmDto) {
