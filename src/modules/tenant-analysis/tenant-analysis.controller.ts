@@ -3,14 +3,17 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam } from '@nestj
 import { TenantAnalysisService } from './tenant-analysis.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { OwnerPermissionGuard } from '../../common/guards/owner-permission.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { OwnerPermission } from '../../common/decorators/owner-permission.decorator';
+import { OwnerAction } from '../../common/constants/owner-permissions.constants';
 import { UserRole } from '@prisma/client';
 import { AnalyzeTenantDto, GetAnalysisHistoryDto } from './dto';
 
 @ApiTags('Tenant Analysis')
 @Controller('tenant-analysis')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, OwnerPermissionGuard)
 @ApiBearerAuth()
 export class TenantAnalysisController {
   constructor(private readonly tenantAnalysisService: TenantAnalysisService) {}
@@ -28,8 +31,10 @@ export class TenantAnalysisController {
     UserRole.AGENCY_ADMIN,
     UserRole.AGENCY_MANAGER,
     UserRole.BROKER,
-    UserRole.INDEPENDENT_OWNER
+    UserRole.INDEPENDENT_OWNER,
+    UserRole.PROPRIETARIO
   )
+  @OwnerPermission('tenant_analysis', OwnerAction.CREATE)
   @ApiOperation({ summary: 'Perform a complete tenant analysis' })
   async analyzeTenant(
     @Body() dto: AnalyzeTenantDto,
@@ -59,7 +64,8 @@ export class TenantAnalysisController {
     UserRole.AGENCY_ADMIN,
     UserRole.AGENCY_MANAGER,
     UserRole.BROKER,
-    UserRole.INDEPENDENT_OWNER
+    UserRole.INDEPENDENT_OWNER,
+    UserRole.PROPRIETARIO
   )
   @ApiOperation({ summary: 'Get analysis history with filters' })
   @ApiQuery({ name: 'document', required: false, description: 'Filter by document' })
@@ -83,7 +89,8 @@ export class TenantAnalysisController {
     UserRole.AGENCY_ADMIN,
     UserRole.AGENCY_MANAGER,
     UserRole.BROKER,
-    UserRole.INDEPENDENT_OWNER
+    UserRole.INDEPENDENT_OWNER,
+    UserRole.PROPRIETARIO
   )
   @ApiOperation({ summary: 'Get analysis statistics for dashboard' })
   async getAnalysisStats(@CurrentUser() user: any) {
@@ -99,7 +106,8 @@ export class TenantAnalysisController {
     UserRole.AGENCY_ADMIN,
     UserRole.AGENCY_MANAGER,
     UserRole.BROKER,
-    UserRole.INDEPENDENT_OWNER
+    UserRole.INDEPENDENT_OWNER,
+    UserRole.PROPRIETARIO
   )
   @ApiOperation({ summary: 'Get a specific analysis by ID' })
   @ApiParam({ name: 'id', description: 'Analysis ID' })

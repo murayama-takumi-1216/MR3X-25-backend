@@ -14,7 +14,10 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { AgreementsService } from './agreements.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { OwnerPermissionGuard } from '../../common/guards/owner-permission.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { OwnerPermission } from '../../common/decorators/owner-permission.decorator';
+import { OwnerAction } from '../../common/constants/owner-permissions.constants';
 import { CreateAgreementDto, AgreementStatus } from './dto/create-agreement.dto';
 import { UpdateAgreementDto, SignAgreementDto, ApproveRejectAgreementDto } from './dto/update-agreement.dto';
 import { Request } from 'express';
@@ -37,7 +40,7 @@ import { AgreementPermissionService, UserContext } from './services/agreement-pe
 
 @ApiTags('Agreements')
 @Controller('agreements')
-@UseGuards(JwtAuthGuard, AgreementPermissionGuard)
+@UseGuards(JwtAuthGuard, AgreementPermissionGuard, OwnerPermissionGuard)
 @ApiBearerAuth()
 export class AgreementsController {
   constructor(
@@ -184,6 +187,7 @@ export class AgreementsController {
 
   @Post('templates')
   @CanCreateAgreement()
+  @OwnerPermission('agreements', OwnerAction.CREATE)
   @ApiOperation({ summary: 'Create a new agreement template' })
   async createTemplate(@Body() data: any, @CurrentUser('sub') userId: string) {
     return this.agreementsService.createTemplate(data, userId);
@@ -191,6 +195,7 @@ export class AgreementsController {
 
   @Put('templates/:id')
   @CanEditAgreement()
+  @OwnerPermission('agreements', OwnerAction.EDIT)
   @ApiOperation({ summary: 'Update agreement template' })
   @ApiParam({ name: 'id', description: 'Template ID' })
   async updateTemplate(@Param('id') id: string, @Body() data: any) {
@@ -199,6 +204,7 @@ export class AgreementsController {
 
   @Delete('templates/:id')
   @CanDeleteAgreement()
+  @OwnerPermission('agreements', OwnerAction.DELETE)
   @ApiOperation({ summary: 'Delete agreement template' })
   @ApiParam({ name: 'id', description: 'Template ID' })
   async removeTemplate(@Param('id') id: string) {
@@ -278,6 +284,7 @@ export class AgreementsController {
 
   @Post()
   @CanCreateAgreement()
+  @OwnerPermission('agreements', OwnerAction.CREATE)
   @ApiOperation({ summary: 'Create a new agreement' })
   async create(
     @Body() data: CreateAgreementDto,
@@ -291,6 +298,7 @@ export class AgreementsController {
 
   @Put(':id')
   @CanEditAgreement()
+  @OwnerPermission('agreements', OwnerAction.EDIT)
   @ApiOperation({ summary: 'Update agreement' })
   @ApiParam({ name: 'id', description: 'Agreement ID' })
   async update(
@@ -304,6 +312,7 @@ export class AgreementsController {
 
   @Patch(':id/sign')
   @AgreementPermission(AgreementAction.SIGN)
+  @OwnerPermission('agreements', OwnerAction.SIGN)
   @ApiOperation({ summary: 'Sign agreement' })
   @ApiParam({ name: 'id', description: 'Agreement ID' })
   async sign(
@@ -347,6 +356,7 @@ export class AgreementsController {
 
   @Patch(':id/send-for-signature')
   @CanSendForSignature()
+  @OwnerPermission('agreements', OwnerAction.EDIT)
   @ApiOperation({ summary: 'Send agreement for signature' })
   @ApiParam({ name: 'id', description: 'Agreement ID' })
   async sendForSignature(@Param('id') id: string) {
@@ -355,6 +365,7 @@ export class AgreementsController {
 
   @Patch(':id/approve')
   @CanApproveAgreement()
+  @OwnerPermission('agreements', OwnerAction.APPROVE)
   @ApiOperation({ summary: 'Approve and complete agreement' })
   @ApiParam({ name: 'id', description: 'Agreement ID' })
   async approve(
@@ -366,6 +377,7 @@ export class AgreementsController {
 
   @Patch(':id/reject')
   @AgreementPermission(AgreementAction.REJECT)
+  @OwnerPermission('agreements', OwnerAction.APPROVE)
   @ApiOperation({ summary: 'Reject agreement' })
   @ApiParam({ name: 'id', description: 'Agreement ID' })
   async reject(
@@ -378,6 +390,7 @@ export class AgreementsController {
 
   @Patch(':id/cancel')
   @CanCancelAgreement()
+  @OwnerPermission('agreements', OwnerAction.DELETE)
   @ApiOperation({ summary: 'Cancel agreement' })
   @ApiParam({ name: 'id', description: 'Agreement ID' })
   async cancel(
@@ -389,6 +402,7 @@ export class AgreementsController {
 
   @Patch(':id/status')
   @CanEditAgreement()
+  @OwnerPermission('agreements', OwnerAction.EDIT)
   @ApiOperation({ summary: 'Update agreement status' })
   @ApiParam({ name: 'id', description: 'Agreement ID' })
   async updateStatus(
@@ -400,6 +414,7 @@ export class AgreementsController {
 
   @Delete(':id')
   @CanDeleteAgreement()
+  @OwnerPermission('agreements', OwnerAction.DELETE)
   @ApiOperation({ summary: 'Delete agreement (only drafts, never signed)' })
   @ApiParam({ name: 'id', description: 'Agreement ID' })
   async remove(@Param('id') id: string) {

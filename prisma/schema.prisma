@@ -88,12 +88,13 @@ model Agency {
   apiKey                String?   @map("api_key") @db.VarChar(255)
 
   // Relations
-  users         User[]
-  properties    Property[]
-  contracts     Contract[]
-  payments      Payment[]
-  notifications Notification[]
-  invoices      Invoice[]
+  users            User[]
+  properties       Property[]
+  contracts        Contract[]
+  payments         Payment[]
+  notifications    Notification[]
+  invoices         Invoice[]
+  serviceContracts ServiceContract[]
 
   @@map("agencies")
 }
@@ -211,6 +212,12 @@ model User {
   // Tenant Analysis relations
   tenantAnalysesRequested TenantAnalysis[]  @relation("TenantAnalysisRequestedBy")
 
+  // Contract clause editing relations
+  contractClauseEdits     ContractClauseHistory[] @relation("ContractClauseEditor")
+
+  // Service contract relations (owner)
+  serviceContractsAsOwner ServiceContract[] @relation("ServiceContractOwner")
+
   @@map("users")
 }
 
@@ -293,15 +300,16 @@ model Property {
   creator       User?   @relation("PropertyCreatedBy", fields: [createdBy], references: [id])
   deletedByUser User?   @relation("PropertyDeletedBy", fields: [deletedBy], references: [id])
 
-  contracts     Contract[]
-  documents     Document[]
-  notifications Notification[]
-  payments      Payment[]
-  expenses      Expense[]
-  inspections   Inspection[]
-  images        PropertyImage[]
-  agreements    Agreement[]
-  invoices      Invoice[]
+  contracts            Contract[]
+  documents            Document[]
+  notifications        Notification[]
+  payments             Payment[]
+  expenses             Expense[]
+  inspections          Inspection[]
+  images               PropertyImage[]
+  agreements           Agreement[]
+  invoices             Invoice[]
+  serviceContractLinks ServiceContractProperty[]
 
   @@map("properties")
 }
@@ -329,27 +337,53 @@ model Contract {
   templateType    String?   @map("template_type") @db.VarChar(10) // CTR, ACD, VST
   clientIP        String?   @map("client_ip") @db.VarChar(45) // IPv4 or IPv6 address
   userAgent       String?   @map("user_agent") @db.VarChar(500) // Browser/Client user agent
-  // Signature fields
+
+  // Advanced signature workflow fields
+  clausesSnapshot     Json?     @map("clauses_snapshot") // Frozen clauses at signing
+  provisionalPdfPath  String?   @map("provisional_pdf_path") @db.VarChar(500) // Pre-signature PDF
+  provisionalHash     String?   @map("provisional_hash") @db.VarChar(255) // Hash of provisional PDF
+  finalPdfPath        String?   @map("final_pdf_path") @db.VarChar(500) // Post-signature immutable PDF
+  hashFinal           String?   @map("hash_final") @db.VarChar(255) // SHA-256 of final PDF
+  verificationUrl     String?   @map("verification_url") @db.VarChar(500) // Public verification URL
+
+  // Signature fields with geolocation
   tenantSignature     String?   @map("tenant_signature") @db.Text // Base64 signature image
   tenantSignedAt      DateTime? @map("tenant_signed_at") @db.Timestamp(0)
   tenantSignedIP      String?   @map("tenant_signed_ip") @db.VarChar(45)
   tenantSignedAgent   String?   @map("tenant_signed_agent") @db.VarChar(500)
+  tenantGeoLat        Float?    @map("tenant_geo_lat")
+  tenantGeoLng        Float?    @map("tenant_geo_lng")
+  tenantGeoConsent    Boolean   @default(false) @map("tenant_geo_consent")
+
   ownerSignature      String?   @map("owner_signature") @db.Text
   ownerSignedAt       DateTime? @map("owner_signed_at") @db.Timestamp(0)
   ownerSignedIP       String?   @map("owner_signed_ip") @db.VarChar(45)
   ownerSignedAgent    String?   @map("owner_signed_agent") @db.VarChar(500)
+  ownerGeoLat         Float?    @map("owner_geo_lat")
+  ownerGeoLng         Float?    @map("owner_geo_lng")
+  ownerGeoConsent     Boolean   @default(false) @map("owner_geo_consent")
+
   agencySignature     String?   @map("agency_signature") @db.Text
   agencySignedAt      DateTime? @map("agency_signed_at") @db.Timestamp(0)
   agencySignedIP      String?   @map("agency_signed_ip") @db.VarChar(45)
   agencySignedAgent   String?   @map("agency_signed_agent") @db.VarChar(500)
+  agencyGeoLat        Float?    @map("agency_geo_lat")
+  agencyGeoLng        Float?    @map("agency_geo_lng")
+  agencyGeoConsent    Boolean   @default(false) @map("agency_geo_consent")
+
   witnessSignature    String?   @map("witness_signature") @db.Text
   witnessSignedAt     DateTime? @map("witness_signed_at") @db.Timestamp(0)
   witnessName         String?   @map("witness_name") @db.VarChar(100)
   witnessDocument     String?   @map("witness_document") @db.VarChar(30)
+  witnessGeoLat       Float?    @map("witness_geo_lat")
+  witnessGeoLng       Float?    @map("witness_geo_lng")
+  witnessGeoConsent   Boolean   @default(false) @map("witness_geo_consent")
+
   deleted         Boolean   @default(false)
   deletedAt       DateTime? @map("deleted_at") @db.DateTime(0)
   deletedBy       BigInt?   @map("deleted_by") @db.UnsignedBigInt
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
 
   // Relations
   property      Property @relation(fields: [propertyId], references: [id])
@@ -358,10 +392,12 @@ model Contract {
   ownerUser     User?    @relation("ContractOwner", fields: [ownerId], references: [id])
   deletedByUser User?    @relation("ContractDeletedBy", fields: [deletedBy], references: [id])
 
-  payments Payment[]
-  audits   ContractAudit[]
-  invoices Invoice[]
-  agreements Agreement[]
+  payments       Payment[]
+  audits         ContractAudit[]
+  invoices       Invoice[]
+  agreements     Agreement[]
+  signatureLinks SignatureLink[]
+  clauseHistory  ContractClauseHistory[]
 
   @@map("contracts")
 }
@@ -378,6 +414,46 @@ model ContractAudit {
   contract Contract @relation(fields: [contractId], references: [id])
 
   @@map("contract_audit")
+}
+
+/// Signature invitation links for external signers
+model SignatureLink {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  contractId  BigInt    @map("contract_id") @db.UnsignedBigInt
+  signerType  String    @map("signer_type") @db.VarChar(20) // "tenant", "owner", "agency", "witness"
+  signerEmail String    @map("signer_email") @db.VarChar(191)
+  signerName  String?   @map("signer_name") @db.VarChar(255)
+  token       String    @unique @db.VarChar(191)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamp(0)
+  usedAt      DateTime? @map("used_at") @db.Timestamp(0)
+  sentAt      DateTime? @map("sent_at") @db.Timestamp(0)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
+
+  // Relations
+  contract Contract @relation(fields: [contractId], references: [id])
+
+  @@index([token])
+  @@index([contractId])
+  @@map("signature_links")
+}
+
+/// Contract clause version history for audit trail
+model ContractClauseHistory {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  contractId  BigInt   @map("contract_id") @db.UnsignedBigInt
+  clauses     Json     // Full clause snapshot
+  editedBy    BigInt   @map("edited_by") @db.UnsignedBigInt
+  editedAt    DateTime @default(now()) @map("edited_at") @db.Timestamp(0)
+  changeNote  String?  @map("change_note") @db.VarChar(500)
+  ip          String?  @db.VarChar(45)
+  userAgent   String?  @map("user_agent") @db.VarChar(500)
+
+  // Relations
+  contract Contract @relation(fields: [contractId], references: [id])
+  editor   User     @relation("ContractClauseEditor", fields: [editedBy], references: [id])
+
+  @@index([contractId])
+  @@map("contract_clause_history")
 }
 
 model Document {
@@ -1115,6 +1191,133 @@ model PlanModificationRequest {
   reviewedBy  User? @relation("PlanModificationReviewer", fields: [reviewedById], references: [id])
 
   @@map("plan_modification_requests")
+}
+
+/// Service Contract - Agreement between Agency and Property Owner
+/// This is the contract the PROPRIETARIO signs with the agency for property management services
+model ServiceContract {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  agencyId        BigInt    @map("agency_id") @db.UnsignedBigInt
+  ownerId         BigInt    @map("owner_id") @db.UnsignedBigInt
+
+  // Contract identification
+  contractToken   String    @unique @map("contract_token") @db.VarChar(100) // MR3X-SVC-YEAR-XXXX-XXXX format
+  contractNumber  String?   @map("contract_number") @db.VarChar(50)
+
+  // Contract terms
+  title           String    @db.VarChar(255)
+  description     String?   @db.Text
+  content         String?   @db.LongText // Full contract HTML/text
+  clausesSnapshot Json?     @map("clauses_snapshot") // Frozen clauses at signing
+
+  // Service terms
+  serviceType     String    @default("PROPERTY_MANAGEMENT") @map("service_type") @db.VarChar(50) // PROPERTY_MANAGEMENT, RENTAL_ONLY, FULL_SERVICE
+  agencyFeeType   String    @default("PERCENTAGE") @map("agency_fee_type") @db.VarChar(20) // PERCENTAGE, FIXED
+  agencyFeeValue  Decimal   @map("agency_fee_value") @db.Decimal(12, 2) // Fee percentage or fixed amount
+  minimumFee      Decimal?  @map("minimum_fee") @db.Decimal(12, 2) // Minimum monthly fee (if any)
+
+  // Contract dates
+  startDate       DateTime  @map("start_date") @db.Date
+  endDate         DateTime? @map("end_date") @db.Date // Null for indefinite contracts
+  renewalType     String    @default("AUTO") @map("renewal_type") @db.VarChar(20) // AUTO, MANUAL, NONE
+  noticePeriodDays Int      @default(30) @map("notice_period_days") // Days notice required to cancel
+
+  // Status
+  status          String    @default("DRAFT") @db.VarChar(30) // DRAFT, PENDING_SIGNATURES, SIGNED, ACTIVE, SUSPENDED, TERMINATED, EXPIRED
+
+  // Signatures with geolocation
+  ownerSignature    String?   @map("owner_signature") @db.Text // Base64 signature image
+  ownerSignedAt     DateTime? @map("owner_signed_at") @db.Timestamp(0)
+  ownerSignedIP     String?   @map("owner_signed_ip") @db.VarChar(45)
+  ownerSignedAgent  String?   @map("owner_signed_agent") @db.VarChar(500)
+  ownerGeoLat       Float?    @map("owner_geo_lat")
+  ownerGeoLng       Float?    @map("owner_geo_lng")
+  ownerGeoConsent   Boolean   @default(false) @map("owner_geo_consent")
+
+  agencySignature   String?   @map("agency_signature") @db.Text
+  agencySignedAt    DateTime? @map("agency_signed_at") @db.Timestamp(0)
+  agencySignedIP    String?   @map("agency_signed_ip") @db.VarChar(45)
+  agencySignedAgent String?   @map("agency_signed_agent") @db.VarChar(500)
+  agencyGeoLat      Float?    @map("agency_geo_lat")
+  agencyGeoLng      Float?    @map("agency_geo_lng")
+  agencyGeoConsent  Boolean   @default(false) @map("agency_geo_consent")
+
+  witnessSignature  String?   @map("witness_signature") @db.Text
+  witnessSignedAt   DateTime? @map("witness_signed_at") @db.Timestamp(0)
+  witnessName       String?   @map("witness_name") @db.VarChar(100)
+  witnessDocument   String?   @map("witness_document") @db.VarChar(30)
+  witnessGeoLat     Float?    @map("witness_geo_lat")
+  witnessGeoLng     Float?    @map("witness_geo_lng")
+  witnessGeoConsent Boolean   @default(false) @map("witness_geo_consent")
+
+  // PDF and security
+  provisionalPdfPath  String?   @map("provisional_pdf_path") @db.VarChar(500)
+  provisionalHash     String?   @map("provisional_hash") @db.VarChar(255) // Hash of provisional PDF
+  finalPdfPath        String?   @map("final_pdf_path") @db.VarChar(500)
+  hashFinal           String?   @map("hash_final") @db.VarChar(255) // SHA-256 of final PDF
+  verificationUrl     String?   @map("verification_url") @db.VarChar(500)
+
+  // Client info for audit
+  clientIP          String?   @map("client_ip") @db.VarChar(45)
+  userAgent         String?   @map("user_agent") @db.VarChar(500)
+
+  // Cancellation/termination info
+  terminatedAt      DateTime? @map("terminated_at") @db.Timestamp(0)
+  terminatedBy      BigInt?   @map("terminated_by") @db.UnsignedBigInt
+  terminationReason String?   @map("termination_reason") @db.Text
+
+  // Metadata
+  notes             String?   @db.Text
+  createdBy         BigInt?   @map("created_by") @db.UnsignedBigInt
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  // Relations
+  agency            Agency    @relation(fields: [agencyId], references: [id])
+  owner             User      @relation("ServiceContractOwner", fields: [ownerId], references: [id])
+  properties        ServiceContractProperty[]
+  clauseHistory     ServiceContractClauseHistory[]
+
+  @@index([agencyId])
+  @@index([ownerId])
+  @@index([status])
+  @@map("service_contracts")
+}
+
+/// Properties covered by a service contract
+model ServiceContractProperty {
+  id                BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  serviceContractId BigInt   @map("service_contract_id") @db.UnsignedBigInt
+  propertyId        BigInt   @map("property_id") @db.UnsignedBigInt
+  addedAt           DateTime @default(now()) @map("added_at") @db.Timestamp(0)
+  removedAt         DateTime? @map("removed_at") @db.Timestamp(0)
+  customFee         Decimal? @map("custom_fee") @db.Decimal(12, 2) // Override contract fee for this property
+  notes             String?  @db.Text
+
+  // Relations
+  serviceContract ServiceContract @relation(fields: [serviceContractId], references: [id])
+  property        Property        @relation(fields: [propertyId], references: [id])
+
+  @@unique([serviceContractId, propertyId])
+  @@map("service_contract_properties")
+}
+
+/// Service contract clause version history
+model ServiceContractClauseHistory {
+  id                BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  serviceContractId BigInt   @map("service_contract_id") @db.UnsignedBigInt
+  clauses           Json     // Full clause snapshot
+  editedBy          BigInt   @map("edited_by") @db.UnsignedBigInt
+  editedAt          DateTime @default(now()) @map("edited_at") @db.Timestamp(0)
+  changeNote        String?  @map("change_note") @db.VarChar(500)
+  ip                String?  @db.VarChar(45)
+  userAgent         String?  @map("user_agent") @db.VarChar(500)
+
+  // Relations
+  serviceContract ServiceContract @relation(fields: [serviceContractId], references: [id])
+
+  @@index([serviceContractId])
+  @@map("service_contract_clause_history")
 }
 
 /// Tenant Analysis - Complete screening for prospective tenants

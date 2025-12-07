@@ -1,12 +1,29 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
 import { PlanEnforcementService, PLAN_MESSAGES } from '../plans/plan-enforcement.service';
+import { ContractPdfService } from './services/contract-pdf.service';
+import { ContractHashService } from './services/contract-hash.service';
+import { SignatureLinkService } from './services/signature-link.service';
+
+export interface SignatureDataWithGeo {
+  signature: string; // Base64 signature image
+  clientIP?: string;
+  userAgent?: string;
+  geoLat: number; // Required geolocation
+  geoLng: number; // Required geolocation
+  geoConsent: boolean;
+  witnessName?: string;
+  witnessDocument?: string;
+}
 
 @Injectable()
 export class ContractsService {
   constructor(
     private prisma: PrismaService,
     private planEnforcement: PlanEnforcementService,
+    private pdfService: ContractPdfService,
+    private hashService: ContractHashService,
+    private signatureLinkService: SignatureLinkService,
   ) {}
 
   async findAll(params: { skip?: number; take?: number; agencyId?: string; status?: string; createdById?: string; userId?: string }) {
@@ -377,5 +394,499 @@ export class ContractsService {
     }
 
     return serialized;
+  }
+
+  // ============================================
+  // ADVANCED SIGNATURE WORKFLOW METHODS
+  // ============================================
+
+  /**
+   * Prepare contract for signing: freeze clauses, generate provisional PDF, compute hash
+   */
+  async prepareForSigning(id: string, userId: string) {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: BigInt(id) },
+      include: {
+        property: true,
+        tenantUser: true,
+        ownerUser: true,
+      },
+    });
+
+    if (!contract || contract.deleted) {
+      throw new NotFoundException('Contract not found');
+    }
+
+    // Only allow preparing contracts in PENDENTE status
+    if (contract.status !== 'PENDENTE') {
+      throw new BadRequestException('Contrato deve estar com status PENDENTE para preparar para assinatura');
+    }
+
+    // Generate token if not exists
+    const contractToken = contract.contractToken || this.pdfService.generateContractToken();
+
+    // Freeze current clauses
+    const clausesSnapshot = contract.description ? { content: contract.description } : {};
+
+    // Update contract status to AGUARDANDO_ASSINATURAS
+    await this.prisma.contract.update({
+      where: { id: BigInt(id) },
+      data: {
+        status: 'AGUARDANDO_ASSINATURAS',
+        contractToken,
+        clausesSnapshot,
+      },
+    });
+
+    // Generate provisional PDF
+    const pdfBuffer = await this.pdfService.generateProvisionalPdf(BigInt(id));
+
+    // Log audit event
+    await this.prisma.contractAudit.create({
+      data: {
+        contractId: BigInt(id),
+        action: 'PREPARE_FOR_SIGNING',
+        performedBy: BigInt(userId),
+        details: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          contractToken,
+        }),
+      },
+    });
+
+    return {
+      message: 'Contrato preparado para assinatura',
+      contractToken,
+      provisionalPdfSize: pdfBuffer.length,
+    };
+  }
+
+  /**
+   * Sign contract with required geolocation data
+   */
+  async signContractWithGeo(
+    id: string,
+    signatureType: 'tenant' | 'owner' | 'agency' | 'witness',
+    signatureData: SignatureDataWithGeo,
+    userId: string,
+  ) {
+    // Validate geolocation is provided (REQUIRED)
+    if (!signatureData.geoLat || !signatureData.geoLng) {
+      throw new BadRequestException('Geolocalização é obrigatória para assinar o contrato');
+    }
+
+    if (!signatureData.geoConsent) {
+      throw new BadRequestException('É necessário consentir com o compartilhamento de localização');
+    }
+
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: BigInt(id) },
+      include: { tenantUser: true, ownerUser: true, agency: true },
+    });
+
+    if (!contract || contract.deleted) {
+      throw new NotFoundException('Contract not found');
+    }
+
+    // Check contract is ready for signing
+    if (contract.status !== 'AGUARDANDO_ASSINATURAS') {
+      throw new BadRequestException('Contrato não está pronto para assinatura');
+    }
+
+    const updateData: any = {};
+    const now = new Date();
+
+    switch (signatureType) {
+      case 'tenant':
+        if (contract.tenantSignature) {
+          throw new BadRequestException('Contrato já foi assinado pelo locatário');
+        }
+        updateData.tenantSignature = signatureData.signature;
+        updateData.tenantSignedAt = now;
+        updateData.tenantSignedIP = signatureData.clientIP || null;
+        updateData.tenantSignedAgent = signatureData.userAgent || null;
+        updateData.tenantGeoLat = signatureData.geoLat;
+        updateData.tenantGeoLng = signatureData.geoLng;
+        updateData.tenantGeoConsent = signatureData.geoConsent;
+        break;
+
+      case 'owner':
+        if (contract.ownerSignature) {
+          throw new BadRequestException('Contrato já foi assinado pelo proprietário');
+        }
+        updateData.ownerSignature = signatureData.signature;
+        updateData.ownerSignedAt = now;
+        updateData.ownerSignedIP = signatureData.clientIP || null;
+        updateData.ownerSignedAgent = signatureData.userAgent || null;
+        updateData.ownerGeoLat = signatureData.geoLat;
+        updateData.ownerGeoLng = signatureData.geoLng;
+        updateData.ownerGeoConsent = signatureData.geoConsent;
+        break;
+
+      case 'agency':
+        if (contract.agencySignature) {
+          throw new BadRequestException('Contrato já foi assinado pela imobiliária');
+        }
+        updateData.agencySignature = signatureData.signature;
+        updateData.agencySignedAt = now;
+        updateData.agencySignedIP = signatureData.clientIP || null;
+        updateData.agencySignedAgent = signatureData.userAgent || null;
+        updateData.agencyGeoLat = signatureData.geoLat;
+        updateData.agencyGeoLng = signatureData.geoLng;
+        updateData.agencyGeoConsent = signatureData.geoConsent;
+        break;
+
+      case 'witness':
+        if (contract.witnessSignature) {
+          throw new BadRequestException('Contrato já foi assinado pela testemunha');
+        }
+        updateData.witnessSignature = signatureData.signature;
+        updateData.witnessSignedAt = now;
+        updateData.witnessName = signatureData.witnessName || null;
+        updateData.witnessDocument = signatureData.witnessDocument || null;
+        updateData.witnessGeoLat = signatureData.geoLat;
+        updateData.witnessGeoLng = signatureData.geoLng;
+        updateData.witnessGeoConsent = signatureData.geoConsent;
+        break;
+    }
+
+    // Update contract with signature
+    const updatedContract = await this.prisma.contract.update({
+      where: { id: BigInt(id) },
+      data: updateData,
+    });
+
+    // Log audit event
+    await this.prisma.contractAudit.create({
+      data: {
+        contractId: BigInt(id),
+        action: `SIGNATURE_CAPTURED_${signatureType.toUpperCase()}`,
+        performedBy: BigInt(userId),
+        details: JSON.stringify({
+          signatureType,
+          signedAt: now.toISOString(),
+          clientIP: signatureData.clientIP,
+          geoLat: signatureData.geoLat,
+          geoLng: signatureData.geoLng,
+        }),
+      },
+    });
+
+    // Check if all required signatures are collected
+    const allSigned = await this.checkAllSignaturesCollected(BigInt(id));
+    if (allSigned) {
+      await this.finalizeContract(id, userId);
+    }
+
+    return this.findOne(id);
+  }
+
+  /**
+   * Check if all required signatures are collected
+   */
+  private async checkAllSignaturesCollected(contractId: bigint): Promise<boolean> {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: contractId },
+      select: {
+        tenantSignature: true,
+        ownerSignature: true,
+        agencyId: true,
+        agencySignature: true,
+      },
+    });
+
+    if (!contract) return false;
+
+    // Required: tenant and owner
+    const hasTenant = !!contract.tenantSignature;
+    const hasOwner = !!contract.ownerSignature;
+
+    // Agency signature required only if agency is associated
+    const hasAgency = !contract.agencyId || !!contract.agencySignature;
+
+    return hasTenant && hasOwner && hasAgency;
+  }
+
+  /**
+   * Finalize contract: generate final PDF, compute final hash, set status
+   */
+  async finalizeContract(id: string, userId: string) {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: BigInt(id) },
+    });
+
+    if (!contract || contract.deleted) {
+      throw new NotFoundException('Contract not found');
+    }
+
+    // Generate final PDF with all signatures
+    const pdfBuffer = await this.pdfService.generateFinalPdf(BigInt(id));
+
+    // Update contract status
+    await this.prisma.contract.update({
+      where: { id: BigInt(id) },
+      data: { status: 'ASSINADO' },
+    });
+
+    // Log audit event
+    await this.prisma.contractAudit.create({
+      data: {
+        contractId: BigInt(id),
+        action: 'CONTRACT_FINALIZED',
+        performedBy: BigInt(userId),
+        details: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          finalPdfSize: pdfBuffer.length,
+        }),
+      },
+    });
+
+    return {
+      message: 'Contrato finalizado com sucesso',
+      finalPdfSize: pdfBuffer.length,
+    };
+  }
+
+  /**
+   * Update clauses (only allowed in draft/PENDENTE status)
+   */
+  async updateClauses(id: string, clauses: any, userId: string, ip?: string, userAgent?: string) {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: BigInt(id) },
+    });
+
+    if (!contract || contract.deleted) {
+      throw new NotFoundException('Contract not found');
+    }
+
+    // Only allow editing in PENDENTE status
+    if (contract.status !== 'PENDENTE') {
+      throw new BadRequestException('Cláusulas só podem ser editadas quando o contrato está com status PENDENTE');
+    }
+
+    // Save current version to history
+    const currentClauses = contract.clausesSnapshot || (contract.description ? { content: contract.description } : {});
+    await this.prisma.contractClauseHistory.create({
+      data: {
+        contractId: BigInt(id),
+        clauses: currentClauses,
+        editedBy: BigInt(userId),
+        ip: ip || null,
+        userAgent: userAgent || null,
+      },
+    });
+
+    // Update clauses
+    await this.prisma.contract.update({
+      where: { id: BigInt(id) },
+      data: {
+        clausesSnapshot: clauses,
+        description: typeof clauses === 'string' ? clauses : JSON.stringify(clauses),
+      },
+    });
+
+    // Log audit event
+    await this.prisma.contractAudit.create({
+      data: {
+        contractId: BigInt(id),
+        action: 'CLAUSES_UPDATED',
+        performedBy: BigInt(userId),
+        details: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          ip,
+        }),
+      },
+    });
+
+    return this.findOne(id);
+  }
+
+  /**
+   * Get clause history for a contract
+   */
+  async getClauseHistory(id: string) {
+    const history = await this.prisma.contractClauseHistory.findMany({
+      where: { contractId: BigInt(id) },
+      include: {
+        editor: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+      orderBy: { editedAt: 'desc' },
+    });
+
+    return history.map((h) => ({
+      id: h.id.toString(),
+      clauses: h.clauses,
+      editedBy: {
+        id: h.editor.id.toString(),
+        name: h.editor.name,
+        email: h.editor.email,
+      },
+      editedAt: h.editedAt.toISOString(),
+      changeNote: h.changeNote,
+    }));
+  }
+
+  /**
+   * Get contract by token (public access for verification)
+   */
+  async findByToken(token: string) {
+    const contract = await this.prisma.contract.findUnique({
+      where: { contractToken: token },
+      include: {
+        property: {
+          select: { address: true, city: true, neighborhood: true },
+        },
+      },
+    });
+
+    if (!contract || contract.deleted) {
+      return null;
+    }
+
+    // Return anonymized data for public verification
+    return {
+      token: contract.contractToken,
+      status: contract.status,
+      hashFinal: contract.hashFinal,
+      createdAt: contract.createdAt.toISOString(),
+      property: {
+        city: contract.property.city,
+        neighborhood: contract.property.neighborhood,
+      },
+      signatures: {
+        tenant: contract.tenantSignature ? {
+          signedAt: contract.tenantSignedAt?.toISOString(),
+          hasGeo: !!contract.tenantGeoLat,
+        } : null,
+        owner: contract.ownerSignature ? {
+          signedAt: contract.ownerSignedAt?.toISOString(),
+          hasGeo: !!contract.ownerGeoLat,
+        } : null,
+        agency: contract.agencySignature ? {
+          signedAt: contract.agencySignedAt?.toISOString(),
+          hasGeo: !!contract.agencyGeoLat,
+        } : null,
+        witness: contract.witnessSignature ? {
+          signedAt: contract.witnessSignedAt?.toISOString(),
+          hasGeo: !!contract.witnessGeoLat,
+        } : null,
+      },
+    };
+  }
+
+  /**
+   * Download provisional PDF
+   */
+  async getProvisionalPdf(id: string): Promise<Buffer> {
+    const pdf = await this.pdfService.getStoredPdf(BigInt(id), 'provisional');
+    if (!pdf) {
+      // Generate if not exists
+      return this.pdfService.generateProvisionalPdf(BigInt(id));
+    }
+    return pdf;
+  }
+
+  /**
+   * Download final PDF
+   */
+  async getFinalPdf(id: string): Promise<Buffer> {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: BigInt(id) },
+      select: { status: true },
+    });
+
+    if (!contract) {
+      throw new NotFoundException('Contract not found');
+    }
+
+    if (contract.status !== 'ASSINADO') {
+      throw new BadRequestException('Contrato ainda não foi finalizado');
+    }
+
+    const pdf = await this.pdfService.getStoredPdf(BigInt(id), 'final');
+    if (!pdf) {
+      throw new NotFoundException('PDF final não encontrado');
+    }
+    return pdf;
+  }
+
+  /**
+   * Create signature invitation links for all parties
+   */
+  async createSignatureInvitations(
+    id: string,
+    parties: Array<{ signerType: 'tenant' | 'owner' | 'agency' | 'witness'; email: string; name?: string }>,
+    userId: string,
+  ) {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: BigInt(id) },
+      select: { status: true },
+    });
+
+    if (!contract) {
+      throw new NotFoundException('Contract not found');
+    }
+
+    if (contract.status !== 'AGUARDANDO_ASSINATURAS') {
+      throw new BadRequestException('Contrato deve estar aguardando assinaturas para enviar convites');
+    }
+
+    const links = await this.signatureLinkService.createSignatureLinksForContract(
+      BigInt(id),
+      parties,
+    );
+
+    // Log audit event
+    await this.prisma.contractAudit.create({
+      data: {
+        contractId: BigInt(id),
+        action: 'SIGNATURE_LINKS_CREATED',
+        performedBy: BigInt(userId),
+        details: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          parties: parties.map((p) => ({ signerType: p.signerType, email: p.email })),
+        }),
+      },
+    });
+
+    return links;
+  }
+
+  /**
+   * Revoke signed contract
+   */
+  async revokeContract(id: string, userId: string, reason?: string) {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: BigInt(id) },
+    });
+
+    if (!contract || contract.deleted) {
+      throw new NotFoundException('Contract not found');
+    }
+
+    await this.prisma.contract.update({
+      where: { id: BigInt(id) },
+      data: { status: 'REVOGADO' },
+    });
+
+    // Revoke all signature links
+    await this.signatureLinkService.revokeAllContractLinks(BigInt(id));
+
+    // Log audit event
+    await this.prisma.contractAudit.create({
+      data: {
+        contractId: BigInt(id),
+        action: 'CONTRACT_REVOKED',
+        performedBy: BigInt(userId),
+        details: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          reason: reason || 'No reason provided',
+        }),
+      },
+    });
+
+    return { message: 'Contrato revogado com sucesso' };
   }
 }

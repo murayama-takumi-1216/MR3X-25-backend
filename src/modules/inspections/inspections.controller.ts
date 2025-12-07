@@ -13,13 +13,17 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { InspectionsService } from './inspections.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { OwnerPermissionGuard } from '../../common/guards/owner-permission.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { OwnerPermission } from '../../common/decorators/owner-permission.decorator';
+import { OwnerAction } from '../../common/constants/owner-permissions.constants';
 import { CreateInspectionDto, InspectionStatus } from './dto/create-inspection.dto';
 import { UpdateInspectionDto, SignInspectionDto, ApproveRejectInspectionDto } from './dto/update-inspection.dto';
 
 @ApiTags('Inspections')
 @Controller('inspections')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, OwnerPermissionGuard)
 @ApiBearerAuth()
 export class InspectionsController {
   constructor(private readonly inspectionsService: InspectionsService) {}
@@ -136,18 +140,21 @@ export class InspectionsController {
 
   @Post('templates')
   @ApiOperation({ summary: 'Create a new inspection template' })
+  @OwnerPermission('inspections', OwnerAction.CREATE)
   async createTemplate(@Body() data: any, @CurrentUser('sub') userId: string) {
     return this.inspectionsService.createTemplate(data, userId);
   }
 
   @Put('templates/:id')
   @ApiOperation({ summary: 'Update inspection template' })
+  @OwnerPermission('inspections', OwnerAction.EDIT)
   async updateTemplate(@Param('id') id: string, @Body() data: any) {
     return this.inspectionsService.updateTemplate(id, data);
   }
 
   @Delete('templates/:id')
   @ApiOperation({ summary: 'Delete inspection template' })
+  @OwnerPermission('inspections', OwnerAction.DELETE)
   async removeTemplate(@Param('id') id: string) {
     return this.inspectionsService.removeTemplate(id);
   }
@@ -160,6 +167,7 @@ export class InspectionsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new inspection' })
+  @OwnerPermission('inspections', OwnerAction.CREATE)
   async create(
     @Body() data: CreateInspectionDto,
     @CurrentUser('sub') userId: string,
@@ -169,6 +177,7 @@ export class InspectionsController {
 
   @Put(':id')
   @ApiOperation({ summary: 'Update inspection' })
+  @OwnerPermission('inspections', OwnerAction.EDIT)
   async update(
     @Param('id') id: string,
     @Body() data: UpdateInspectionDto,
@@ -178,6 +187,7 @@ export class InspectionsController {
 
   @Patch(':id/sign')
   @ApiOperation({ summary: 'Sign inspection' })
+  @OwnerPermission('inspections', OwnerAction.SIGN)
   async sign(
     @Param('id') id: string,
     @Body() data: SignInspectionDto,
@@ -188,6 +198,7 @@ export class InspectionsController {
 
   @Patch(':id/approve')
   @ApiOperation({ summary: 'Approve inspection' })
+  @OwnerPermission('inspections', OwnerAction.APPROVE)
   async approve(
     @Param('id') id: string,
     @CurrentUser('sub') userId: string,
@@ -197,6 +208,7 @@ export class InspectionsController {
 
   @Patch(':id/reject')
   @ApiOperation({ summary: 'Reject inspection' })
+  @OwnerPermission('inspections', OwnerAction.APPROVE)
   async reject(
     @Param('id') id: string,
     @Body() data: ApproveRejectInspectionDto,
@@ -207,6 +219,7 @@ export class InspectionsController {
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update inspection status' })
+  @OwnerPermission('inspections', OwnerAction.EDIT)
   async updateStatus(
     @Param('id') id: string,
     @Body('status') status: InspectionStatus,
@@ -216,6 +229,7 @@ export class InspectionsController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete inspection' })
+  @OwnerPermission('inspections', OwnerAction.DELETE)
   async remove(@Param('id') id: string) {
     return this.inspectionsService.remove(id);
   }
