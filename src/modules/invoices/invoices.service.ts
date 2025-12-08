@@ -2,10 +2,15 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../config/prisma.service';
 import { CreateInvoiceDto, InvoiceStatus } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto, MarkAsPaidDto, CancelInvoiceDto } from './dto/update-invoice.dto';
+import { ContractCalculationsService } from '../contracts/contract-calculations.service';
+import { Decimal } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class InvoicesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private calculationsService: ContractCalculationsService,
+  ) {}
 
   private serializeInvoice(invoice: any) {
     return {
@@ -61,6 +66,55 @@ export class InvoicesService {
         retainedTax: t.retainedTax ? Number(t.retainedTax) : null,
         transferredValue: t.transferredValue ? Number(t.transferredValue) : null,
       })),
+    };
+  }
+
+  /**
+   * Calculate penalties and discounts automatically based on contract settings
+   */
+  private async calculatePenaltiesForInvoice(
+    originalValue: number,
+    dueDate: Date,
+    contractId: string,
+    paymentDate: Date = new Date(),
+  ) {
+    // Get contract with penalty settings
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: BigInt(contractId) },
+      select: {
+        lateFeePercent: true,
+        dailyPenaltyPercent: true,
+        interestRatePercent: true,
+        earlyPaymentDiscountPercent: true,
+        earlyPaymentDiscountDays: true,
+      },
+    });
+
+    if (!contract) {
+      throw new NotFoundException('Contract not found');
+    }
+
+    // Calculate using the calculations service
+    const result = this.calculationsService.calculateInvoicePenalties(
+      originalValue,
+      dueDate,
+      paymentDate,
+      {
+        lateFeePercent: contract.lateFeePercent ?? undefined,
+        dailyPenaltyPercent: contract.dailyPenaltyPercent ?? undefined,
+        interestRatePercent: contract.interestRatePercent ?? undefined,
+        earlyPaymentDiscountPercent: contract.earlyPaymentDiscountPercent ?? undefined,
+        earlyPaymentDiscountDays: contract.earlyPaymentDiscountDays ?? undefined,
+      },
+    );
+
+    return {
+      fine: this.calculationsService.roundCurrency(result.lateFee).toNumber(),
+      interest: this.calculationsService.roundCurrency(result.interest).toNumber(),
+      dailyPenalty: this.calculationsService.roundCurrency(result.dailyPenalty).toNumber(),
+      discount: this.calculationsService.roundCurrency(result.discount).toNumber(),
+      updatedValue: this.calculationsService.roundCurrency(result.finalAmount).toNumber(),
+      daysOverdue: result.daysOverdue,
     };
   }
 
@@ -272,6 +326,53 @@ export class InvoicesService {
     }
 
     return this.serializeInvoice(invoice);
+  }
+
+  /**
+   * Recalculate invoice penalties based on current date and contract settings
+   * This is useful to update overdue invoices with current penalties
+   */
+  async recalculatePenalties(id: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: BigInt(id) },
+      include: { contract: true },
+    });
+
+    if (!invoice) {
+      throw new NotFoundException('Invoice not found');
+    }
+
+    if (invoice.status === 'PAID' || invoice.status === 'CANCELED') {
+      throw new BadRequestException('Cannot recalculate penalties for paid or canceled invoices');
+    }
+
+    // Calculate new penalties
+    const calculations = await this.calculatePenaltiesForInvoice(
+      Number(invoice.originalValue),
+      invoice.dueDate,
+      invoice.contractId.toString(),
+      new Date(),
+    );
+
+    // Update invoice
+    const updated = await this.prisma.invoice.update({
+      where: { id: BigInt(id) },
+      data: {
+        fine: calculations.fine,
+        interest: calculations.interest,
+        discount: calculations.discount,
+        updatedValue: calculations.updatedValue,
+        status: calculations.daysOverdue > 0 ? 'OVERDUE' : invoice.status,
+      },
+      include: {
+        contract: true,
+        property: true,
+        tenant: true,
+        owner: true,
+      },
+    });
+
+    return this.serializeInvoice(updated);
   }
 
   async create(data: CreateInvoiceDto, userId: string, userAgencyId?: string) {

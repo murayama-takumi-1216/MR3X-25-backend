@@ -6,6 +6,7 @@ import { ContractVerificationController, ExternalSigningController } from './con
 import { ContractHashService } from './services/contract-hash.service';
 import { ContractPdfService } from './services/contract-pdf.service';
 import { SignatureLinkService } from './services/signature-link.service';
+import { ContractCalculationsService } from './contract-calculations.service';
 
 @Module({
   imports: [PlansModule],
@@ -19,12 +20,14 @@ import { SignatureLinkService } from './services/signature-link.service';
     ContractHashService,
     ContractPdfService,
     SignatureLinkService,
+    ContractCalculationsService,
   ],
   exports: [
     ContractsService,
     ContractHashService,
     ContractPdfService,
     SignatureLinkService,
+    ContractCalculationsService,
   ],
 })
 export class ContractsModule {}

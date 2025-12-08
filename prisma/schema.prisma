@@ -83,6 +83,16 @@ model Agency {
   frozenPropertiesCount Int       @default(0) @map("frozen_properties_count")
   frozenUsersCount      Int       @default(0) @map("frozen_users_count")
 
+  // Default penalty and fee settings for all contracts in this agency
+  defaultEarlyTerminationPenaltyPercent Decimal? @default(3.0) @map("default_early_termination_penalty_percent") @db.Decimal(5, 2)
+  defaultLateFeePercent                 Decimal? @default(2.0) @map("default_late_fee_percent") @db.Decimal(5, 2)
+  defaultDailyPenaltyPercent            Decimal? @default(0.33) @map("default_daily_penalty_percent") @db.Decimal(5, 2)
+  defaultInterestRatePercent            Decimal? @default(1.0) @map("default_interest_rate_percent") @db.Decimal(5, 2)
+  defaultEarlyPaymentDiscountPercent    Decimal? @default(0.0) @map("default_early_payment_discount_percent") @db.Decimal(5, 2)
+  defaultEarlyPaymentDiscountDays       Int?     @default(0) @map("default_early_payment_discount_days")
+  defaultReadjustmentIndex              String?  @default("IGPM") @map("default_readjustment_index") @db.VarChar(20)
+  defaultReadjustmentMonth              Int?     @default(12) @map("default_readjustment_month")
+
   // API access control (disabled on FREE plan)
   apiEnabled Boolean @default(false) @map("api_enabled")
   apiKey     String? @map("api_key") @db.VarChar(255)
@@ -329,15 +339,25 @@ model Contract {
   dueDay          Int?      @map("due_day")
   description     String?   @db.Text
   status          String    @db.VarChar(20)
-  tenant          String?   @db.VarChar(50)
-  pdfPath         String?   @map("pdf_path") @db.VarChar(255)
-  creci           String?   @db.VarChar(50) // CRECI number (e.g., 123456/SP-F or 123456/SP-J)
-  contractToken   String?   @unique @map("contract_token") @db.VarChar(100) // MR3X-CTR-2025-XXXXX format
-  contractHash    String?   @map("contract_hash") @db.VarChar(255) // SHA-256 hash for verification
-  templateId      String?   @map("template_id") @db.VarChar(100) // Template identifier
-  templateType    String?   @map("template_type") @db.VarChar(10) // CTR, ACD, VST
-  clientIP        String?   @map("client_ip") @db.VarChar(45) // IPv4 or IPv6 address
-  userAgent       String?   @map("user_agent") @db.VarChar(500) // Browser/Client user agent
+
+  // Penalty and fee automation settings
+  earlyTerminationPenaltyPercent Decimal? @default(3.0) @map("early_termination_penalty_percent") @db.Decimal(5, 2) // Percentage of monthly rent (e.g., 3.0 = 3%)
+  lateFeePercent                 Decimal? @default(2.0) @map("late_fee_percent") @db.Decimal(5, 2) // Late payment fine percentage (e.g., 2.0 = 2%)
+  dailyPenaltyPercent            Decimal? @default(0.33) @map("daily_penalty_percent") @db.Decimal(5, 2) // Daily penalty percentage (e.g., 0.33 = 0.33% per day)
+  interestRatePercent            Decimal? @default(1.0) @map("interest_rate_percent") @db.Decimal(5, 2) // Monthly interest rate (e.g., 1.0 = 1% per month)
+  earlyPaymentDiscountPercent    Decimal? @default(0.0) @map("early_payment_discount_percent") @db.Decimal(5, 2) // Discount for early payment
+  earlyPaymentDiscountDays       Int?     @default(0) @map("early_payment_discount_days") // Days before due date for discount
+  readjustmentIndex              String?  @default("IGPM") @map("readjustment_index") @db.VarChar(20) // IGPM, IPCA, INPC, IGP-M
+  readjustmentMonth              Int?     @default(12) @map("readjustment_month") // Month of annual readjustment (1-12)
+  tenant                         String?  @db.VarChar(50)
+  pdfPath                        String?  @map("pdf_path") @db.VarChar(255)
+  creci                          String?  @db.VarChar(50) // CRECI number (e.g., 123456/SP-F or 123456/SP-J)
+  contractToken                  String?  @unique @map("contract_token") @db.VarChar(100) // MR3X-CTR-2025-XXXXX format
+  contractHash                   String?  @map("contract_hash") @db.VarChar(255) // SHA-256 hash for verification
+  templateId                     String?  @map("template_id") @db.VarChar(100) // Template identifier
+  templateType                   String?  @map("template_type") @db.VarChar(10) // CTR, ACD, VST
+  clientIP                       String?  @map("client_ip") @db.VarChar(45) // IPv4 or IPv6 address
+  userAgent                      String?  @map("user_agent") @db.VarChar(500) // Browser/Client user agent
 
   // Advanced signature workflow fields
   clausesSnapshot    Json?   @map("clauses_snapshot") // Frozen clauses at signing
@@ -824,21 +844,21 @@ model InspectionItem {
 }
 
 model InspectionMedia {
-  id            BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  inspectionId  BigInt   @map("inspection_id") @db.UnsignedBigInt
-  itemIndex     Int?     @map("item_index")
-  room          String?  @db.VarChar(100)
-  filename      String   @db.VarChar(255)
-  originalName  String   @map("original_name") @db.VarChar(255)
-  mimeType      String   @map("mime_type") @db.VarChar(100)
-  size          Int
-  path          String   @db.VarChar(500)
-  type          String   @db.VarChar(20) // IMAGE or VIDEO
-  uploadedById  BigInt   @map("uploaded_by_id") @db.UnsignedBigInt
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  id           BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  inspectionId BigInt   @map("inspection_id") @db.UnsignedBigInt
+  itemIndex    Int?     @map("item_index")
+  room         String?  @db.VarChar(100)
+  filename     String   @db.VarChar(255)
+  originalName String   @map("original_name") @db.VarChar(255)
+  mimeType     String   @map("mime_type") @db.VarChar(100)
+  size         Int
+  path         String   @db.VarChar(500)
+  type         String   @db.VarChar(20) // IMAGE or VIDEO
+  uploadedById BigInt   @map("uploaded_by_id") @db.UnsignedBigInt
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(0)
 
-  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
-  uploadedBy   User       @relation("InspectionMediaUploadedBy", fields: [uploadedById], references: [id])
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  uploadedBy User       @relation("InspectionMediaUploadedBy", fields: [uploadedById], references: [id])
 
   @@map("inspection_media")
 }
