@@ -223,7 +223,7 @@ export class TenantAnalysisService {
     return {
       data: data.map(item => ({
         id: item.id.toString(),
-        document: this.maskDocument(item.document),
+        document: item.document,
         documentType: item.documentType,
         name: item.name,
         riskScore: item.riskScore,
@@ -316,7 +316,7 @@ export class TenantAnalysisService {
       }, {} as Record<string, number>),
       recentAnalyses: recentAnalyses.map(a => ({
         id: a.id.toString(),
-        document: this.maskDocument(a.document),
+        document: a.document,
         name: a.name,
         riskLevel: a.riskLevel,
         riskScore: a.riskScore,
@@ -557,7 +557,7 @@ export class TenantAnalysisService {
 
     return {
       id: analysis.id.toString(),
-      document: this.maskDocument(analysis.document),
+      document: analysis.document,
       documentType: analysis.documentType,
       name: analysis.name,
 
