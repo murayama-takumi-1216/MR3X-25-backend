@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/commo
 import { PrismaService } from '../../config/prisma.service';
 import { PlansService } from '../plans/plans.service';
 import { PlanEnforcementService, PLAN_MESSAGES } from '../plans/plan-enforcement.service';
+import { TokenGeneratorService, TokenEntityType } from '../common/services/token-generator.service';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -11,6 +12,7 @@ export class PropertiesService {
     private prisma: PrismaService,
     private plansService: PlansService,
     private planEnforcement: PlanEnforcementService,
+    private tokenGenerator: TokenGeneratorService,
   ) {}
 
   async findAll(params: { skip?: number; take?: number; agencyId?: string; status?: string; ownerId?: string; createdById?: string }) {
@@ -90,8 +92,12 @@ export class PropertiesService {
       }
     }
 
+    // Generate unique MR3X token for the property
+    const token = await this.tokenGenerator.generateToken(TokenEntityType.PROPERTY);
+
     const property = await this.prisma.property.create({
       data: {
+        token,
         address: data.address,
         neighborhood: data.neighborhood,
         city: data.city,

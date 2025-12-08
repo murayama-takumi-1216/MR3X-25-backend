@@ -4,9 +4,10 @@ import { PropertyImagesPublicController } from './property-images-public.control
 import { PropertiesService } from './properties.service';
 import { PropertyImagesService } from './property-images.service';
 import { PlansModule } from '../plans/plans.module';
+import { CommonModule } from '../common/common.module';
 
 @Module({
-  imports: [PlansModule],
+  imports: [PlansModule, CommonModule],
   controllers: [PropertyImagesPublicController, PropertiesController],
   providers: [PropertiesService, PropertyImagesService],
   exports: [PropertiesService, PropertyImagesService],

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException, 
 import { PrismaService } from '../../config/prisma.service';
 import { PlansService } from '../plans/plans.service';
 import { PlanEnforcementService, PLAN_MESSAGES } from '../plans/plan-enforcement.service';
+import { TokenGeneratorService, TokenEntityType } from '../common/services/token-generator.service';
 import { CreateUserDto, UpdateUserDto, CreateTenantDto, UpdateTenantDto } from './dto/user.dto';
 import * as bcrypt from 'bcryptjs';
 import { UserRole } from '@prisma/client';
@@ -57,6 +58,7 @@ export class UsersService {
     private prisma: PrismaService,
     private plansService: PlansService,
     private planEnforcement: PlanEnforcementService,
+    private tokenGenerator: TokenGeneratorService,
   ) {}
 
   /**
@@ -245,8 +247,17 @@ export class UsersService {
       ownerId = BigInt(creatorId);
     }
 
+    // Generate MR3X token for INQUILINO (tenants) and PROPRIETARIO/INDEPENDENT_OWNER (owners)
+    let token: string | null = null;
+    if (dto.role === 'INQUILINO') {
+      token = await this.tokenGenerator.generateToken(TokenEntityType.TENANT);
+    } else if (dto.role === 'PROPRIETARIO' || dto.role === 'INDEPENDENT_OWNER') {
+      token = await this.tokenGenerator.generateToken(TokenEntityType.OWNER);
+    }
+
     const user = await this.prisma.user.create({
       data: {
+        token,
         email: dto.email,
         password: hashedPassword,
         plainPassword: plainPassword,

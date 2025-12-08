@@ -62,6 +62,7 @@ enum NotificationType {
 
 model Agency {
   id            BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  token         String?  @unique @db.VarChar(50) // MR3X-AGE-YEAR-XXXX-XXXX
   name          String   @db.VarChar(255)
   cnpj          String   @unique @db.VarChar(20)
   email         String   @db.VarChar(191)
@@ -111,6 +112,7 @@ model Agency {
 
 model User {
   id                      BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  token                   String?   @unique @db.VarChar(50) // MR3X-LOC-YEAR-XXXX-XXXX (tenants) or MR3X-PRO-YEAR-XXXX-XXXX (owners)
   email                   String    @unique @db.VarChar(191)
   password                String    @db.VarChar(255)
   plainPassword           String?   @map("plain_password") @db.VarChar(255)
@@ -277,6 +279,7 @@ model RefreshToken {
 
 model Property {
   id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  token          String?   @unique @db.VarChar(50) // MR3X-IMO-YEAR-XXXX-XXXX
   ownerId        BigInt?   @map("owner_id") @db.UnsignedBigInt
   agencyId       BigInt?   @map("agency_id") @db.UnsignedBigInt
   brokerId       BigInt?   @map("broker_id") @db.UnsignedBigInt
@@ -479,6 +482,7 @@ model ContractClauseHistory {
 
 model Document {
   id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  token      String?  @unique @db.VarChar(50) // MR3X-DOC-YEAR-XXXX-XXXX
   propertyId BigInt   @map("property_id") @db.UnsignedBigInt
   tenantId   BigInt?  @map("tenant_id") @db.UnsignedBigInt
   name       String   @db.VarChar(255)
@@ -620,6 +624,7 @@ model Company {
 
 model Invoice {
   id         BigInt  @id @default(autoincrement()) @db.UnsignedBigInt
+  token      String? @unique @db.VarChar(50) // MR3X-INV-YEAR-XXXX-XXXX
   contractId BigInt  @map("contract_id") @db.UnsignedBigInt
   propertyId BigInt? @map("property_id") @db.UnsignedBigInt
   agencyId   BigInt? @map("agency_id") @db.UnsignedBigInt
