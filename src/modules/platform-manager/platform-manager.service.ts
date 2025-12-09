@@ -108,37 +108,18 @@ export class PlatformManagerService {
   }
 
   async getTicketStatusDistribution() {
-    // Return mock data since supportTicket table doesn't exist
-    return [
-      { name: 'Abertos', value: 12, color: '#ef4444' },
-      { name: 'Em Andamento', value: 8, color: '#f59e0b' },
-      { name: 'Resolvidos', value: 45, color: '#22c55e' },
-      { name: 'Fechados', value: 30, color: '#6b7280' },
-    ];
+    // Return empty data - ticket system not implemented
+    return [];
   }
 
   async getMonthlyTickets() {
-    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'];
-
-    // Generate last 6 months data
-    return months.map((month) => ({
-      month,
-      abertos: Math.floor(Math.random() * 30) + 10,
-      resolvidos: Math.floor(Math.random() * 25) + 15,
-    }));
+    // Return empty data - ticket system not implemented
+    return [];
   }
 
   async getPlatformHealth() {
-    // Generate 24-hour health data
-    const hours: HealthData[] = [];
-    for (let i = 0; i < 24; i++) {
-      hours.push({
-        time: `${i.toString().padStart(2, '0')}:00`,
-        uptime: 99.5 + Math.random() * 0.5,
-        responseTime: 50 + Math.floor(Math.random() * 100),
-      });
-    }
-    return hours;
+    // Return empty data - health monitoring not implemented
+    return [];
   }
 
   async getRecentActivities() {
@@ -159,25 +140,14 @@ export class PlatformManagerService {
         status: log.event.includes('DELETE') ? 'warning' : 'success',
       }));
     } catch {
-      // Return mock data if no audit logs
-      return [
-        { id: '1', message: 'Nova agência cadastrada: Imobiliária ABC', time: 'Há 5 minutos', status: 'success' },
-        { id: '2', message: 'Ticket #123 resolvido', time: 'Há 15 minutos', status: 'success' },
-        { id: '3', message: 'Novo usuário registrado', time: 'Há 30 minutos', status: 'info' },
-        { id: '4', message: 'Alerta: Alta demanda no servidor', time: 'Há 1 hora', status: 'warning' },
-        { id: '5', message: 'Backup automático concluído', time: 'Há 2 horas', status: 'success' },
-      ];
+      // Return empty array if no audit logs
+      return [];
     }
   }
 
   async getSystemStatus() {
-    return [
-      { name: 'API Principal', status: 'online', uptime: '99.9%' },
-      { name: 'Banco de Dados', status: 'online', uptime: '99.8%' },
-      { name: 'Serviço de Email', status: 'online', uptime: '99.5%' },
-      { name: 'Armazenamento', status: 'online', uptime: '100%' },
-      { name: 'Gateway de Pagamentos', status: 'online', uptime: '99.7%' },
-    ];
+    // Return empty data - system monitoring not implemented
+    return [];
   }
 
   async getAgencies(params?: { search?: string; status?: string; plan?: string }) {
@@ -412,7 +382,7 @@ export class PlatformManagerService {
   }
 
   async getBillingOverview() {
-    // Return mock billing data since there's no billing table
+    // Return empty data - billing system not implemented
     return {
       totalRevenue: 0,
       monthlyRevenue: 0,
@@ -428,27 +398,13 @@ export class PlatformManagerService {
     startDate?: string;
     endDate?: string;
   }) {
-    // Return mock webhook logs since there's no webhook logs table
-    return [
-      { id: '1', service: 'Asaas', event: 'payment.received', status: 'success', timestamp: new Date() },
-      { id: '2', service: 'Email', event: 'email.sent', status: 'success', timestamp: new Date() },
-    ];
+    // Return empty data - webhook logs not implemented
+    return [];
   }
 
   async getTickets(params?: { status?: string; priority?: string; category?: string }) {
-    // Return mock tickets since there's no tickets table
-    return [
-      {
-        id: '1',
-        subject: 'Problema com login',
-        description: 'Não consigo acessar minha conta',
-        status: 'OPEN',
-        priority: 'HIGH',
-        category: 'SUPPORT',
-        createdAt: new Date(),
-        agency: { name: 'Imobiliária Teste' },
-      },
-    ];
+    // Return empty data - ticket system not implemented
+    return [];
   }
 
   private formatTimeAgo(date: Date): string {

@@ -250,12 +250,12 @@ export class InfoSimplesService {
   }
 
   /**
-   * Main method to get protest analysis - tries CENPROT-SP first, falls back to mock if disabled
+   * Main method to get protest analysis from CENPROT-SP
    */
   async analyzeProtests(document: string): Promise<ProtestAnalysisResult> {
     if (!this.isServiceEnabled()) {
-      this.logger.warn('InfoSimples not enabled, returning mock data');
-      return this.getMockProtestData(document);
+      this.logger.warn('InfoSimples service is not enabled');
+      return this.getEmptyResult();
     }
 
     try {
@@ -357,148 +357,6 @@ export class InfoSimplesService {
       cartoriosWithProtests: 0,
       source: 'INFOSIMPLES_CENPROT_SP',
     };
-  }
-
-  /**
-   * Generate mock protest data for testing/development
-   */
-  private getMockProtestData(document: string): ProtestAnalysisResult {
-    // Use document hash to generate consistent mock data
-    const hash = document.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const scenario = hash % 4;
-
-    switch (scenario) {
-      case 0:
-        // No protests
-        return this.getEmptyResult();
-
-      case 1:
-        // One small protest
-        return {
-          hasProtests: true,
-          totalProtests: 1,
-          totalValue: 1500.00,
-          protests: [{
-            notaryOffice: '1º Tabelião de Protestos de São Paulo',
-            city: 'São Paulo',
-            state: 'SP',
-            date: '2024-06-15',
-            amount: 1500.00,
-            protocol: 'MOCK-001',
-            presenter: 'Empresa XYZ Ltda',
-            assignor: 'Banco ABC S.A.',
-            type: 'Duplicata',
-          }],
-          cartoriosWithProtests: 1,
-          consultationProtocol: 'MOCK-PROTOCOL-001',
-          consultationDate: new Date().toISOString(),
-          source: 'INFOSIMPLES_CENPROT_SP',
-        };
-
-      case 2:
-        // Multiple protests
-        return {
-          hasProtests: true,
-          totalProtests: 3,
-          totalValue: 8750.00,
-          protests: [
-            {
-              notaryOffice: '2º Tabelião de Protestos de São Paulo',
-              city: 'São Paulo',
-              state: 'SP',
-              date: '2024-03-10',
-              amount: 3500.00,
-              protocol: 'MOCK-002',
-              presenter: 'Comércio ABC',
-              type: 'Cheque',
-            },
-            {
-              notaryOffice: '5º Tabelião de Protestos de São Paulo',
-              city: 'São Paulo',
-              state: 'SP',
-              date: '2024-05-20',
-              amount: 2250.00,
-              protocol: 'MOCK-003',
-              presenter: 'Serviços XYZ',
-              type: 'Duplicata',
-            },
-            {
-              notaryOffice: '1º Tabelião de Protestos de Campinas',
-              city: 'Campinas',
-              state: 'SP',
-              date: '2024-07-01',
-              amount: 3000.00,
-              protocol: 'MOCK-004',
-              presenter: 'Fornecedor QRS',
-              type: 'Nota Promissória',
-            },
-          ],
-          cartoriosWithProtests: 3,
-          consultationProtocol: 'MOCK-PROTOCOL-002',
-          consultationDate: new Date().toISOString(),
-          source: 'INFOSIMPLES_CENPROT_SP',
-        };
-
-      default:
-        // Critical - many protests
-        return {
-          hasProtests: true,
-          totalProtests: 7,
-          totalValue: 45000.00,
-          protests: [
-            {
-              notaryOffice: '1º Tabelião de Protestos de São Paulo',
-              city: 'São Paulo',
-              state: 'SP',
-              date: '2023-11-15',
-              amount: 12000.00,
-              protocol: 'MOCK-010',
-              presenter: 'Banco Central',
-              type: 'Cédula de Crédito',
-            },
-            {
-              notaryOffice: '3º Tabelião de Protestos de São Paulo',
-              city: 'São Paulo',
-              state: 'SP',
-              date: '2024-01-20',
-              amount: 8500.00,
-              protocol: 'MOCK-011',
-              type: 'Duplicata',
-            },
-            {
-              notaryOffice: '7º Tabelião de Protestos de São Paulo',
-              city: 'São Paulo',
-              state: 'SP',
-              date: '2024-02-10',
-              amount: 15000.00,
-              protocol: 'MOCK-012',
-              type: 'Contrato',
-            },
-            {
-              notaryOffice: '2º Tabelião de Protestos de Guarulhos',
-              city: 'Guarulhos',
-              state: 'SP',
-              date: '2024-04-05',
-              amount: 5000.00,
-              protocol: 'MOCK-013',
-              type: 'Cheque',
-            },
-            {
-              notaryOffice: '1º Tabelião de Protestos de Santos',
-              city: 'Santos',
-              state: 'SP',
-              date: '2024-05-15',
-              amount: 4500.00,
-              protocol: 'MOCK-014',
-              type: 'Nota Promissória',
-            },
-          ],
-          cartoriosWithProtests: 5,
-          consultationProtocol: 'MOCK-PROTOCOL-003',
-          consultationDate: new Date().toISOString(),
-          source: 'INFOSIMPLES_CENPROT_SP',
-        };
-    }
   }
 
   /**

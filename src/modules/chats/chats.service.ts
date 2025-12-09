@@ -228,43 +228,269 @@ export class ChatsService {
     return { id: chat.id.toString() };
   }
 
-  async getAvailableUsers(userId: string, role: string) {
-    const availableUsers: any[] = [];
+  async getAvailableUsers(userId: string, role: string, userAgencyId?: string) {
+    const userIdBigInt = BigInt(userId);
 
-    // For simplicity, return empty array for now
-    // Full implementation would need to match the original role-based logic
-    if (role === 'AGENCY_ADMIN') {
-      const agencyAdmin = await this.prisma.user.findUnique({
-        where: { id: BigInt(userId) },
-        select: { agencyId: true },
+    // AGENCY_ADMIN can chat with all users in their agency (managers, brokers, tenants, owners)
+    if (role === 'AGENCY_ADMIN' && userAgencyId) {
+      const agencyUsers = await this.prisma.user.findMany({
+        where: {
+          agencyId: BigInt(userAgencyId),
+          id: { not: userIdBigInt },
+          status: 'ACTIVE',
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          role: true,
+        },
       });
 
-      if (agencyAdmin?.agencyId) {
-        const managers = await this.prisma.user.findMany({
-          where: {
-            agencyId: agencyAdmin.agencyId,
-            role: 'AGENCY_MANAGER',
-            id: { not: BigInt(userId) },
+      // Also get tenants from contracts in this agency
+      const agencyContracts = await this.prisma.contract.findMany({
+        where: {
+          agencyId: BigInt(userAgencyId),
+          deleted: false,
+        },
+        select: {
+          tenantId: true,
+          tenantUser: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              role: true,
+            },
           },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
+        },
+      });
+
+      const tenantUsers = agencyContracts
+        .filter(c => c.tenantUser && c.tenantUser.id.toString() !== userId)
+        .map(c => c.tenantUser);
+
+      // Combine and deduplicate
+      const allUsers = [...agencyUsers, ...tenantUsers];
+      const uniqueUsers = allUsers.filter((user, index, self) =>
+        index === self.findIndex(u => u?.id?.toString() === user?.id?.toString())
+      );
+
+      return uniqueUsers.filter(u => u).map(u => ({
+        id: u!.id.toString(),
+        name: u!.name,
+        email: u!.email,
+        phone: u!.phone,
+        role: u!.role,
+      }));
+    }
+
+    // AGENCY_MANAGER can chat with agency admin, other managers, brokers, and tenants
+    if (role === 'AGENCY_MANAGER' && userAgencyId) {
+      const agencyUsers = await this.prisma.user.findMany({
+        where: {
+          agencyId: BigInt(userAgencyId),
+          id: { not: userIdBigInt },
+          status: 'ACTIVE',
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          role: true,
+        },
+      });
+
+      return agencyUsers.map(u => ({
+        id: u.id.toString(),
+        name: u.name,
+        email: u.email,
+        phone: u.phone,
+        role: u.role,
+      }));
+    }
+
+    // BROKER can chat with agency users and their assigned tenants
+    if (role === 'BROKER' && userAgencyId) {
+      const agencyUsers = await this.prisma.user.findMany({
+        where: {
+          agencyId: BigInt(userAgencyId),
+          id: { not: userIdBigInt },
+          status: 'ACTIVE',
+          role: { in: ['AGENCY_ADMIN', 'AGENCY_MANAGER'] },
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          role: true,
+        },
+      });
+
+      // Get tenants from properties assigned to this broker
+      const brokerProperties = await this.prisma.property.findMany({
+        where: {
+          brokerId: userIdBigInt,
+        },
+        select: {
+          contracts: {
+            where: { deleted: false },
+            select: {
+              tenantUser: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  phone: true,
+                  role: true,
+                },
+              },
+            },
           },
-        });
-        return managers.map(m => ({
-          id: m.id.toString(),
-          name: m.name,
-          email: m.email,
-          phone: m.phone,
-        }));
-      }
-      return [];
+        },
+      });
+
+      const tenantUsers = brokerProperties
+        .flatMap(p => p.contracts)
+        .filter(c => c.tenantUser)
+        .map(c => c.tenantUser);
+
+      const allUsers = [...agencyUsers, ...tenantUsers];
+      const uniqueUsers = allUsers.filter((user, index, self) =>
+        index === self.findIndex(u => u?.id?.toString() === user?.id?.toString())
+      );
+
+      return uniqueUsers.filter(u => u).map(u => ({
+        id: u!.id.toString(),
+        name: u!.name,
+        email: u!.email,
+        phone: u!.phone,
+        role: u!.role,
+      }));
+    }
+
+    // INQUILINO can chat with their landlord/agency
+    if (role === 'INQUILINO') {
+      const tenantContracts = await this.prisma.contract.findMany({
+        where: {
+          tenantId: userIdBigInt,
+          deleted: false,
+        },
+        select: {
+          ownerUser: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              role: true,
+            },
+          },
+          agency: {
+            select: {
+              users: {
+                where: {
+                  role: { in: ['AGENCY_ADMIN', 'AGENCY_MANAGER', 'BROKER'] },
+                  status: 'ACTIVE',
+                },
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  phone: true,
+                  role: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const owners = tenantContracts
+        .filter(c => c.ownerUser)
+        .map(c => c.ownerUser);
+
+      const agencyUsers = tenantContracts
+        .flatMap(c => c.agency?.users || []);
+
+      const allUsers = [...owners, ...agencyUsers];
+      const uniqueUsers = allUsers.filter((user, index, self) =>
+        index === self.findIndex(u => u?.id?.toString() === user?.id?.toString())
+      );
+
+      return uniqueUsers.filter(u => u).map(u => ({
+        id: u!.id.toString(),
+        name: u!.name,
+        email: u!.email,
+        phone: u!.phone,
+        role: u!.role,
+      }));
+    }
+
+    // PROPRIETARIO can chat with their tenants and agency
+    if (role === 'PROPRIETARIO' || role === 'INDEPENDENT_OWNER') {
+      const ownerContracts = await this.prisma.contract.findMany({
+        where: {
+          ownerId: userIdBigInt,
+          deleted: false,
+        },
+        select: {
+          tenantUser: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              role: true,
+            },
+          },
+          agency: {
+            select: {
+              users: {
+                where: {
+                  role: { in: ['AGENCY_ADMIN', 'AGENCY_MANAGER'] },
+                  status: 'ACTIVE',
+                },
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  phone: true,
+                  role: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const tenants = ownerContracts
+        .filter(c => c.tenantUser)
+        .map(c => c.tenantUser);
+
+      const agencyUsers = ownerContracts
+        .flatMap(c => c.agency?.users || []);
+
+      const allUsers = [...tenants, ...agencyUsers];
+      const uniqueUsers = allUsers.filter((user, index, self) =>
+        index === self.findIndex(u => u?.id?.toString() === user?.id?.toString())
+      );
+
+      return uniqueUsers.filter(u => u).map(u => ({
+        id: u!.id.toString(),
+        name: u!.name,
+        email: u!.email,
+        phone: u!.phone,
+        role: u!.role,
+      }));
     }
 
     // Default return empty array
-    return availableUsers;
+    return [];
   }
 
   async deleteChat(chatId: string, userId: string) {

@@ -21,6 +21,10 @@ export class PaymentsService {
           createdBy: BigInt(userId),
         };
       }
+      // AGENCY_ADMIN can see all payments in their agency
+      else if (role === 'AGENCY_ADMIN' && userAgencyId) {
+        where.agencyId = BigInt(userAgencyId);
+      }
       // AGENCY_MANAGER can see all payments in their agency
       else if (role === 'AGENCY_MANAGER' && userAgencyId) {
         where.agencyId = BigInt(userAgencyId);
@@ -436,6 +440,14 @@ export class PaymentsService {
           createdBy: BigInt(userId),
         };
       }
+      // AGENCY_ADMIN can see all payments in their agency
+      else if (role === 'AGENCY_ADMIN' && userAgencyId) {
+        where.agencyId = BigInt(userAgencyId);
+      }
+      // AGENCY_MANAGER can see all payments in their agency
+      else if (role === 'AGENCY_MANAGER' && userAgencyId) {
+        where.agencyId = BigInt(userAgencyId);
+      }
       // PROPRIETARIO can only see payments for their properties
       else if (role === 'PROPRIETARIO' || role === 'GESTOR') {
         where.property = {
@@ -451,10 +463,6 @@ export class PaymentsService {
       // INQUILINO can only see their own payments
       else if (role === 'INQUILINO') {
         where.userId = BigInt(userId);
-      }
-      // AGENCY_MANAGER can see all payments in their agency
-      else if (role === 'AGENCY_MANAGER' && userAgencyId) {
-        where.agencyId = BigInt(userAgencyId);
       }
       // Other roles have no access
       else {

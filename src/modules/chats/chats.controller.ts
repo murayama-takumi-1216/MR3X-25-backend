@@ -22,7 +22,8 @@ export class ChatsController {
   async getAvailableUsers(@Req() req: any) {
     const userId = req.user.sub;
     const role = req.user.role;
-    return this.chatsService.getAvailableUsers(userId, role);
+    const agencyId = req.user.agencyId;
+    return this.chatsService.getAvailableUsers(userId, role, agencyId);
   }
 
   @Get(':chatId/messages')

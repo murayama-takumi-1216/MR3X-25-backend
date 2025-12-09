@@ -66,12 +66,18 @@ export class InvoicesController {
     } else if (user?.role === 'INDEPENDENT_OWNER') {
       // INDEPENDENT_OWNER sees only their own invoices
       createdById = user.sub;
-    } else if (user?.agencyId) {
-      // Agency users see only their agency's invoices
+    } else if (user?.role === 'AGENCY_ADMIN' && user?.agencyId) {
+      // AGENCY_ADMIN sees all invoices in their agency
       effectiveAgencyId = user.agencyId;
-    } else if (user?.role === 'AGENCY_ADMIN' || user?.role === 'AGENCY_MANAGER') {
-      // Agency admins/managers without agencyId
-      userId = user?.sub;
+    } else if (user?.role === 'AGENCY_MANAGER' && user?.agencyId) {
+      // AGENCY_MANAGER sees all invoices in their agency
+      effectiveAgencyId = user.agencyId;
+    } else if (user?.role === 'BROKER' && user?.agencyId) {
+      // BROKER sees all invoices in their agency
+      effectiveAgencyId = user.agencyId;
+    } else if (user?.agencyId) {
+      // Other agency users see only their agency's invoices
+      effectiveAgencyId = user.agencyId;
     } else {
       // For any other role, use userId fallback
       userId = user?.sub;
@@ -106,6 +112,15 @@ export class InvoicesController {
       // CEO sees all
     } else if (user?.role === 'ADMIN' || user?.role === 'INDEPENDENT_OWNER') {
       createdById = user.sub;
+    } else if (user?.role === 'AGENCY_ADMIN' && user?.agencyId) {
+      // AGENCY_ADMIN sees all statistics in their agency
+      agencyId = user.agencyId;
+    } else if (user?.role === 'AGENCY_MANAGER' && user?.agencyId) {
+      // AGENCY_MANAGER sees all statistics in their agency
+      agencyId = user.agencyId;
+    } else if (user?.role === 'BROKER' && user?.agencyId) {
+      // BROKER sees all statistics in their agency
+      agencyId = user.agencyId;
     } else if (user?.agencyId) {
       agencyId = user.agencyId;
     } else {
