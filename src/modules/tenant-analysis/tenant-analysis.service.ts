@@ -1,10 +1,12 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../config/prisma.service';
 import { CellereService } from './integrations/cellere.service';
+import { InfoSimplesService, ProtestAnalysisResult } from './integrations/infosimples.service';
 import { MockAnalysisService } from './services/mock-analysis.service';
 import { AnalyzeTenantDto, AnalysisType, GetAnalysisHistoryDto } from './dto';
 import { TenantAnalysisStatus, RiskLevel } from '@prisma/client';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class TenantAnalysisService {
@@ -15,6 +17,7 @@ export class TenantAnalysisService {
   constructor(
     private prisma: PrismaService,
     private cellereService: CellereService,
+    private infoSimplesService: InfoSimplesService,
     private mockService: MockAnalysisService,
     private configService: ConfigService,
   ) {
@@ -29,11 +32,28 @@ export class TenantAnalysisService {
   }
 
   /**
+   * Generate unique token for tenant analysis
+   */
+  private generateAnalysisToken(): string {
+    const prefix = 'TA';
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const random = uuidv4().replace(/-/g, '').substring(0, 8).toUpperCase();
+    return `${prefix}-${timestamp}-${random}`;
+  }
+
+  /**
    * Perform a full tenant analysis
    */
   async analyzeTenant(dto: AnalyzeTenantDto, userId: bigint, agencyId?: bigint) {
-    const { document, analysisType = AnalysisType.FULL, name } = dto;
+    const { document, analysisType = AnalysisType.FULL, name, lgpdAccepted } = dto;
     const documentType = document.length === 11 ? 'CPF' : 'CNPJ';
+
+    // Verify LGPD acceptance
+    if (!lgpdAccepted) {
+      throw new BadRequestException(
+        'Você deve aceitar os termos da LGPD para realizar a consulta. O usuário se responsabiliza pelo uso indevido dos dados pesquisados conforme determina a LGPD.'
+      );
+    }
 
     this.logger.log(`Starting ${analysisType} analysis for document: ${this.maskDocument(document)}`);
 
@@ -75,14 +95,53 @@ export class TenantAnalysisService {
     const validUntil = new Date();
     validUntil.setDate(validUntil.getDate() + this.analysisValidityDays);
 
+    // Generate unique token
+    const token = this.generateAnalysisToken();
+
+    // Extract basic data from document validation
+    const isCPF = documentType === 'CPF';
+    const address = documentValidation?.address;
+    const fullAddress = address
+      ? `${address.logradouro || ''}${address.numero ? ', ' + address.numero : ''}${address.bairro ? ' - ' + address.bairro : ''}`
+      : null;
+
     // Only save to DB after successful analysis
     const analysis = await this.prisma.tenantAnalysis.create({
       data: {
+        token,
         document,
         documentType,
         name: documentValidation?.registrationName || name,
         requestedById: userId,
         agencyId,
+
+        // Basic data for CPF
+        ...(isCPF ? {
+          personStatus: documentValidation?.situacaoCadastral || financial?.situacaoCadastral,
+          personAddress: fullAddress,
+          personCity: address?.cidade,
+          personState: address?.uf,
+          personZipCode: address?.cep,
+          personPhone: documentValidation?.phones?.[0] || null,
+          birthDate: documentValidation?.birthDate || financial?.birthDate,
+          motherName: documentValidation?.motherName || financial?.motherName,
+        } : {}),
+
+        // Basic data for CNPJ
+        ...(!isCPF ? {
+          companyName: documentValidation?.registrationName || financial?.name,
+          tradingName: null, // Would need additional API call
+          companyStatus: documentValidation?.situacaoCadastral || financial?.situacaoCadastral,
+          companyAddress: fullAddress,
+          companyCity: address?.cidade,
+          companyState: address?.uf,
+          companyZipCode: address?.cep,
+          companyPhone: documentValidation?.phones?.[0] || null,
+        } : {}),
+
+        // LGPD tracking
+        lgpdAcceptedAt: new Date(),
+        lgpdAcceptedBy: userId,
 
         // Financial data
         creditScore: financial?.creditScore,
@@ -223,6 +282,7 @@ export class TenantAnalysisService {
     return {
       data: data.map(item => ({
         id: item.id.toString(),
+        token: item.token,
         document: item.document,
         documentType: item.documentType,
         name: item.name,
@@ -359,16 +419,76 @@ export class TenantAnalysisService {
   }
 
   private async getBackgroundAnalysis(document: string) {
+    let baseBackground;
+
     if (this.useMockData) {
-      return this.mockService.getBackgroundCheck(document);
+      baseBackground = await this.mockService.getBackgroundCheck(document);
+    } else {
+      baseBackground = await this.cellereService.getBackgroundCheck({
+        document,
+        includeCriminal: true,
+        includeJudicial: true,
+        includeProtests: true,
+      });
     }
 
-    return this.cellereService.getBackgroundCheck({
-      document,
-      includeCriminal: true,
-      includeJudicial: true,
-      includeProtests: true,
-    });
+    // Enhance with InfoSimples CENPROT-SP protest data
+    try {
+      const infoSimplesProtests = await this.infoSimplesService.analyzeProtests(document);
+
+      // Merge protest data from InfoSimples
+      if (infoSimplesProtests && infoSimplesProtests.hasProtests) {
+        this.logger.log(`InfoSimples found ${infoSimplesProtests.totalProtests} protests for ${this.maskDocument(document)}`);
+
+        // Map InfoSimples protests to our format
+        const mappedProtests = infoSimplesProtests.protests.map(p => ({
+          notaryOffice: p.notaryOffice,
+          amount: p.amount || 0,
+          creditor: p.assignor || p.presenter || 'Não informado',
+          status: 'ATIVO',
+          date: p.date,
+          city: p.city,
+          state: p.state,
+          type: p.type,
+          protocol: p.protocol,
+          source: 'INFOSIMPLES_CENPROT_SP',
+        }));
+
+        // Combine protests from both sources, removing duplicates by protocol/amount
+        const existingProtests = baseBackground.protestRecords || [];
+        const allProtests = [...existingProtests];
+
+        for (const newProtest of mappedProtests) {
+          const isDuplicate = allProtests.some(existing =>
+            (existing.protocol && existing.protocol === newProtest.protocol) ||
+            (existing.amount === newProtest.amount && existing.notaryOffice === newProtest.notaryOffice)
+          );
+          if (!isDuplicate) {
+            allProtests.push(newProtest);
+          }
+        }
+
+        // Update background with merged protest data
+        baseBackground = {
+          ...baseBackground,
+          hasProtests: allProtests.length > 0,
+          protestRecords: allProtests,
+          totalProtestValue: allProtests.reduce((sum, p) => sum + (p.amount || 0), 0),
+          // Add InfoSimples specific data
+          infoSimplesData: {
+            source: infoSimplesProtests.source,
+            consultationProtocol: infoSimplesProtests.consultationProtocol,
+            consultationDate: infoSimplesProtests.consultationDate,
+            cartoriosWithProtests: infoSimplesProtests.cartoriosWithProtests,
+          },
+        };
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to fetch InfoSimples protest data: ${error.message}`);
+      // Continue with base background data if InfoSimples fails
+    }
+
+    return baseBackground;
   }
 
   private async getDocumentValidation(document: string) {
@@ -554,12 +674,45 @@ export class TenantAnalysisService {
 
   private formatAnalysisResponse(analysis: any) {
     const riskPercentage = Math.round((analysis.riskScore || 0) / 10);
+    const isCPF = analysis.documentType === 'CPF';
 
     return {
       id: analysis.id.toString(),
+      token: analysis.token,
       document: analysis.document,
       documentType: analysis.documentType,
       name: analysis.name,
+
+      // Basic data for CPF
+      basicData: isCPF ? {
+        type: 'CPF',
+        name: analysis.name,
+        status: analysis.personStatus,
+        address: analysis.personAddress,
+        city: analysis.personCity,
+        state: analysis.personState,
+        zipCode: analysis.personZipCode,
+        phone: analysis.personPhone,
+        birthDate: analysis.birthDate,
+        motherName: analysis.motherName,
+      } : {
+        type: 'CNPJ',
+        companyName: analysis.companyName || analysis.name,
+        tradingName: analysis.tradingName,
+        status: analysis.companyStatus,
+        address: analysis.companyAddress,
+        city: analysis.companyCity,
+        state: analysis.companyState,
+        zipCode: analysis.companyZipCode,
+        phone: analysis.companyPhone,
+        openingDate: analysis.companyOpeningDate?.toISOString()?.split('T')[0],
+      },
+
+      // Photo
+      photo: analysis.photoPath ? {
+        path: analysis.photoPath,
+        filename: analysis.photoFilename,
+      } : null,
 
       financial: {
         creditScore: analysis.creditScore,
@@ -603,6 +756,12 @@ export class TenantAnalysisService {
       status: analysis.status,
       analyzedAt: analysis.analyzedAt?.toISOString(),
       validUntil: analysis.validUntil?.toISOString(),
+
+      // LGPD tracking
+      lgpd: {
+        acceptedAt: analysis.lgpdAcceptedAt?.toISOString(),
+        acceptedBy: analysis.lgpdAcceptedBy?.toString(),
+      },
 
       summary: {
         financialStatus: analysis.financialStatus || 'CLEAR',
@@ -651,7 +810,8 @@ export class TenantAnalysisService {
 
   async getFullAnalysis(document: string) {
     // This is the legacy method - create a simple DTO and call the new method
-    const dto: AnalyzeTenantDto = { document, analysisType: AnalysisType.FULL };
+    // For legacy support, we assume LGPD acceptance
+    const dto: AnalyzeTenantDto = { document, analysisType: AnalysisType.FULL, lgpdAccepted: true };
     // Note: This will need a userId in production - for legacy support, we'll use a system user
     return this.analyzeTenant(dto, BigInt(1));
   }
@@ -673,5 +833,46 @@ export class TenantAnalysisService {
       service: 'Cellere API',
       timestamp: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Upload photo for an analysis
+   */
+  async uploadPhoto(analysisId: bigint, photoPath: string, photoFilename: string, userId: bigint) {
+    const analysis = await this.prisma.tenantAnalysis.findUnique({
+      where: { id: analysisId },
+    });
+
+    if (!analysis) {
+      throw new NotFoundException('Análise não encontrada');
+    }
+
+    // Delete old photo if exists
+    if (analysis.photoPath) {
+      try {
+        const fs = require('fs');
+        if (fs.existsSync(analysis.photoPath)) {
+          fs.unlinkSync(analysis.photoPath);
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to delete old photo: ${error.message}`);
+      }
+    }
+
+    const updated = await this.prisma.tenantAnalysis.update({
+      where: { id: analysisId },
+      data: {
+        photoPath,
+        photoFilename,
+      },
+      include: {
+        requestedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    this.logger.log(`Photo uploaded for analysis ${analysisId}`);
+    return this.formatAnalysisResponse(updated);
   }
 }

@@ -46,6 +46,23 @@ export class PlansController {
     return config;
   }
 
+  // ==================== PLAN MODIFICATION REQUESTS ====================
+  // NOTE: These routes MUST be defined before the :id route to avoid being caught by it
+
+  @Get('modification-requests/pending')
+  @Roles(UserRole.CEO)
+  @ApiOperation({ summary: 'Get pending plan modification requests (CEO only)' })
+  async getPendingModificationRequests() {
+    return this.plansService.getPendingModificationRequests();
+  }
+
+  @Get('modification-requests')
+  @Roles(UserRole.CEO, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get all plan modification requests' })
+  async getAllModificationRequests() {
+    return this.plansService.getAllModificationRequests();
+  }
+
   @Get(':id')
   @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.AGENCY_MANAGER, UserRole.BROKER, UserRole.PROPRIETARIO, UserRole.INDEPENDENT_OWNER)
   @ApiOperation({ summary: 'Get plan by ID' })
@@ -290,21 +307,7 @@ export class PlansController {
     return { success: true, message: 'Monthly usage reset successfully' };
   }
 
-  // ==================== PLAN MODIFICATION REQUESTS ====================
-
-  @Get('modification-requests/pending')
-  @Roles(UserRole.CEO)
-  @ApiOperation({ summary: 'Get pending plan modification requests (CEO only)' })
-  async getPendingModificationRequests() {
-    return this.plansService.getPendingModificationRequests();
-  }
-
-  @Get('modification-requests')
-  @Roles(UserRole.CEO, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Get all plan modification requests' })
-  async getAllModificationRequests() {
-    return this.plansService.getAllModificationRequests();
-  }
+  // ==================== PLAN MODIFICATION & UPDATE ====================
 
   @Put(':id')
   @Roles(UserRole.CEO, UserRole.ADMIN)

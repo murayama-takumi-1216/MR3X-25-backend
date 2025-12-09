@@ -1,5 +1,10 @@
-import { Controller, Get, Post, Body, UseGuards, Query, Param, HttpException, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, UseGuards, Query, Param, HttpException, HttpStatus, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { diskStorage } from 'multer';
+import { v4 as uuidv4 } from 'uuid';
+import * as path from 'path';
+import * as fs from 'fs';
 import { TenantAnalysisService } from './tenant-analysis.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -10,6 +15,30 @@ import { OwnerPermission } from '../../common/decorators/owner-permission.decora
 import { OwnerAction } from '../../common/constants/owner-permissions.constants';
 import { UserRole } from '@prisma/client';
 import { AnalyzeTenantDto, GetAnalysisHistoryDto } from './dto';
+
+// Configure multer storage for analysis photos
+const analysisPhotoStorage = diskStorage({
+  destination: (_req, _file, cb) => {
+    const uploadDir = path.join(process.cwd(), 'uploads', 'tenant-analysis');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (_req, file, cb) => {
+    const uniqueName = `${uuidv4()}-${file.originalname}`;
+    cb(null, uniqueName);
+  },
+});
+
+// File filter for images only
+const imageFileFilter = (_req: any, file: any, cb: any) => {
+  if (file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Apenas arquivos de imagem são permitidos'), false);
+  }
+};
 
 @ApiTags('Tenant Analysis')
 @Controller('tenant-analysis')
@@ -118,6 +147,53 @@ export class TenantAnalysisController {
     const userId = BigInt(user.sub);
     const agencyId = user.agencyId ? BigInt(user.agencyId) : undefined;
     return this.tenantAnalysisService.getAnalysisById(BigInt(id), userId, user.role, agencyId);
+  }
+
+  @Post(':id/photo')
+  @Roles(
+    UserRole.CEO,
+    UserRole.ADMIN,
+    UserRole.AGENCY_ADMIN,
+    UserRole.AGENCY_MANAGER,
+    UserRole.BROKER,
+    UserRole.INDEPENDENT_OWNER,
+    UserRole.PROPRIETARIO
+  )
+  @ApiOperation({ summary: 'Upload photo for a tenant analysis' })
+  @ApiParam({ name: 'id', description: 'Analysis ID' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        photo: {
+          type: 'string',
+          format: 'binary',
+          description: 'Photo image file',
+        },
+      },
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('photo', {
+      storage: analysisPhotoStorage,
+      fileFilter: imageFileFilter,
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB
+      },
+    }),
+  )
+  async uploadPhoto(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: any,
+  ) {
+    if (!file) {
+      throw new HttpException('Arquivo de foto é obrigatório', HttpStatus.BAD_REQUEST);
+    }
+
+    const userId = BigInt(user.sub);
+    return this.tenantAnalysisService.uploadPhoto(BigInt(id), file.path, file.filename, userId);
   }
 
   // Legacy endpoints for backward compatibility

@@ -42,6 +42,13 @@ export class AnalyzeTenantDto {
   @IsString()
   @Length(2, 255)
   name?: string;
+
+  @ApiProperty({
+    description: 'LGPD disclaimer acceptance (required)',
+    example: true
+  })
+  @IsNotEmpty({ message: 'Você deve aceitar os termos da LGPD para continuar' })
+  lgpdAccepted: boolean;
 }
 
 export class GetAnalysisHistoryDto {

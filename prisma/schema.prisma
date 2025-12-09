@@ -1406,14 +1406,44 @@ enum RiskLevel {
 }
 
 model TenantAnalysis {
-  id BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  id    BigInt  @id @default(autoincrement()) @db.UnsignedBigInt
+  token String? @unique @db.VarChar(50)
 
- 
+  // Document Info
   document     String  @db.VarChar(20)
   documentType String  @map("document_type") @db.VarChar(10)
   name         String? @db.VarChar(255)
 
- 
+  // Basic Data for CPF
+  personStatus  String? @map("person_status") @db.VarChar(50)
+  personAddress String? @map("person_address") @db.VarChar(500)
+  personCity    String? @map("person_city") @db.VarChar(100)
+  personState   String? @map("person_state") @db.VarChar(10)
+  personZipCode String? @map("person_zip_code") @db.VarChar(20)
+  personPhone   String? @map("person_phone") @db.VarChar(30)
+  birthDate     String? @map("birth_date") @db.VarChar(20)
+  motherName    String? @map("mother_name") @db.VarChar(255)
+
+  // Basic Data for CNPJ
+  companyName        String?   @map("company_name") @db.VarChar(255)
+  tradingName        String?   @map("trading_name") @db.VarChar(255)
+  companyStatus      String?   @map("company_status") @db.VarChar(50)
+  companyAddress     String?   @map("company_address") @db.VarChar(500)
+  companyCity        String?   @map("company_city") @db.VarChar(100)
+  companyState       String?   @map("company_state") @db.VarChar(10)
+  companyZipCode     String?   @map("company_zip_code") @db.VarChar(20)
+  companyPhone       String?   @map("company_phone") @db.VarChar(30)
+  companyOpeningDate DateTime? @map("company_opening_date") @db.Date
+
+  // Photo for identification
+  photoPath     String? @map("photo_path") @db.VarChar(500)
+  photoFilename String? @map("photo_filename") @db.VarChar(255)
+
+  // LGPD Acceptance
+  lgpdAcceptedAt DateTime? @map("lgpd_accepted_at") @db.Timestamp(0)
+  lgpdAcceptedBy BigInt?   @map("lgpd_accepted_by") @db.UnsignedBigInt
+
+  // References
   requestedById BigInt  @map("requested_by_id") @db.UnsignedBigInt
   agencyId      BigInt? @map("agency_id") @db.UnsignedBigInt
 
