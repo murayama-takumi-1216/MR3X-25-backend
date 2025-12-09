@@ -21,6 +21,7 @@ import { PlansModule } from './modules/plans/plans.module';
 import { ContractTemplatesModule } from './modules/contract-templates/contract-templates.module';
 import { TenantAnalysisModule } from './modules/tenant-analysis/tenant-analysis.module';
 import { InspectionsModule } from './modules/inspections/inspections.module';
+import { ExtrajudicialNotificationsModule } from './modules/extrajudicial-notifications/extrajudicial-notifications.module';
 import { AgreementsModule } from './modules/agreements/agreements.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { ApiClientModule } from './modules/api-client/api-client.module';
@@ -56,6 +57,7 @@ import { HealthController } from './health.controller';
     ContractTemplatesModule,
     TenantAnalysisModule,
     InspectionsModule,
+    ExtrajudicialNotificationsModule,
     AgreementsModule,
     InvoicesModule,
     ApiClientModule,
