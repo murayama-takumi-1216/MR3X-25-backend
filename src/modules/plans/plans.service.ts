@@ -966,7 +966,7 @@ export class PlansService {
   }
 
   // Check if a user has reached their plan limits (legacy - for backward compatibility)
-  async checkPlanLimits(userId: string, limitType: 'property' | 'user' | 'contract'): Promise<{ allowed: boolean; current: number; limit: number; message?: string }> {
+  async checkPlanLimits(userId: string, limitType: 'property' | 'user' | 'tenant' | 'contract'): Promise<{ allowed: boolean; current: number; limit: number; message?: string }> {
     const user = await this.prisma.user.findUnique({
       where: { id: BigInt(userId) },
       select: { id: true, plan: true, role: true, agencyId: true },
@@ -1006,36 +1006,125 @@ export class PlansService {
             message: allowed ? undefined : `Você atingiu o limite de ${limit} contratos ativos do plano ${agency.plan}. Faça upgrade para adicionar mais contratos.`,
           };
         }
+
+        if (limitType === 'property') {
+          const propertyCount = await this.prisma.property.count({
+            where: {
+              agencyId: agency.id,
+              deleted: false,
+              isFrozen: false,
+            },
+          });
+
+          const limit = planConfig?.maxProperties || 1;
+          const allowed = propertyCount < limit;
+
+          return {
+            allowed,
+            current: propertyCount,
+            limit,
+            message: allowed ? undefined : `Você atingiu o limite de ${limit} imóveis do plano ${agency.plan}. Faça upgrade para adicionar mais imóveis.`,
+          };
+        }
+
+        if (limitType === 'tenant' || limitType === 'user') {
+          const tenantCount = await this.prisma.user.count({
+            where: {
+              agencyId: agency.id,
+              role: UserRole.INQUILINO,
+              status: 'ACTIVE',
+              isFrozen: false,
+            },
+          });
+
+          const limit = planConfig?.maxTenants || 2;
+          // 9999 means unlimited
+          if (limit >= 9999) {
+            return { allowed: true, current: tenantCount, limit: -1 };
+          }
+          const allowed = tenantCount < limit;
+
+          return {
+            allowed,
+            current: tenantCount,
+            limit,
+            message: allowed ? undefined : `Você atingiu o limite de ${limit} inquilinos do plano ${agency.plan}. Faça upgrade para adicionar mais inquilinos.`,
+          };
+        }
       }
     }
 
-    // For independent owners or property limit check
-    if (user.role === UserRole.INDEPENDENT_OWNER || limitType === 'property') {
-      const planName = user.plan || 'FREE';
-      const planConfig = getPlanConfigByName(planName);
+    // For independent owners, check their personal plan limits
+    const planName = user.plan || 'FREE';
+    const planConfig = getPlanConfigByName(planName);
 
-      if (limitType === 'property') {
-        const propertyCount = await this.prisma.property.count({
-          where: { ownerId: user.id, deleted: false },
-        });
+    if (limitType === 'property') {
+      const propertyCount = await this.prisma.property.count({
+        where: { ownerId: user.id, deleted: false, isFrozen: false },
+      });
 
-        const limit = planConfig?.maxActiveContracts || 1; // Using contract limit as property limit for independent owners
-        const allowed = propertyCount < limit;
+      const limit = planConfig?.maxProperties || 1;
+      const allowed = propertyCount < limit;
 
-        return {
-          allowed,
-          current: propertyCount,
-          limit,
-          message: allowed ? undefined : `Você atingiu o limite de ${limit} imóveis do seu plano ${planName}. Faça upgrade para adicionar mais imóveis.`,
-        };
+      return {
+        allowed,
+        current: propertyCount,
+        limit,
+        message: allowed ? undefined : `Você atingiu o limite de ${limit} imóveis do seu plano ${planName}. Faça upgrade para adicionar mais imóveis.`,
+      };
+    }
+
+    if (limitType === 'tenant' || limitType === 'user') {
+      // Count tenants created by this independent owner
+      const tenantCount = await this.prisma.user.count({
+        where: {
+          createdBy: user.id,
+          role: UserRole.INQUILINO,
+          status: 'ACTIVE',
+          isFrozen: false,
+        },
+      });
+
+      const limit = planConfig?.maxTenants || 2;
+      // 9999 means unlimited
+      if (limit >= 9999) {
+        return { allowed: true, current: tenantCount, limit: -1 };
       }
+      const allowed = tenantCount < limit;
+
+      return {
+        allowed,
+        current: tenantCount,
+        limit,
+        message: allowed ? undefined : `Você atingiu o limite de ${limit} inquilinos do seu plano ${planName}. Faça upgrade para adicionar mais inquilinos.`,
+      };
+    }
+
+    if (limitType === 'contract') {
+      const contractCount = await this.prisma.contract.count({
+        where: {
+          ownerId: user.id,
+          deleted: false,
+          isFrozen: false,
+        },
+      });
+
+      const limit = planConfig?.maxActiveContracts || 1;
+      const allowed = contractCount < limit;
+
+      return {
+        allowed,
+        current: contractCount,
+        limit,
+        message: allowed ? undefined : `Você atingiu o limite de ${limit} contratos do seu plano ${planName}. Faça upgrade para adicionar mais contratos.`,
+      };
     }
 
     return { allowed: true, current: 0, limit: -1 };
   }
 
   // Get current usage for a user (legacy - for backward compatibility)
-  async getPlanUsage(userId: string): Promise<{ properties: { current: number; limit: number }; users: { current: number; limit: number }; contracts: { current: number; limit: number }; plan: string }> {
+  async getPlanUsage(userId: string): Promise<{ properties: { current: number; limit: number }; tenants: { current: number; limit: number }; users: { current: number; limit: number }; contracts: { current: number; limit: number }; plan: string }> {
     const user = await this.prisma.user.findUnique({
       where: { id: BigInt(userId) },
       select: { id: true, plan: true, role: true, agencyId: true },
@@ -1044,6 +1133,7 @@ export class PlansService {
     if (!user) {
       return {
         properties: { current: 0, limit: -1 },
+        tenants: { current: 0, limit: -1 },
         users: { current: 0, limit: -1 },
         contracts: { current: 0, limit: -1 },
         plan: 'FREE',
@@ -1052,10 +1142,36 @@ export class PlansService {
 
     // If user belongs to an agency
     if (user.agencyId) {
+      const agency = await this.prisma.agency.findUnique({
+        where: { id: user.agencyId },
+        select: { plan: true },
+      });
+
+      const planConfig = getPlanConfigByName(agency?.plan || 'FREE');
       const usage = await this.getAgencyPlanUsage(user.agencyId.toString());
 
+      // Count properties for agency
+      const propertyCount = await this.prisma.property.count({
+        where: {
+          agencyId: user.agencyId,
+          deleted: false,
+          isFrozen: false,
+        },
+      });
+
+      // Count tenants for agency
+      const tenantCount = await this.prisma.user.count({
+        where: {
+          agencyId: user.agencyId,
+          role: UserRole.INQUILINO,
+          status: 'ACTIVE',
+          isFrozen: false,
+        },
+      });
+
       return {
-        properties: { current: 0, limit: -1 }, // Properties not limited for agencies
+        properties: { current: propertyCount, limit: planConfig?.maxProperties || 1 },
+        tenants: { current: tenantCount, limit: planConfig?.maxTenants || 2 },
         users: { current: usage.users.current, limit: usage.users.limit },
         contracts: { current: usage.contracts.current, limit: usage.contracts.limit },
         plan: usage.plan,
@@ -1066,15 +1182,25 @@ export class PlansService {
     const planConfig = getPlanConfigByName(planName);
 
     const propertyCount = await this.prisma.property.count({
-      where: { ownerId: user.id, deleted: false },
+      where: { ownerId: user.id, deleted: false, isFrozen: false },
+    });
+
+    const tenantCount = await this.prisma.user.count({
+      where: {
+        createdBy: user.id,
+        role: UserRole.INQUILINO,
+        status: 'ACTIVE',
+        isFrozen: false,
+      },
     });
 
     const contractCount = await this.prisma.contract.count({
-      where: { ownerId: user.id, deleted: false },
+      where: { ownerId: user.id, deleted: false, isFrozen: false },
     });
 
     return {
-      properties: { current: propertyCount, limit: planConfig?.maxActiveContracts || 1 },
+      properties: { current: propertyCount, limit: planConfig?.maxProperties || 1 },
+      tenants: { current: tenantCount, limit: planConfig?.maxTenants || 2 },
       users: { current: 0, limit: planConfig?.maxInternalUsers || 2 },
       contracts: { current: contractCount, limit: planConfig?.maxActiveContracts || 1 },
       plan: planName,

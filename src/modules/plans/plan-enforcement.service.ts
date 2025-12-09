@@ -9,12 +9,15 @@ export const PLAN_MESSAGES = {
   USER_FROZEN: 'Este usuário está desativado devido ao limite do plano. Faça upgrade para reativar.',
   CREATE_CONTRACT_BLOCKED: 'Você atingiu o limite de {limit} contrato(s) ativo(s) do seu plano {plan}. Você pode adicionar contratos extras por R$ {price}/cada ou fazer upgrade.',
   CREATE_USER_BLOCKED: 'Você atingiu o limite de {limit} usuário(s) do seu plano {plan}. Faça upgrade para adicionar mais usuários.',
+  CREATE_PROPERTY_BLOCKED: 'Você atingiu o limite de {limit} imóvel(is) do seu plano {plan}. Faça upgrade para adicionar mais imóveis.',
+  CREATE_TENANT_BLOCKED: 'Você atingiu o limite de {limit} inquilino(s) do seu plano {plan}. Faça upgrade para adicionar mais inquilinos.',
   OPERATION_ON_FROZEN_CONTRACT: 'Não é possível realizar esta operação em contratos congelados. Faça upgrade ou ative este contrato primeiro.',
   PAYMENT_ON_FROZEN_CONTRACT: 'Não é possível registrar pagamentos para contratos congelados.',
   INSPECTION_REQUIRES_PAYMENT: 'Vistorias requerem pagamento no plano {plan}. Valor: R$ {price}',
   SETTLEMENT_REQUIRES_PAYMENT: 'Acordos requerem pagamento no plano {plan}. Valor: R$ {price}',
   EDIT_FROZEN_CONTRACT: 'Este contrato está congelado e não pode ser editado. Faça upgrade do seu plano.',
   EDIT_FROZEN_USER: 'Este usuário está congelado e não pode ser editado. Faça upgrade do seu plano.',
+  EDIT_FROZEN_PROPERTY: 'Este imóvel está congelado e não pode ser editado. Faça upgrade do seu plano.',
   UPGRADE_SUCCESS: 'Upgrade realizado com sucesso! Todos os seus contratos e usuários foram desbloqueados.',
   DOWNGRADE_WARNING: 'Ao fazer downgrade para o plano {plan}, {freezeCount} contrato(s) e {userFreezeCount} usuário(s) serão congelados.',
   SWITCH_ACTIVE_SUCCESS: 'Contrato ativo alterado com sucesso.',
@@ -228,6 +231,196 @@ export class PlanEnforcementService {
           current: activeUserCount,
           limit: limits.users,
         };
+      }
+    }
+
+    return { allowed: true };
+  }
+
+  /**
+   * Check if a property operation is allowed based on user/agency plan
+   * This checks against maxProperties limit
+   */
+  async checkPropertyOperationAllowed(
+    userId: string,
+    operation: 'create' | 'update' | 'delete',
+    propertyId?: string,
+  ): Promise<OperationResult> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: BigInt(userId) },
+      select: { id: true, plan: true, role: true, agencyId: true },
+    });
+
+    if (!user) {
+      return { allowed: false, message: 'Usuário não encontrado' };
+    }
+
+    // For update/delete, check if the specific property is frozen
+    if ((operation === 'update' || operation === 'delete') && propertyId) {
+      const property = await this.prisma.property.findUnique({
+        where: { id: BigInt(propertyId) },
+        select: { isFrozen: true, frozenReason: true },
+      });
+
+      if (property?.isFrozen) {
+        return {
+          allowed: false,
+          message: PLAN_MESSAGES.EDIT_FROZEN_PROPERTY,
+        };
+      }
+    }
+
+    // For create, check property limits
+    if (operation === 'create') {
+      // If user belongs to an agency, check agency limits
+      if (user.agencyId) {
+        const agency = await this.prisma.agency.findUnique({
+          where: { id: user.agencyId },
+          select: { id: true, plan: true },
+        });
+
+        if (agency) {
+          const planConfig = getPlanByName(agency.plan) || PLANS_CONFIG.FREE;
+
+          const propertyCount = await this.prisma.property.count({
+            where: {
+              agencyId: user.agencyId,
+              deleted: false,
+              isFrozen: false,
+            },
+          });
+
+          if (propertyCount >= planConfig.maxProperties) {
+            return {
+              allowed: false,
+              message: PLAN_MESSAGES.CREATE_PROPERTY_BLOCKED
+                .replace('{limit}', planConfig.maxProperties.toString())
+                .replace('{plan}', planConfig.displayName),
+              current: propertyCount,
+              limit: planConfig.maxProperties,
+            };
+          }
+        }
+      } else {
+        // For independent owners, check their personal plan limits
+        const planConfig = getPlanByName(user.plan || 'FREE') || PLANS_CONFIG.FREE;
+
+        const propertyCount = await this.prisma.property.count({
+          where: {
+            ownerId: user.id,
+            deleted: false,
+            isFrozen: false,
+          },
+        });
+
+        if (propertyCount >= planConfig.maxProperties) {
+          return {
+            allowed: false,
+            message: PLAN_MESSAGES.CREATE_PROPERTY_BLOCKED
+              .replace('{limit}', planConfig.maxProperties.toString())
+              .replace('{plan}', planConfig.displayName),
+            current: propertyCount,
+            limit: planConfig.maxProperties,
+          };
+        }
+      }
+    }
+
+    return { allowed: true };
+  }
+
+  /**
+   * Check if a tenant operation is allowed based on user/agency plan
+   * This checks against maxTenants limit
+   */
+  async checkTenantOperationAllowed(
+    userId: string,
+    operation: 'create' | 'update' | 'delete',
+    tenantId?: string,
+  ): Promise<OperationResult> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: BigInt(userId) },
+      select: { id: true, plan: true, role: true, agencyId: true },
+    });
+
+    if (!user) {
+      return { allowed: false, message: 'Usuário não encontrado' };
+    }
+
+    // For update/delete, check if the specific tenant user is frozen
+    if ((operation === 'update' || operation === 'delete') && tenantId) {
+      const tenant = await this.prisma.user.findUnique({
+        where: { id: BigInt(tenantId) },
+        select: { isFrozen: true, frozenReason: true },
+      });
+
+      if (tenant?.isFrozen) {
+        return {
+          allowed: false,
+          message: PLAN_MESSAGES.EDIT_FROZEN_USER,
+        };
+      }
+    }
+
+    // For create, check tenant limits
+    if (operation === 'create') {
+      // If user belongs to an agency, check agency limits
+      if (user.agencyId) {
+        const agency = await this.prisma.agency.findUnique({
+          where: { id: user.agencyId },
+          select: { id: true, plan: true },
+        });
+
+        if (agency) {
+          const planConfig = getPlanByName(agency.plan) || PLANS_CONFIG.FREE;
+
+          // Count tenants (INQUILINO role users) linked to this agency
+          const tenantCount = await this.prisma.user.count({
+            where: {
+              agencyId: user.agencyId,
+              role: UserRole.INQUILINO,
+              status: 'ACTIVE',
+              isFrozen: false,
+            },
+          });
+
+          // maxTenants 9999 means unlimited
+          if (planConfig.maxTenants < 9999 && tenantCount >= planConfig.maxTenants) {
+            return {
+              allowed: false,
+              message: PLAN_MESSAGES.CREATE_TENANT_BLOCKED
+                .replace('{limit}', planConfig.maxTenants.toString())
+                .replace('{plan}', planConfig.displayName),
+              current: tenantCount,
+              limit: planConfig.maxTenants,
+            };
+          }
+        }
+      } else {
+        // For independent owners, check their personal plan limits
+        const planConfig = getPlanByName(user.plan || 'FREE') || PLANS_CONFIG.FREE;
+
+        // Count tenants linked to this independent owner's properties
+        const tenantCount = await this.prisma.user.count({
+          where: {
+            createdBy: user.id,
+            role: UserRole.INQUILINO,
+            status: 'ACTIVE',
+            isFrozen: false,
+          },
+        });
+
+        // maxTenants 9999 means unlimited
+        if (planConfig.maxTenants < 9999 && tenantCount >= planConfig.maxTenants) {
+          return {
+            allowed: false,
+            message: PLAN_MESSAGES.CREATE_TENANT_BLOCKED
+              .replace('{limit}', planConfig.maxTenants.toString())
+              .replace('{plan}', planConfig.displayName),
+            current: tenantCount,
+            limit: planConfig.maxTenants,
+          };
+        }
       }
     }
 

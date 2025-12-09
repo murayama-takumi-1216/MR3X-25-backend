@@ -200,9 +200,17 @@ export class UsersService {
 
     // Check plan limits for INDEPENDENT_OWNER creating INQUILINO (tenant)
     if (creatorId && creatorRole === UserRole.INDEPENDENT_OWNER && dto.role === 'INQUILINO') {
-      const planCheck = await this.plansService.checkPlanLimits(creatorId, 'user');
+      const planCheck = await this.plansService.checkPlanLimits(creatorId, 'tenant');
       if (!planCheck.allowed) {
         throw new ForbiddenException(planCheck.message || 'Você atingiu o limite de inquilinos do seu plano.');
+      }
+    }
+
+    // Check plan limits for agency users creating INQUILINO (tenant)
+    if (creatorId && dto.agencyId && dto.role === 'INQUILINO') {
+      const planCheck = await this.plansService.checkPlanLimits(creatorId, 'tenant');
+      if (!planCheck.allowed) {
+        throw new ForbiddenException(planCheck.message || 'Você atingiu o limite de inquilinos do plano da agência.');
       }
     }
 
@@ -744,6 +752,12 @@ export class UsersService {
   }
 
   async createTenant(requestingUserId: string, dto: CreateTenantDto, requestingUserRole?: string) {
+    // Check plan limits for tenant creation
+    const planCheck = await this.plansService.checkPlanLimits(requestingUserId, 'tenant');
+    if (!planCheck.allowed) {
+      throw new ForbiddenException(planCheck.message || 'Você atingiu o limite de inquilinos do seu plano.');
+    }
+
     const existingUser = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });

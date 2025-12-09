@@ -19,6 +19,10 @@ export interface PlanConfig {
   maxActiveContracts: number;
   maxInternalUsers: number;
 
+  // Property and Tenant limits (as shown in UI)
+  maxProperties: number;
+  maxTenants: number;
+
   // Feature flags
   unlimitedInspections: boolean;
   unlimitedSettlements: boolean;
@@ -74,6 +78,8 @@ export type EntityType = 'agency' | 'independent_owner';
 export interface PlanLimits {
   contracts: number;
   users: number;
+  properties: number;
+  tenants: number;
   apiAccess: boolean;
   advancedReports: boolean;
   automations: boolean;
@@ -95,6 +101,10 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     // Contract-based limits
     maxActiveContracts: 1,
     maxInternalUsers: 2,
+
+    // Property and Tenant limits
+    maxProperties: 1,
+    maxTenants: 2,
 
     // Features
     unlimitedInspections: false,
@@ -140,6 +150,10 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     // Contract-based limits
     maxActiveContracts: 20,
     maxInternalUsers: 5,
+
+    // Property and Tenant limits
+    maxProperties: 20,
+    maxTenants: 5,
 
     // Features
     unlimitedInspections: true, // Included
@@ -187,6 +201,10 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     maxActiveContracts: 60,
     maxInternalUsers: 10,
 
+    // Property and Tenant limits
+    maxProperties: 60,
+    maxTenants: 10,
+
     // Features
     unlimitedInspections: true,
     unlimitedSettlements: true, // Included
@@ -233,6 +251,10 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     // Contract-based limits
     maxActiveContracts: 200,
     maxInternalUsers: -1, // Unlimited
+
+    // Property and Tenant limits
+    maxProperties: 200,
+    maxTenants: 9999, // Unlimited
 
     // Features
     unlimitedInspections: true,
@@ -295,6 +317,8 @@ export function getPlanLimits(planName: string, entityType: EntityType = 'agency
   return {
     contracts: plan.maxActiveContracts,
     users: plan.maxInternalUsers === -1 ? 9999 : plan.maxInternalUsers,
+    properties: plan.maxProperties,
+    tenants: plan.maxTenants,
     apiAccess: plan.apiAccessIncluded || plan.apiAccessOptional,
     advancedReports: plan.advancedReports,
     automations: plan.automations,
