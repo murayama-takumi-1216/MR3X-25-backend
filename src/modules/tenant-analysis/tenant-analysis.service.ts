@@ -5,7 +5,7 @@ import { CellereService } from './integrations/cellere.service';
 import { InfoSimplesService } from './integrations/infosimples.service';
 import { AnalyzeTenantDto, AnalysisType, GetAnalysisHistoryDto } from './dto';
 import { TenantAnalysisStatus, RiskLevel } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class TenantAnalysisService {
@@ -22,13 +22,12 @@ export class TenantAnalysisService {
   }
 
   /**
-   * Generate unique token for tenant analysis
+   * Generate unique token for tenant analysis in format MR3X-PSQ-YEAR-XXXXX
    */
   private generateAnalysisToken(): string {
-    const prefix = 'TA';
-    const timestamp = Date.now().toString(36).toUpperCase();
-    const random = uuidv4().replace(/-/g, '').substring(0, 8).toUpperCase();
-    return `${prefix}-${timestamp}-${random}`;
+    const year = new Date().getFullYear();
+    const random = crypto.randomBytes(3).toString('hex').toUpperCase();
+    return `MR3X-PSQ-${year}-${random}`;
   }
 
   /**

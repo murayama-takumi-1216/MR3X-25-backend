@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsEnum, Matches, Length } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, Matches, Length, IsBoolean } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export enum DocumentType {
   CPF = 'CPF',
@@ -47,6 +48,8 @@ export class AnalyzeTenantDto {
     description: 'LGPD disclaimer acceptance (required)',
     example: true
   })
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean({ message: 'lgpdAccepted deve ser um valor booleano' })
   @IsNotEmpty({ message: 'Você deve aceitar os termos da LGPD para continuar' })
   lgpdAccepted: boolean;
 }

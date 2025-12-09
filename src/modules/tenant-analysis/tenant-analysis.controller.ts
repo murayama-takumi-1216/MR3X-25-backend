@@ -70,10 +70,18 @@ export class TenantAnalysisController {
     @CurrentUser() user: any,
   ) {
     try {
+      console.log('Received analyze request:', {
+        document: dto.document ? `${dto.document.substring(0, 3)}***` : 'missing',
+        analysisType: dto.analysisType,
+        lgpdAccepted: dto.lgpdAccepted,
+        name: dto.name
+      });
+
       const userId = BigInt(user.sub);
       const agencyId = user.agencyId ? BigInt(user.agencyId) : undefined;
       return await this.tenantAnalysisService.analyzeTenant(dto, userId, agencyId);
     } catch (error) {
+      console.error('Tenant analysis error:', error.message);
       // Return user-friendly error response
       throw new HttpException(
         {

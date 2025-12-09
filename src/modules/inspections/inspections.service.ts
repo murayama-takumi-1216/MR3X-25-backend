@@ -2,10 +2,33 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { PrismaService } from '../../config/prisma.service';
 import { CreateInspectionDto, InspectionStatus } from './dto/create-inspection.dto';
 import { UpdateInspectionDto, SignInspectionDto, ApproveRejectInspectionDto } from './dto/update-inspection.dto';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class InspectionsService {
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * Generate unique inspection token in format MR3X-VST-YEAR-XXXX-XXXX
+   */
+  private generateInspectionToken(): string {
+    const year = new Date().getFullYear();
+    const random1 = crypto.randomBytes(2).toString('hex').toUpperCase();
+    const random2 = crypto.randomBytes(2).toString('hex').toUpperCase();
+    return `MR3X-VST-${year}-${random1}-${random2}`;
+  }
+
+  /**
+   * Check if inspection has any signatures
+   */
+  private hasSignatures(inspection: any): boolean {
+    return !!(
+      inspection.tenantSignature ||
+      inspection.ownerSignature ||
+      inspection.agencySignature ||
+      inspection.inspectorSignature
+    );
+  }
 
   async findAll(params: {
     skip?: number;
@@ -162,11 +185,15 @@ export class InspectionsService {
       }
     }
 
+    // Generate unique token for this inspection
+    const token = this.generateInspectionToken();
+
     const inspection = await this.prisma.inspection.create({
       data: {
         propertyId: BigInt(data.propertyId),
         contractId: data.contractId ? BigInt(data.contractId) : null,
         agencyId: data.agencyId ? BigInt(data.agencyId) : property.agencyId,
+        token: token,
         type: data.type,
         date: new Date(data.date),
         scheduledDate: data.scheduledDate ? new Date(data.scheduledDate) : null,
@@ -214,6 +241,14 @@ export class InspectionsService {
     // Don't allow updates to approved or rejected inspections
     if (inspection.status === 'APROVADA' || inspection.status === 'REJEITADA') {
       throw new ForbiddenException('Cannot update an approved or rejected inspection');
+    }
+
+    // Block edits after any signature has been added (fraud prevention)
+    if (this.hasSignatures(inspection)) {
+      throw new ForbiddenException(
+        'Não é possível editar o termo de vistoria após a assinatura das partes. ' +
+        'Isso garante a integridade do documento e previne fraudes.'
+      );
     }
 
     const updateData: any = {};
@@ -528,6 +563,7 @@ export class InspectionsService {
     const serialized: any = {
       ...inspection,
       id: inspection.id.toString(),
+      token: inspection.token || null,
       propertyId: inspection.propertyId.toString(),
       contractId: inspection.contractId?.toString() || null,
       agencyId: inspection.agencyId?.toString() || null,
@@ -546,6 +582,8 @@ export class InspectionsService {
       approvedAt: inspection.approvedAt?.toISOString() || null,
       createdAt: inspection.createdAt?.toISOString() || null,
       updatedAt: inspection.updatedAt?.toISOString() || null,
+      // Flag indicating if inspection has any signatures (used to block edits)
+      hasSignatures: this.hasSignatures(inspection),
     };
 
     // Serialize property

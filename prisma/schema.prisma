@@ -769,6 +769,7 @@ model Expense {
 
 model Inspection {
   id            BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  token         String?   @unique @db.VarChar(50)
   propertyId    BigInt    @map("property_id") @db.UnsignedBigInt
   contractId    BigInt?   @map("contract_id") @db.UnsignedBigInt
   agencyId      BigInt?   @map("agency_id") @db.UnsignedBigInt
