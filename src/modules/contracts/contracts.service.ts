@@ -112,6 +112,29 @@ export class ContractsService {
       }
     }
 
+    // Check if property already has an active contract (only one contract per property at a time)
+    const existingActiveContract = await this.prisma.contract.findFirst({
+      where: {
+        propertyId: BigInt(data.propertyId),
+        deleted: false,
+        status: {
+          notIn: ['REVOGADO', 'ENCERRADO'],
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        contractToken: true,
+      },
+    });
+
+    if (existingActiveContract) {
+      throw new BadRequestException(
+        `Este imóvel já possui um contrato ativo (${existingActiveContract.contractToken || `#${existingActiveContract.id}`}). ` +
+        `Encerre ou revogue o contrato existente antes de criar um novo.`
+      );
+    }
+
     // Determine ownerId: from data, from property, or null
     let ownerId = data.ownerId ? BigInt(data.ownerId) : null;
     if (!ownerId && property?.ownerId) {
