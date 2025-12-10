@@ -4,6 +4,8 @@ import { PlanEnforcementService, PLAN_MESSAGES } from '../plans/plan-enforcement
 import { ContractPdfService } from './services/contract-pdf.service';
 import { ContractHashService } from './services/contract-hash.service';
 import { SignatureLinkService } from './services/signature-link.service';
+import { ContractImmutabilityService } from './services/contract-immutability.service';
+import { ContractValidationService } from './services/contract-validation.service';
 
 export interface SignatureDataWithGeo {
   signature: string; // Base64 signature image
@@ -24,6 +26,8 @@ export class ContractsService {
     private pdfService: ContractPdfService,
     private hashService: ContractHashService,
     private signatureLinkService: SignatureLinkService,
+    private immutabilityService: ContractImmutabilityService,
+    private validationService: ContractValidationService,
   ) {}
 
   async findAll(params: { skip?: number; take?: number; agencyId?: string; status?: string; createdById?: string; userId?: string }) {
@@ -153,7 +157,7 @@ export class ContractsService {
     return this.serializeContract(contract);
   }
 
-  async update(id: string, data: any) {
+  async update(id: string, data: any, userId?: string) {
     const contract = await this.prisma.contract.findUnique({
       where: { id: BigInt(id) },
     });
@@ -162,12 +166,51 @@ export class ContractsService {
       throw new NotFoundException('Contract not found');
     }
 
+    // Enforce immutability based on contract status
+    const immutabilityCheck = await this.immutabilityService.enforceImmutability(
+      BigInt(id),
+      data,
+      userId || '0',
+    );
+
+    if (!immutabilityCheck.allowed) {
+      throw new ForbiddenException(immutabilityCheck.message);
+    }
+
     const updated = await this.prisma.contract.update({
       where: { id: BigInt(id) },
       data,
     });
 
     return this.serializeContract(updated);
+  }
+
+  /**
+   * Validate contract before preparing for signing
+   */
+  async validateForSigning(id: string) {
+    const validation = await this.validationService.validateContract(BigInt(id));
+    return validation;
+  }
+
+  /**
+   * Get contract immutability status
+   */
+  async getImmutabilityStatus(id: string) {
+    return this.immutabilityService.checkImmutability(BigInt(id));
+  }
+
+  /**
+   * Create amended contract when original is immutable
+   */
+  async createAmendedContract(originalId: string, amendments: Record<string, any>, userId: string) {
+    const check = await this.immutabilityService.checkImmutability(BigInt(originalId));
+
+    if (check.canEdit) {
+      throw new BadRequestException('Contrato original pode ser editado diretamente. Use o método update.');
+    }
+
+    return this.immutabilityService.createAmendedContract(BigInt(originalId), amendments, userId);
   }
 
   async remove(id: string, userId: string) {
@@ -179,12 +222,31 @@ export class ContractsService {
       throw new NotFoundException('Contract not found');
     }
 
+    // Check if deletion is allowed based on immutability status
+    const immutabilityCheck = await this.immutabilityService.checkImmutability(BigInt(id));
+    if (!immutabilityCheck.canDelete) {
+      throw new ForbiddenException(`Não é possível excluir este contrato: ${immutabilityCheck.reason}`);
+    }
+
     await this.prisma.contract.update({
       where: { id: BigInt(id) },
       data: {
         deleted: true,
         deletedAt: new Date(),
         deletedBy: BigInt(userId),
+      },
+    });
+
+    // Log deletion in audit
+    await this.prisma.contractAudit.create({
+      data: {
+        contractId: BigInt(id),
+        action: 'CONTRACT_DELETED',
+        performedBy: BigInt(userId),
+        details: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          previousStatus: contract.status,
+        }),
       },
     });
 
@@ -425,6 +487,13 @@ export class ContractsService {
     // Only allow preparing contracts in PENDENTE status
     if (contract.status !== 'PENDENTE') {
       throw new BadRequestException('Contrato deve estar com status PENDENTE para preparar para assinatura');
+    }
+
+    // Validate contract has all required fields before freezing
+    const validation = await this.validationService.validateContract(BigInt(id));
+    if (!validation.valid) {
+      const errorMessages = validation.errors.map(e => e.message).join('; ');
+      throw new BadRequestException(`Contrato não pode ser preparado para assinatura: ${errorMessages}`);
     }
 
     // Generate token if not exists

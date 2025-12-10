@@ -129,8 +129,42 @@ export class ContractsController {
   @Put(':id')
   @ApiOperation({ summary: 'Update contract' })
   @OwnerPermission('contracts', OwnerAction.EDIT)
-  async update(@Param('id') id: string, @Body() data: any) {
-    return this.contractsService.update(id, data);
+  async update(@Param('id') id: string, @Body() data: any, @CurrentUser('sub') userId: string) {
+    return this.contractsService.update(id, data, userId);
+  }
+
+  /**
+   * Validate contract for required fields before signing
+   */
+  @Get(':id/validate')
+  @ApiOperation({ summary: 'Validate contract for required fields' })
+  @ApiParam({ name: 'id', description: 'Contract ID' })
+  async validateContract(@Param('id') id: string) {
+    return this.contractsService.validateForSigning(id);
+  }
+
+  /**
+   * Get contract immutability status
+   */
+  @Get(':id/immutability')
+  @ApiOperation({ summary: 'Get contract immutability status (what operations are allowed)' })
+  @ApiParam({ name: 'id', description: 'Contract ID' })
+  async getImmutabilityStatus(@Param('id') id: string) {
+    return this.contractsService.getImmutabilityStatus(id);
+  }
+
+  /**
+   * Create amended contract when original is immutable
+   */
+  @Post(':id/amend')
+  @ApiOperation({ summary: 'Create amended contract (when original is signed/immutable)' })
+  @ApiParam({ name: 'id', description: 'Original Contract ID' })
+  async createAmendedContract(
+    @Param('id') id: string,
+    @Body() amendments: any,
+    @CurrentUser('sub') userId: string,
+  ) {
+    return this.contractsService.createAmendedContract(id, amendments, userId);
   }
 
   @Delete(':id')

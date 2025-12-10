@@ -28,6 +28,7 @@ import { ApiClientModule } from './modules/api-client/api-client.module';
 import { SalesRepModule } from './modules/sales-rep/sales-rep.module';
 import { AuditorModule } from './modules/auditor/auditor.module';
 import { PlatformManagerModule } from './modules/platform-manager/platform-manager.module';
+import { AsaasModule } from './modules/asaas/asaas.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -64,6 +65,7 @@ import { HealthController } from './health.controller';
     SalesRepModule,
     AuditorModule,
     PlatformManagerModule,
+    AsaasModule,
   ],
   controllers: [HealthController],
 })

@@ -1892,3 +1892,27 @@ model ExtrajudicialNotificationAudit {
   @@index([notificationId])
   @@map("extrajudicial_notification_audits")
 }
+
+// =============================================================================
+// WEBHOOK LOG
+// Audit log for external webhook events (Asaas, etc.)
+// =============================================================================
+
+model WebhookLog {
+  id        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  provider  String   @db.VarChar(50) // ASAAS, STRIPE, etc.
+  event     String   @db.VarChar(100) // Event type
+  payloadId String?  @map("payload_id") @db.VarChar(100) // External ID from the webhook payload
+  payload   String   @db.Text // Full JSON payload
+  status    String   @default("RECEIVED") @db.VarChar(30) // RECEIVED, PROCESSED, FAILED
+  error     String?  @db.Text // Error message if processing failed
+  processedAt DateTime? @map("processed_at") @db.Timestamp(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+
+  @@index([provider])
+  @@index([event])
+  @@index([payloadId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("webhook_logs")
+}
