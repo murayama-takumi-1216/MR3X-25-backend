@@ -99,15 +99,17 @@ export class UsersService {
     role?: UserRole;
     agencyId?: string;
     status?: string;
+    plan?: string;
     createdById?: string;
     excludeUserId?: string;
   }) {
-    const { skip = 0, take = 10, role, agencyId, status, createdById, excludeUserId } = params;
+    const { skip = 0, take = 10, role, agencyId, status, plan, createdById, excludeUserId } = params;
 
     const where: any = {};
     if (role) where.role = role;
     if (agencyId) where.agencyId = BigInt(agencyId);
     if (status) where.status = status;
+    if (plan) where.plan = plan;
     if (createdById) where.createdBy = BigInt(createdById);
     if (excludeUserId) where.id = { not: BigInt(excludeUserId) };
 

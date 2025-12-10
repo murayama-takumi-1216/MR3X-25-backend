@@ -11,8 +11,9 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { AgreementsService } from './agreements.service';
+import { AgreementCalculationService } from './services/agreement-calculation.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OwnerPermissionGuard } from '../../common/guards/owner-permission.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -20,6 +21,14 @@ import { OwnerPermission } from '../../common/decorators/owner-permission.decora
 import { OwnerAction } from '../../common/constants/owner-permissions.constants';
 import { CreateAgreementDto, AgreementStatus } from './dto/create-agreement.dto';
 import { UpdateAgreementDto, SignAgreementDto, ApproveRejectAgreementDto } from './dto/update-agreement.dto';
+import {
+  CalculateDebtDto,
+  SimulateDebtDto,
+  AcceptSettlementDto,
+  CalculateMultipleDebtsDto,
+  DebtCalculationResponseDto,
+  SettlementOptionsResponseDto,
+} from './dto/calculation.dto';
 import { Request } from 'express';
 
 // Permission imports
@@ -46,6 +55,7 @@ export class AgreementsController {
   constructor(
     private readonly agreementsService: AgreementsService,
     private readonly permissionService: AgreementPermissionService,
+    private readonly calculationService: AgreementCalculationService,
   ) {}
 
   @Get()
@@ -210,6 +220,151 @@ export class AgreementsController {
   async removeTemplate(@Param('id') id: string) {
     return this.agreementsService.removeTemplate(id);
   }
+
+  // ============================================
+  // DEBT CALCULATION & SETTLEMENT ENDPOINTS
+  // ============================================
+
+  @Get('calculate/invoice/:invoiceId')
+  @AgreementPermission(AgreementAction.VIEW)
+  @ApiOperation({
+    summary: 'Calculate current debt for an invoice',
+    description: 'Calculates monetary correction, penalty, and daily interest based on contract parameters',
+  })
+  @ApiParam({ name: 'invoiceId', description: 'Invoice ID' })
+  @ApiResponse({ status: 200, type: DebtCalculationResponseDto })
+  async calculateDebt(
+    @Param('invoiceId') invoiceId: string,
+    @Query() query: CalculateDebtDto,
+  ) {
+    const calculationDate = query.calculationDate ? new Date(query.calculationDate) : undefined;
+    return this.calculationService.calculateDebt(invoiceId, calculationDate);
+  }
+
+  @Get('calculate/invoice/:invoiceId/options')
+  @AgreementPermission(AgreementAction.VIEW)
+  @ApiOperation({
+    summary: 'Get settlement options for an invoice',
+    description: 'Returns all available settlement options with different discount tiers',
+  })
+  @ApiParam({ name: 'invoiceId', description: 'Invoice ID' })
+  @ApiResponse({ status: 200, type: SettlementOptionsResponseDto })
+  async getSettlementOptions(
+    @Param('invoiceId') invoiceId: string,
+    @Query() query: CalculateDebtDto,
+  ) {
+    const calculationDate = query.calculationDate ? new Date(query.calculationDate) : undefined;
+    return this.calculationService.getSettlementOptions(invoiceId, calculationDate);
+  }
+
+  @Post('calculate/multiple')
+  @AgreementPermission(AgreementAction.VIEW)
+  @ApiOperation({
+    summary: 'Calculate debt for multiple invoices',
+    description: 'Useful for creating agreements covering multiple overdue invoices',
+  })
+  async calculateMultipleDebts(@Body() body: CalculateMultipleDebtsDto) {
+    const calculationDate = body.calculationDate ? new Date(body.calculationDate) : undefined;
+    return this.calculationService.calculateMultipleDebts(body.invoiceIds, calculationDate);
+  }
+
+  @Post('calculate/simulate')
+  @AgreementPermission(AgreementAction.VIEW)
+  @ApiOperation({
+    summary: 'Simulate debt calculation',
+    description: 'Test calculation with custom parameters without a real invoice',
+  })
+  async simulateDebt(@Body() body: SimulateDebtDto) {
+    return this.calculationService.simulateDebt({
+      baseValue: body.baseValue,
+      dueDate: new Date(body.dueDate),
+      calculationDate: body.calculationDate ? new Date(body.calculationDate) : undefined,
+      readjustmentIndex: body.readjustmentIndex,
+      penaltyPercent: body.penaltyPercent,
+      monthlyInterestPercent: body.monthlyInterestPercent,
+    });
+  }
+
+  @Post('settlement/accept')
+  @CanCreateAgreement()
+  @OwnerPermission('agreements', OwnerAction.CREATE)
+  @ApiOperation({
+    summary: 'Accept a settlement option',
+    description: 'Freezes the calculated values and returns data for agreement creation',
+  })
+  async acceptSettlement(
+    @Body() body: AcceptSettlementDto,
+    @CurrentUser('sub') userId: string,
+    @Req() req: Request,
+  ) {
+    const clientIP = req.ip || req.connection.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+
+    const settlementData = await this.calculationService.acceptSettlement(
+      body.invoiceId,
+      body.optionId,
+      userId,
+      clientIP,
+      userAgent,
+    );
+
+    return settlementData;
+  }
+
+  @Post('settlement/accept-and-create')
+  @CanCreateAgreement()
+  @OwnerPermission('agreements', OwnerAction.CREATE)
+  @ApiOperation({
+    summary: 'Accept settlement and create agreement in one step',
+    description: 'Combines settlement acceptance with agreement creation',
+  })
+  async acceptSettlementAndCreate(
+    @Body() body: AcceptSettlementDto & { title?: string; notes?: string },
+    @CurrentUser('sub') userId: string,
+    @Req() req: Request,
+  ) {
+    const clientIP = req.ip || req.connection.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+
+    // Get settlement data
+    const settlementData = await this.calculationService.acceptSettlement(
+      body.invoiceId,
+      body.optionId,
+      userId,
+      clientIP,
+      userAgent,
+    );
+
+    // Create the agreement
+    const agreementData: CreateAgreementDto = {
+      contractId: settlementData.contractId,
+      propertyId: settlementData.propertyId,
+      agencyId: settlementData.agencyId || undefined,
+      type: 'PAYMENT_SETTLEMENT' as any,
+      title: body.title || `Acordo de Pagamento - Fatura ${settlementData.invoiceToken || settlementData.invoiceId}`,
+      description: `Acordo de pagamento para fatura vencida. ${settlementData.calculationDetails.selectedOption.installments > 1 ? `Parcelado em ${settlementData.calculationDetails.selectedOption.installments}x` : 'Pagamento à vista'}`,
+      tenantId: settlementData.tenantId,
+      ownerId: settlementData.ownerId || undefined,
+      originalAmount: settlementData.originalAmount,
+      negotiatedAmount: settlementData.negotiatedAmount,
+      fineAmount: settlementData.fineAmount,
+      discountAmount: settlementData.discountAmount,
+      installments: settlementData.installments,
+      installmentValue: settlementData.installmentValue,
+      notes: body.notes || JSON.stringify(settlementData.calculationDetails),
+    };
+
+    const agreement = await this.agreementsService.create(agreementData, userId, clientIP, userAgent);
+
+    return {
+      agreement,
+      settlementData,
+    };
+  }
+
+  // ============================================
+  // STANDARD AGREEMENT CRUD ENDPOINTS
+  // ============================================
 
   @Get(':id')
   @CanViewAgreement()
