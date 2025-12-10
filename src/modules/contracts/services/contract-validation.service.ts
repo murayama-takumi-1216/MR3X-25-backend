@@ -130,6 +130,13 @@ export class ContractValidationService {
       description: 'Penalidade proporcional ao tempo restante do contrato',
       legalBasis: 'Art. 4º - Durante o prazo, o locatário não poderá devolver o imóvel senão pagando multa pactuada',
     },
+    {
+      field: 'creci',
+      label: 'CRECI do Corretor',
+      category: 'legal',
+      description: 'Número de registro no Conselho Regional de Corretores de Imóveis',
+      legalBasis: 'Lei 6.530/78 - Somente corretores inscritos no CRECI podem intermediar transações imobiliárias',
+    },
   ];
 
   /**
@@ -349,6 +356,20 @@ export class ContractValidationService {
           };
         }
         break;
+
+      case 'creci':
+        const creciStr = String(value).trim();
+        // CRECI format: CRECI/XX 12345 or CRECI-XX 12345 or just numbers with state
+        const creciRegex = /^(CRECI[\/\-]?)?([A-Z]{2})\s*[\-\/]?\s*(\d{3,6})([\-\/]?[FJ])?$/i;
+        if (!creciRegex.test(creciStr) && !/^\d{3,6}[\/\-]?[A-Z]{2}$/i.test(creciStr)) {
+          warning = {
+            field: field.field,
+            label: field.label,
+            message: 'Formato do CRECI pode estar incorreto',
+            recommendation: 'Use o formato: CRECI/XX 12345 ou XX-12345 (ex: CRECI/SP 12345)',
+          };
+        }
+        break;
     }
 
     return { error, warning };
@@ -443,6 +464,47 @@ export class ContractValidationService {
           recommendation: 'Art. 38 Lei 8.245/91 - A caução não pode exceder 3 meses de aluguel',
         });
       }
+    }
+
+    // Validate CRECI - must have either broker CRECI or agency CRECI
+    if (!contract.creci) {
+      // Check if agency has CRECI
+      if (contract.agency && contract.agency.creci) {
+        // Agency CRECI exists, use it as fallback - add warning but not error
+        warnings.push({
+          field: 'creci',
+          label: 'CRECI do Corretor',
+          message: 'Usando CRECI da imobiliária',
+          recommendation: 'Recomenda-se informar o CRECI do corretor responsável pelo contrato',
+        });
+      } else {
+        errors.push({
+          field: 'creci',
+          label: 'CRECI do Corretor',
+          message: 'O CRECI do corretor é obrigatório para validade do contrato',
+          category: 'legal',
+        });
+      }
+    }
+
+    // Validate tenant document (CPF/CNPJ) - REQUIRED by law
+    if (contract.tenantUser && !contract.tenantUser.document) {
+      errors.push({
+        field: 'tenantDocument',
+        label: 'CPF/CNPJ do Locatário',
+        message: 'O CPF ou CNPJ do locatário é obrigatório para validade jurídica',
+        category: 'parties',
+      });
+    }
+
+    // Validate owner document (CPF/CNPJ) - REQUIRED by law
+    if (contract.ownerUser && !contract.ownerUser.document) {
+      errors.push({
+        field: 'ownerDocument',
+        label: 'CPF/CNPJ do Locador',
+        message: 'O CPF ou CNPJ do locador é obrigatório para validade jurídica',
+        category: 'parties',
+      });
     }
 
     return { errors, warnings };

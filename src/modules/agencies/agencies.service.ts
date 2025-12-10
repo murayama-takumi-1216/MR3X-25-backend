@@ -8,6 +8,8 @@ export interface AgencyCreateDTO {
   cnpj: string;
   email: string;
   phone?: string;
+  creci?: string;
+  creciState?: string;
   address?: string;
   city?: string;
   state?: string;
@@ -22,6 +24,8 @@ export interface AgencyUpdateDTO {
   name?: string;
   email?: string;
   phone?: string;
+  creci?: string;
+  creciState?: string;
   address?: string;
   city?: string;
   state?: string;
@@ -70,6 +74,8 @@ export class AgenciesService {
         cnpj: cleanCnpj,
         email: data.email,
         phone: data.phone || null,
+        creci: data.creci || null,
+        creciState: data.creciState || null,
         address: data.address || null,
         city: data.city || null,
         state: data.state || null,
@@ -88,6 +94,8 @@ export class AgenciesService {
         cnpj: true,
         email: true,
         phone: true,
+        creci: true,
+        creciState: true,
         address: true,
         city: true,
         state: true,
@@ -117,6 +125,8 @@ export class AgenciesService {
       cnpj: agency.cnpj,
       email: agency.email,
       phone: agency.phone || '',
+      creci: agency.creci || '',
+      creciState: agency.creciState || '',
       address: agency.address || '',
       city: agency.city || '',
       state: agency.state || '',
@@ -144,6 +154,8 @@ export class AgenciesService {
         cnpj: true,
         email: true,
         phone: true,
+        creci: true,
+        creciState: true,
         address: true,
         city: true,
         state: true,
@@ -170,6 +182,8 @@ export class AgenciesService {
       cnpj: agency.cnpj,
       email: agency.email,
       phone: agency.phone || '',
+      creci: agency.creci || '',
+      creciState: agency.creciState || '',
       address: agency.address || '',
       city: agency.city || '',
       state: agency.state || '',
@@ -193,6 +207,8 @@ export class AgenciesService {
         cnpj: true,
         email: true,
         phone: true,
+        creci: true,
+        creciState: true,
         address: true,
         city: true,
         state: true,
@@ -235,6 +251,8 @@ export class AgenciesService {
       cnpj: agency.cnpj,
       email: agency.email,
       phone: agency.phone || '',
+      creci: agency.creci || '',
+      creciState: agency.creciState || '',
       address: agency.address || '',
       city: agency.city || '',
       state: agency.state || '',

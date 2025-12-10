@@ -64,6 +64,11 @@ model Agency {
   cnpj          String   @unique @db.VarChar(20)
   email         String   @db.VarChar(191)
   phone         String?  @db.VarChar(30)
+
+  // CRECI - Conselho Regional de Corretores de Imóveis (Required for real estate agencies)
+  creci         String?  @db.VarChar(30)
+  creciState    String?  @map("creci_state") @db.VarChar(2)
+
   address       String?  @db.VarChar(255)
   city          String?  @db.VarChar(100)
   state         String?  @db.VarChar(10)

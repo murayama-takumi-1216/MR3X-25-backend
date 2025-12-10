@@ -30,10 +30,52 @@ export class PropertiesService {
         skip,
         take,
         include: {
-          owner: { select: { id: true, name: true, email: true } },
-          tenant: { select: { id: true, name: true, email: true } },
-          broker: { select: { id: true, name: true, email: true } },
-          agency: { select: { id: true, name: true } },
+          owner: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              document: true,
+              address: true,
+              number: true,
+              neighborhood: true,
+              city: true,
+              state: true,
+              cep: true,
+            }
+          },
+          tenant: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              document: true,
+              address: true,
+              number: true,
+              neighborhood: true,
+              city: true,
+              state: true,
+              cep: true,
+            }
+          },
+          broker: { select: { id: true, name: true, email: true, document: true } },
+          agency: {
+            select: {
+              id: true,
+              name: true,
+              cnpj: true,
+              creci: true,
+              creciState: true,
+              email: true,
+              phone: true,
+              address: true,
+              city: true,
+              state: true,
+              zipCode: true,
+            }
+          },
           images: { where: { isPrimary: true }, take: 1 },
         },
         orderBy: { createdAt: 'desc' },
@@ -53,9 +95,37 @@ export class PropertiesService {
     const property = await this.prisma.property.findUnique({
       where: { id: BigInt(id) },
       include: {
-        owner: { select: { id: true, name: true, email: true, phone: true } },
-        tenant: { select: { id: true, name: true, email: true, phone: true } },
-        broker: { select: { id: true, name: true, email: true } },
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            document: true,
+            address: true,
+            number: true,
+            neighborhood: true,
+            city: true,
+            state: true,
+            cep: true,
+          }
+        },
+        tenant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            document: true,
+            address: true,
+            number: true,
+            neighborhood: true,
+            city: true,
+            state: true,
+            cep: true,
+          }
+        },
+        broker: { select: { id: true, name: true, email: true, document: true } },
         agency: true,
         images: true,
         contracts: { orderBy: { createdAt: 'desc' }, take: 5 },
