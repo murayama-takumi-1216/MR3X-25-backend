@@ -70,8 +70,8 @@ Têm entre si, justo e contratado, o que segue:
 **CLÁUSULA 5 - MULTA E JUROS POR ATRASO**
 
 5.1. Em caso de atraso no pagamento do aluguel ou encargos, incidirá:
-- Multa de 10% (dez por cento) sobre o valor devido (art. 413 do Código Civil);
-- Juros moratórios de 1% (um por cento) ao mês;
+- Multa de [MULTA_ATRASO] sobre o valor devido (art. 413 do Código Civil);
+- Juros moratórios de [JUROS_MORA] ao mês;
 - Correção monetária conforme índice pactuado.
 
 **CLÁUSULA 6 - GARANTIA LOCATÍCIA**
@@ -160,8 +160,8 @@ Telefone: [TELEFONE_LOCATARIO]
 **CLÁUSULA 6 – MULTAS E ATRASOS**
 
 6.1. Em caso de inadimplemento, incidirão:
-- Multa de 10% sobre o valor devido;
-- Juros de mora de 1% ao mês;
+- Multa de [MULTA_ATRASO] sobre o valor devido;
+- Juros de mora de [JUROS_MORA] ao mês;
 - Correção monetária pelo índice pactuado.
 
 **CLÁUSULA 7 – VISTORIA E DEVOLUÇÃO**
@@ -241,8 +241,8 @@ Telefone: [TELEFONE_LOCATARIO]
 **CLÁUSULA 5 – MULTA E JUROS POR ATRASO**
 
 5.1. Em caso de inadimplência, aplicar-se-ão:
-- Multa de 10% (dez por cento) sobre o valor da parcela vencida;
-- Juros de mora de 1% (um por cento) ao mês;
+- Multa de [MULTA_ATRASO] sobre o valor da parcela vencida;
+- Juros de mora de [JUROS_MORA] ao mês;
 - Correção monetária pelo mesmo índice do reajuste contratual.
 
 **CLÁUSULA 6 – GARANTIA LOCATÍCIA**
@@ -330,8 +330,8 @@ Telefone: [TELEFONE_LOCATARIO]
 **CLÁUSULA 6 – MULTAS E ATRASOS**
 
 6.1. Em caso de inadimplência, será aplicada:
-- Multa de 10% (dez por cento) sobre o valor da obrigação vencida;
-- Juros de mora de 1% (um por cento) ao mês;
+- Multa de [MULTA_ATRASO] sobre o valor da obrigação vencida;
+- Juros de mora de [JUROS_MORA] ao mês;
 - Correção monetária pelo índice pactuado no contrato.
 
 **CLÁUSULA 7 – RESCISÃO**
