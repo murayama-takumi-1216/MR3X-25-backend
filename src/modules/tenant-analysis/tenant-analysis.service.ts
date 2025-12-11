@@ -231,19 +231,59 @@ export class TenantAnalysisService {
 
   /**
    * Get analysis history with filters
-   * All authorized roles can see all analyses since the analysis is about the tenant,
-   * not the requester. This allows sharing tenant risk information across the platform
-   * and avoids redundant API calls.
+   * Each user type only sees analyses from their own scope:
+   * - Agency users (AGENCY_ADMIN, AGENCY_MANAGER, BROKER): only their agency's analyses
+   * - INDEPENDENT_OWNER/PROPRIETARIO: only their own analyses
+   * - ADMIN: can see all platform internal searches (not from agencies)
+   * - CEO: no access to search history (platform oversight, not operational)
    */
   async getAnalysisHistory(dto: GetAnalysisHistoryDto, userId: bigint, userRole: string, agencyId?: bigint) {
     const { document, riskLevel, status, page = 1, limit = 10 } = dto;
     const skip = (page - 1) * limit;
 
-    // Build where clause - all authorized roles can see all analyses
-    // The controller already restricts access to authorized roles only via @Roles decorator
+    // Build where clause based on user role - each scope only sees their own data
     const where: any = {};
 
-    // Apply filters
+    // Apply role-based scoping
+    if (userRole === 'CEO') {
+      // CEO should not see search history - return empty
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 0,
+      };
+    } else if (userRole === 'ADMIN') {
+      // ADMIN sees only platform internal searches (no agencyId)
+      where.agencyId = null;
+    } else if (['AGENCY_ADMIN', 'AGENCY_MANAGER', 'BROKER'].includes(userRole)) {
+      // Agency users see only their agency's analyses
+      if (!agencyId) {
+        return {
+          data: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+        };
+      }
+      where.agencyId = agencyId;
+    } else if (['INDEPENDENT_OWNER', 'PROPRIETARIO'].includes(userRole)) {
+      // Independent owners and proprietors only see their own analyses
+      where.requestedById = userId;
+    } else {
+      // Unknown role - return empty
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 0,
+      };
+    }
+
+    // Apply additional filters
     if (document) {
       where.document = { contains: document };
     }
@@ -313,7 +353,11 @@ export class TenantAnalysisService {
 
   /**
    * Get a specific analysis by ID
-   * All authorized roles can access any analysis since the analysis is about the tenant.
+   * Access is restricted based on user role scope:
+   * - Agency users: only their agency's analyses
+   * - Independent owners/proprietors: only their own analyses
+   * - ADMIN: only platform internal analyses
+   * - CEO: no access
    */
   async getAnalysisById(id: bigint, userId: bigint, userRole: string, agencyId?: bigint) {
     const analysis = await this.prisma.tenantAnalysis.findUnique({
@@ -326,23 +370,83 @@ export class TenantAnalysisService {
     });
 
     if (!analysis) {
-      throw new NotFoundException('Analysis not found');
+      throw new NotFoundException('Análise não encontrada');
     }
 
-    // All authorized roles can access any analysis
-    // The controller already restricts access to authorized roles only via @Roles decorator
+    // Apply role-based access control
+    if (userRole === 'CEO') {
+      // CEO should not access individual analyses
+      throw new NotFoundException('Acesso negado. CEO não tem acesso ao histórico de pesquisas.');
+    } else if (userRole === 'ADMIN') {
+      // ADMIN can only access platform internal analyses (no agencyId)
+      if (analysis.agencyId !== null) {
+        throw new NotFoundException('Análise não encontrada');
+      }
+    } else if (['AGENCY_ADMIN', 'AGENCY_MANAGER', 'BROKER'].includes(userRole)) {
+      // Agency users can only access their agency's analyses
+      if (!agencyId || analysis.agencyId !== agencyId) {
+        throw new NotFoundException('Análise não encontrada');
+      }
+    } else if (['INDEPENDENT_OWNER', 'PROPRIETARIO'].includes(userRole)) {
+      // Independent owners/proprietors can only access their own analyses
+      if (analysis.requestedById !== userId) {
+        throw new NotFoundException('Análise não encontrada');
+      }
+    } else {
+      // Unknown role - deny access
+      throw new NotFoundException('Análise não encontrada');
+    }
 
     return this.formatAnalysisResponse(analysis);
   }
 
   /**
    * Get statistics for dashboard
-   * All authorized roles can see global statistics since analyses are shared across the platform.
+   * Statistics are scoped based on user role:
+   * - Agency users: only their agency's statistics
+   * - Independent owners/proprietors: only their own statistics
+   * - ADMIN: only platform internal statistics
+   * - CEO: no access to statistics (returns empty)
    */
   async getAnalysisStats(userId: bigint, userRole: string, agencyId?: bigint) {
-    // All authorized roles can see all statistics
-    // The controller already restricts access to authorized roles only via @Roles decorator
+    // Build where clause based on user role
     const where: any = {};
+
+    // Apply role-based scoping
+    if (userRole === 'CEO') {
+      // CEO should not see search statistics - return empty
+      return {
+        total: 0,
+        byRiskLevel: {},
+        byStatus: {},
+        recentAnalyses: [],
+      };
+    } else if (userRole === 'ADMIN') {
+      // ADMIN sees only platform internal statistics (no agencyId)
+      where.agencyId = null;
+    } else if (['AGENCY_ADMIN', 'AGENCY_MANAGER', 'BROKER'].includes(userRole)) {
+      // Agency users see only their agency's statistics
+      if (!agencyId) {
+        return {
+          total: 0,
+          byRiskLevel: {},
+          byStatus: {},
+          recentAnalyses: [],
+        };
+      }
+      where.agencyId = agencyId;
+    } else if (['INDEPENDENT_OWNER', 'PROPRIETARIO'].includes(userRole)) {
+      // Independent owners/proprietors only see their own statistics
+      where.requestedById = userId;
+    } else {
+      // Unknown role - return empty
+      return {
+        total: 0,
+        byRiskLevel: {},
+        byStatus: {},
+        recentAnalyses: [],
+      };
+    }
 
     const [total, byRiskLevel, byStatus, recentAnalyses] = await Promise.all([
       this.prisma.tenantAnalysis.count({ where }),

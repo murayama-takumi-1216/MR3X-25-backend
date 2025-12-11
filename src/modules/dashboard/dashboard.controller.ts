@@ -62,4 +62,16 @@ export class DashboardController {
     const userId = req.user.sub;
     return this.dashboardService.getTenantDashboard(userId);
   }
+
+  @Get('platform-revenue')
+  @ApiOperation({ summary: 'Get platform revenue from agencies and independent owners (CEO only)' })
+  async getPlatformRevenue(@Req() req: any) {
+    const role = req.user.role;
+
+    if (role !== 'CEO') {
+      return { error: 'Acesso negado. Apenas CEO pode visualizar a receita da plataforma.' };
+    }
+
+    return this.dashboardService.getPlatformRevenue();
+  }
 }

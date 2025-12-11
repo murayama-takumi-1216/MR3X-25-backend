@@ -1216,4 +1216,213 @@ export class DashboardService {
 
     return this.buildDashboardResponse(properties, contracts, paymentsThisMonth, pendingContracts, recentPayments);
   }
+
+  /**
+   * Get platform revenue from agencies and independent owners
+   * This shows subscription payments made to the MR3X platform
+   */
+  async getPlatformRevenue() {
+    try {
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+      // Get all agencies with payment info
+      const agencies = await this.prisma.agency.findMany({
+        where: { status: 'ACTIVE' },
+        select: {
+          id: true,
+          name: true,
+          cnpj: true,
+          email: true,
+          plan: true,
+          subscriptionStatus: true,
+          totalSpent: true,
+          lastPaymentAt: true,
+          lastPaymentAmount: true,
+          currentPeriodStart: true,
+          currentPeriodEnd: true,
+          nextBillingDate: true,
+          createdAt: true,
+          _count: {
+            select: {
+              properties: true,
+              contracts: true,
+              users: true,
+            },
+          },
+        },
+        orderBy: { totalSpent: 'desc' },
+      });
+
+      // Get independent owners with their plan info
+      const independentOwners = await this.prisma.user.findMany({
+        where: {
+          role: 'INDEPENDENT_OWNER',
+          status: 'ACTIVE',
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          document: true,
+          plan: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Get microtransactions this month (from agencies)
+      const agencyMicrotransactionsThisMonth = await this.prisma.microtransaction.findMany({
+        where: {
+          agencyId: { not: null },
+          createdAt: { gte: firstDayOfMonth },
+          status: 'PAID',
+        },
+        include: {
+          agency: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Get microtransactions this month (from independent owners)
+      const ownerMicrotransactionsThisMonth = await this.prisma.microtransaction.findMany({
+        where: {
+          userId: { not: null },
+          agencyId: null, // Only from independent owners (no agency)
+          createdAt: { gte: firstDayOfMonth },
+          status: 'PAID',
+        },
+        include: {
+          user: {
+            select: { id: true, name: true, role: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Calculate totals
+      const totalAgencyRevenue = agencies.reduce((sum, a) => sum + Number(a.totalSpent || 0), 0);
+      const monthlyAgencyMicrotransactions = agencyMicrotransactionsThisMonth.reduce(
+        (sum, m) => sum + Number(m.amount || 0),
+        0
+      );
+      const monthlyOwnerMicrotransactions = ownerMicrotransactionsThisMonth.reduce(
+        (sum, m) => sum + Number(m.amount || 0),
+        0
+      );
+
+      // Count by plan
+      const agencyPlanCounts: Record<string, number> = {};
+      const ownerPlanCounts: Record<string, number> = {};
+
+      agencies.forEach(a => {
+        agencyPlanCounts[a.plan || 'FREE'] = (agencyPlanCounts[a.plan || 'FREE'] || 0) + 1;
+      });
+
+      independentOwners.forEach(o => {
+        ownerPlanCounts[o.plan || 'FREE'] = (ownerPlanCounts[o.plan || 'FREE'] || 0) + 1;
+      });
+
+      // Get recent payments (agencies that paid recently)
+      const recentAgencyPayments = agencies
+        .filter(a => a.lastPaymentAt)
+        .sort((a, b) => new Date(b.lastPaymentAt!).getTime() - new Date(a.lastPaymentAt!).getTime())
+        .slice(0, 10)
+        .map(a => ({
+          id: a.id.toString(),
+          type: 'agency' as const,
+          name: a.name,
+          email: a.email,
+          plan: a.plan,
+          amount: Number(a.lastPaymentAmount || 0),
+          date: a.lastPaymentAt,
+          totalSpent: Number(a.totalSpent || 0),
+        }));
+
+      // Format agencies for response
+      const formattedAgencies = agencies.map(a => ({
+        id: a.id.toString(),
+        name: a.name,
+        cnpj: a.cnpj,
+        email: a.email,
+        plan: a.plan || 'FREE',
+        subscriptionStatus: a.subscriptionStatus || 'ACTIVE',
+        totalSpent: Number(a.totalSpent || 0),
+        lastPaymentAt: a.lastPaymentAt,
+        lastPaymentAmount: Number(a.lastPaymentAmount || 0),
+        nextBillingDate: a.nextBillingDate,
+        createdAt: a.createdAt,
+        stats: {
+          properties: a._count.properties,
+          contracts: a._count.contracts,
+          users: a._count.users,
+        },
+      }));
+
+      // Format independent owners for response
+      const formattedOwners = independentOwners.map(o => ({
+        id: o.id.toString(),
+        name: o.name,
+        email: o.email,
+        document: o.document,
+        plan: o.plan || 'FREE',
+        createdAt: o.createdAt,
+      }));
+
+      return {
+        summary: {
+          totalAgencies: agencies.length,
+          totalIndependentOwners: independentOwners.length,
+          totalAgencyRevenue,
+          monthlyAgencyMicrotransactions,
+          monthlyOwnerMicrotransactions,
+          totalMonthlyRevenue: monthlyAgencyMicrotransactions + monthlyOwnerMicrotransactions,
+        },
+        planDistribution: {
+          agencies: agencyPlanCounts,
+          independentOwners: ownerPlanCounts,
+        },
+        agencies: formattedAgencies,
+        independentOwners: formattedOwners,
+        recentPayments: recentAgencyPayments,
+        microtransactions: {
+          agencies: agencyMicrotransactionsThisMonth.map(m => ({
+            id: m.id.toString(),
+            type: m.type,
+            amount: Number(m.amount || 0),
+            status: m.status,
+            description: m.description,
+            paidAt: m.paidAt,
+            createdAt: m.createdAt,
+            agency: m.agency ? {
+              id: m.agency.id.toString(),
+              name: m.agency.name,
+            } : null,
+          })),
+          owners: ownerMicrotransactionsThisMonth
+            .filter(m => m.user?.role === 'INDEPENDENT_OWNER')
+            .map(m => ({
+              id: m.id.toString(),
+              type: m.type,
+              amount: Number(m.amount || 0),
+              status: m.status,
+              description: m.description,
+              paidAt: m.paidAt,
+              createdAt: m.createdAt,
+              owner: m.user ? {
+                id: m.user.id.toString(),
+                name: m.user.name,
+              } : null,
+            })),
+        },
+      };
+    } catch (error: any) {
+      console.error('Error in getPlatformRevenue:', error);
+      throw error;
+    }
+  }
 }
