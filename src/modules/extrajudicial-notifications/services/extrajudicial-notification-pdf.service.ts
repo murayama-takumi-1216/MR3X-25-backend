@@ -811,14 +811,14 @@ export class ExtrajudicialNotificationPdfService {
 
     /* Signatures */
     .signatures {
-      margin-top: 40px;
+      margin-top: 30px;
       page-break-inside: avoid;
     }
 
     .signature-row {
       display: flex;
       gap: 30px;
-      margin-bottom: 30px;
+      margin-bottom: 20px;
     }
 
     .signature-box {
@@ -828,13 +828,13 @@ export class ExtrajudicialNotificationPdfService {
 
     .signature-line {
       border-top: 1px solid #333;
-      margin-top: 60px;
+      margin-top: 50px;
       padding-top: 5px;
     }
 
     .signature-image {
-      height: 50px;
-      margin-bottom: 10px;
+      height: 40px;
+      margin-bottom: 5px;
     }
 
     .signature-image img {
