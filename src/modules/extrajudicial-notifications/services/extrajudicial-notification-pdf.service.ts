@@ -159,9 +159,9 @@ export class ExtrajudicialNotificationPdfService {
         phone: notification.debtorPhone,
       },
       property: {
-        address: notification.property.address,
-        city: notification.property.city,
-        state: '',
+        address: notification.property?.address || 'Endereco nao informado',
+        city: notification.property?.city || 'Cidade nao informada',
+        state: notification.property?.state || '',
       },
       title: notification.title,
       subject: notification.subject,
@@ -319,13 +319,37 @@ export class ExtrajudicialNotificationPdfService {
    * Generate provisional PDF (with watermark)
    */
   async generateProvisionalPdf(notificationId: bigint): Promise<Buffer> {
-    const data = await this.getNotificationData(notificationId);
-    const html = await this.renderHtmlTemplate(data, true);
+    console.log(`[PDF] Starting provisional PDF generation for notification ${notificationId}`);
 
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    let data;
+    try {
+      data = await this.getNotificationData(notificationId);
+      console.log(`[PDF] Got notification data: ${data.id}, token: ${data.token}`);
+    } catch (error) {
+      console.error(`[PDF] Error getting notification data:`, error);
+      throw error;
+    }
+
+    let html;
+    try {
+      html = await this.renderHtmlTemplate(data, true);
+      console.log(`[PDF] HTML template rendered successfully`);
+    } catch (error) {
+      console.error(`[PDF] Error rendering HTML template:`, error);
+      throw error;
+    }
+
+    let browser;
+    try {
+      browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      });
+      console.log(`[PDF] Puppeteer browser launched successfully`);
+    } catch (error) {
+      console.error(`[PDF] Error launching Puppeteer browser:`, error);
+      throw new Error(`Failed to launch PDF generator: ${error.message}`);
+    }
 
     try {
       const page = await browser.newPage();
