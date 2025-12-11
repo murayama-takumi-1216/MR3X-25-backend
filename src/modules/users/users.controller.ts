@@ -20,6 +20,7 @@ export class UsersController {
   @ApiOperation({ summary: 'List all users' })
   @ApiQuery({ name: 'skip', required: false })
   @ApiQuery({ name: 'take', required: false })
+  @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'role', required: false, enum: UserRole })
   @ApiQuery({ name: 'agencyId', required: false })
   @ApiQuery({ name: 'status', required: false })
@@ -28,6 +29,7 @@ export class UsersController {
   async findAll(
     @Query('skip') skip?: number,
     @Query('take') take?: number,
+    @Query('search') search?: string,
     @Query('role') role?: UserRole,
     @Query('agencyId') agencyId?: string,
     @Query('status') status?: string,
@@ -53,7 +55,7 @@ export class UsersController {
     // Exclude current user from results if requested
     const excludeUserId = excludeCurrentUser === 'true' ? user.sub : undefined;
 
-    return this.usersService.findAll({ skip, take, role, agencyId, status, plan, createdById, excludeUserId });
+    return this.usersService.findAll({ skip, take, search, role, agencyId, status, plan, createdById, excludeUserId });
   }
 
   @Get('details')

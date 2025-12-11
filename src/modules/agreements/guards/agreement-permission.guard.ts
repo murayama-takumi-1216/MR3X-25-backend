@@ -14,7 +14,7 @@ import {
   AgreementPermissionService,
   UserContext,
 } from '../services/agreement-permission.service';
-import { AgreementAction } from '../constants/agreement-permissions.constants';
+import { AgreementAction, SignatureType } from '../constants/agreement-permissions.constants';
 
 /**
  * Guard that checks agreement-specific permissions
@@ -74,7 +74,20 @@ export class AgreementPermissionGuard implements CanActivate {
       action: permissionMeta.action,
     });
 
-    const { action, signatureType, requiresAgreementId } = permissionMeta;
+    const { action, requiresAgreementId } = permissionMeta;
+    let { signatureType } = permissionMeta;
+
+    // For SIGN action, determine signature type from request body if not specified in decorator
+    if (action === AgreementAction.SIGN && !signatureType && request.body) {
+      if (request.body.tenantSignature) {
+        signatureType = SignatureType.TENANT;
+      } else if (request.body.ownerSignature) {
+        signatureType = SignatureType.OWNER;
+      } else if (request.body.agencySignature) {
+        signatureType = SignatureType.AGENCY;
+      }
+      console.log('[AgreementPermissionGuard] Derived signatureType from body:', signatureType);
+    }
 
     // For actions that require a specific agreement
     if (requiresAgreementId) {

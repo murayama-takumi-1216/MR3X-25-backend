@@ -97,11 +97,11 @@ export const PROPRIETARIO_PERMISSIONS: Record<string, ModulePermission> = {
     message: 'Vistorias são realizadas pela imobiliária',
   },
 
-  // Agreements - READ ONLY
+  // Agreements - CAN VIEW AND SIGN (when they are a party)
   agreements: {
     accessLevel: OwnerAccessLevel.VIEW_ONLY,
-    allowedActions: [OwnerAction.VIEW],
-    message: 'Acordos são gerenciados pela imobiliária',
+    allowedActions: [OwnerAction.VIEW, OwnerAction.SIGN],
+    message: 'Proprietário pode visualizar e assinar acordos onde é parte',
   },
 
   // Reports - can view reports about their properties

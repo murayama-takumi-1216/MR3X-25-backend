@@ -96,6 +96,7 @@ export class UsersService {
   async findAll(params: {
     skip?: number;
     take?: number;
+    search?: string;
     role?: UserRole;
     agencyId?: string;
     status?: string;
@@ -103,7 +104,7 @@ export class UsersService {
     createdById?: string;
     excludeUserId?: string;
   }) {
-    const { skip = 0, take = 10, role, agencyId, status, plan, createdById, excludeUserId } = params;
+    const { skip = 0, take = 10, search, role, agencyId, status, plan, createdById, excludeUserId } = params;
 
     const where: any = {};
     if (role) where.role = role;
@@ -112,6 +113,17 @@ export class UsersService {
     if (plan) where.plan = plan;
     if (createdById) where.createdBy = BigInt(createdById);
     if (excludeUserId) where.id = { not: BigInt(excludeUserId) };
+
+    // Add search filter for name, email, document, or phone
+    // MySQL's default collation is case-insensitive, so no mode needed
+    if (search && search.trim()) {
+      where.OR = [
+        { name: { contains: search.trim() } },
+        { email: { contains: search.trim() } },
+        { document: { contains: search.trim() } },
+        { phone: { contains: search.trim() } },
+      ];
+    }
 
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
