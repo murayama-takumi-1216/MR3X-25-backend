@@ -93,6 +93,7 @@ export class ExtrajudicialNotificationPdfService {
         height: 10,
         includetext: true,
         textxalign: 'center',
+        textyoffset: 10,
       });
       return `data:image/png;base64,${png.toString('base64')}`;
     } catch (error) {
@@ -330,10 +331,22 @@ export class ExtrajudicialNotificationPdfService {
       const page = await browser.newPage();
       await page.setContent(html, { waitUntil: 'networkidle0' });
 
+      const footerTemplate = `
+        <div style="width: 100%; font-size: 9pt; font-family: 'Times New Roman', Times, serif; color: #666; padding: 5px 15mm; border-top: 1px solid #ddd;">
+          <p style="margin: 0 0 4px 0;"><strong>Token:</strong> ${data.token}</p>
+          <p style="margin: 0 0 4px 0;"><strong>Protocolo:</strong> ${data.protocolNumber}</p>
+          <p style="margin: 0 0 4px 0;"><strong>Gerado em:</strong> ${this.formatDateTime(new Date())}</p>
+          <p style="margin: 0;"><strong>Verificacao:</strong> ${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify/notification/${data.token}</p>
+        </div>
+      `;
+
       const pdfUint8Array = await page.pdf({
         format: 'A4',
         printBackground: true,
-        margin: { top: '15mm', right: '12mm', bottom: '15mm', left: '12mm' },
+        margin: { top: '15mm', right: '12mm', bottom: '30mm', left: '12mm' },
+        displayHeaderFooter: true,
+        headerTemplate: '<div></div>',
+        footerTemplate: footerTemplate,
       });
 
       const pdfBuffer = Buffer.from(pdfUint8Array);
@@ -378,10 +391,22 @@ export class ExtrajudicialNotificationPdfService {
       const page = await browser.newPage();
       await page.setContent(html, { waitUntil: 'networkidle0' });
 
+      const footerTemplate = `
+        <div style="width: 100%; font-size: 7pt; font-family: 'Times New Roman', Times, serif; color: #666; padding: 5px 15mm; border-top: 1px solid #ddd;">
+          <p style="margin: 0 0 2px 0;"><strong>Token:</strong> ${data.token}</p>
+          <p style="margin: 0 0 2px 0;"><strong>Protocolo:</strong> ${data.protocolNumber}</p>
+          <p style="margin: 0 0 2px 0;"><strong>Gerado em:</strong> ${this.formatDateTime(new Date())}</p>
+          <p style="margin: 0;"><strong>Verificacao:</strong> ${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify/notification/${data.token}</p>
+        </div>
+      `;
+
       const pdfUint8Array = await page.pdf({
         format: 'A4',
         printBackground: true,
-        margin: { top: '15mm', right: '12mm', bottom: '15mm', left: '12mm' },
+        margin: { top: '15mm', right: '12mm', bottom: '30mm', left: '12mm' },
+        displayHeaderFooter: true,
+        headerTemplate: '<div></div>',
+        footerTemplate: footerTemplate,
       });
 
       const pdfBuffer = Buffer.from(pdfUint8Array);
@@ -448,11 +473,6 @@ export class ExtrajudicialNotificationPdfService {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Notificacao Extrajudicial - ${data.notificationNumber}</title>
   <style>
-    @page {
-      size: A4;
-      margin: 0;
-    }
-
     * {
       margin: 0;
       padding: 0;
@@ -468,9 +488,7 @@ export class ExtrajudicialNotificationPdfService {
     }
 
     .page {
-      width: 210mm;
-      min-height: 297mm;
-      padding: 20mm 15mm;
+      padding: 10px;
       position: relative;
     }
 
@@ -533,17 +551,10 @@ export class ExtrajudicialNotificationPdfService {
       height: 50px;
     }
 
-    .codes-container .barcode-text {
-      font-family: 'Courier New', monospace;
-      font-size: 10pt;
-      text-align: center;
-      margin-top: 5px;
-    }
-
     /* Sidebar barcode (vertical on right side) */
     .sidebar-barcode {
       position: fixed;
-      right: 5mm;
+      right: -10mm;
       top: 50%;
       transform: rotate(90deg) translateX(-50%);
       z-index: 100;
@@ -552,26 +563,6 @@ export class ExtrajudicialNotificationPdfService {
     .sidebar-barcode img {
       max-width: 60mm;
       height: auto;
-    }
-
-    /* QR Code bottom right */
-    .qrcode-container {
-      position: fixed;
-      bottom: 25mm;
-      right: 20mm;
-      text-align: center;
-      z-index: 100;
-    }
-
-    .qrcode-container img {
-      width: 25mm;
-      height: 25mm;
-    }
-
-    .qrcode-container p {
-      font-size: 7pt;
-      color: #666;
-      margin-top: 2mm;
     }
 
     /* Header */
@@ -867,27 +858,6 @@ export class ExtrajudicialNotificationPdfService {
       margin-top: 3px;
     }
 
-    /* Footer */
-    .footer {
-      position: fixed;
-      bottom: 10mm;
-      left: 15mm;
-      right: 60mm;
-      font-size: 7pt;
-      color: #666;
-      border-top: 1px solid #ddd;
-      padding-top: 5px;
-    }
-
-    .footer p {
-      margin-bottom: 2px;
-    }
-
-    .hash {
-      font-family: 'Courier New', monospace;
-      font-size: 6pt;
-      word-break: break-all;
-    }
   </style>
 </head>
 <body>
@@ -895,11 +865,6 @@ export class ExtrajudicialNotificationPdfService {
 
   <div class="sidebar-barcode">
     <img src="${data.barcodeBase64}" alt="Codigo de barras">
-  </div>
-
-  <div class="qrcode-container">
-    <img src="${data.qrCodeBase64}" alt="QR Code de verificacao">
-    <p>Verifique este documento</p>
   </div>
 
   <div class="page">
@@ -922,7 +887,6 @@ export class ExtrajudicialNotificationPdfService {
       </div>
       <div class="barcode">
         <img src="${data.barcodeBase64}" alt="Codigo de barras">
-        <div class="barcode-text">${data.token}</div>
       </div>
     </div>
 
@@ -1172,13 +1136,6 @@ export class ExtrajudicialNotificationPdfService {
       }
     </div>
 
-    <div class="footer">
-      <p><strong>Token:</strong> ${data.token}</p>
-      <p><strong>Protocolo:</strong> ${data.protocolNumber}</p>
-      <p><strong>Gerado em:</strong> ${data.generatedAt}</p>
-      <p><strong>Verificacao:</strong> ${data.verificationUrl}</p>
-      ${!data.isProvisional ? `<p class="hash"><strong>Hash SHA-256:</strong> Calculado apos geracao final</p>` : ''}
-    </div>
   </div>
 </body>
 </html>
