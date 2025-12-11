@@ -554,7 +554,7 @@ export class ExtrajudicialNotificationPdfService {
     /* Sidebar barcode (vertical on right side) */
     .sidebar-barcode {
       position: fixed;
-      right: -10mm;
+      right: -25mm;
       top: 50%;
       transform: rotate(90deg) translateX(-50%);
       z-index: 100;
