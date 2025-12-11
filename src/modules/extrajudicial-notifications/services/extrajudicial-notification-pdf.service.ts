@@ -93,7 +93,7 @@ export class ExtrajudicialNotificationPdfService {
         height: 10,
         includetext: true,
         textxalign: 'center',
-        textyoffset: 10,
+        textyoffset: -4,
       });
       return `data:image/png;base64,${png.toString('base64')}`;
     } catch (error) {
