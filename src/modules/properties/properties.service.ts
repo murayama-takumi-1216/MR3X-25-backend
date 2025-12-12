@@ -176,6 +176,7 @@ export class PropertiesService {
         address: data.address,
         neighborhood: data.neighborhood,
         city: data.city,
+        stateNumber: data.stateNumber || data.state,
         cep: data.cep,
         monthlyRent: data.monthlyRent,
         status: data.status || 'DISPONIVEL',
@@ -219,6 +220,11 @@ export class PropertiesService {
     if (data.tenantId) updateData.tenantId = BigInt(data.tenantId);
     if (data.brokerId) updateData.brokerId = BigInt(data.brokerId);
     if (data.agencyId) updateData.agencyId = BigInt(data.agencyId);
+    // Handle state field - frontend may send 'state' or 'stateNumber', database uses 'stateNumber'
+    if (data.state !== undefined && data.stateNumber === undefined) {
+      updateData.stateNumber = data.state;
+      delete updateData.state;
+    }
 
     const updated = await this.prisma.property.update({
       where: { id: BigInt(id) },
