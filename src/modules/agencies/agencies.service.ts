@@ -580,4 +580,62 @@ export class AgenciesService {
   async checkUserCreationAllowed(agencyId: string) {
     return this.planEnforcement.checkUserOperationAllowed(agencyId, 'create');
   }
+
+  /**
+   * Change agency plan and enforce limits
+   */
+  async changePlan(agencyId: string, newPlan: string) {
+    const agency = await this.prisma.agency.findUnique({
+      where: { id: BigInt(agencyId) },
+      select: { id: true, plan: true },
+    });
+
+    if (!agency) {
+      throw new NotFoundException('Agency not found');
+    }
+
+    // Get new plan limits
+    const newPlanLimits = getPlanLimitsForEntity(newPlan, 'agency');
+
+    // Update agency with new plan
+    await this.prisma.agency.update({
+      where: { id: BigInt(agencyId) },
+      data: {
+        plan: newPlan,
+        maxProperties: newPlanLimits.contracts,
+        maxUsers: newPlanLimits.users,
+        lastPlanChange: new Date(),
+      },
+    });
+
+    // Enforce plan limits (freeze/unfreeze as needed)
+    const enforcementResult = await this.planEnforcement.enforcePlanLimits(agencyId, newPlan);
+
+    // Get updated agency data
+    const updatedAgency = await this.prisma.agency.findUnique({
+      where: { id: BigInt(agencyId) },
+      select: {
+        id: true,
+        name: true,
+        plan: true,
+        maxProperties: true,
+        maxUsers: true,
+        frozenContractsCount: true,
+        frozenUsersCount: true,
+      },
+    });
+
+    return {
+      success: true,
+      agency: {
+        id: updatedAgency?.id.toString(),
+        name: updatedAgency?.name,
+        plan: updatedAgency?.plan,
+        maxProperties: updatedAgency?.maxProperties,
+        maxUsers: updatedAgency?.maxUsers,
+      },
+      enforcement: enforcementResult,
+      message: enforcementResult.message,
+    };
+  }
 }

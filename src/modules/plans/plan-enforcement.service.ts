@@ -1756,10 +1756,14 @@ export class PlanEnforcementService {
    * Preview what would happen if agency changes to a different plan
    */
   async previewPlanChange(agencyId: string, newPlan: string): Promise<{
-    contractsWouldFreeze: number;
-    usersWouldFreeze: number;
-    contractsWouldUnfreeze: number;
-    usersWouldUnfreeze: number;
+    currentPlan: string;
+    newPlan: string;
+    currentLimits: { properties: number; users: number };
+    newLimits: { properties: number; users: number };
+    currentUsage: { properties: number; users: number };
+    willFreeze: { properties: number; users: number };
+    willUnfreeze: { properties: number; users: number };
+    isUpgrade: boolean;
     warning?: string;
   }> {
     const agency = await this.prisma.agency.findUnique({
@@ -1821,11 +1825,37 @@ export class PlanEnforcementService {
         .replace('{userFreezeCount}', usersWouldFreeze.toString());
     }
 
+    // Get current limits
+    const currentUserLimit = currentConfig.maxInternalUsers === -1 ? 9999 : currentConfig.maxInternalUsers;
+
+    // Determine if this is an upgrade (new plan has higher limits)
+    const isUpgrade = newConfig.maxProperties > currentConfig.maxProperties ||
+                      newUserLimit > currentUserLimit;
+
     return {
-      contractsWouldFreeze,
-      usersWouldFreeze,
-      contractsWouldUnfreeze,
-      usersWouldUnfreeze,
+      currentPlan: agency.plan,
+      newPlan: newPlan,
+      currentLimits: {
+        properties: currentConfig.maxProperties,
+        users: currentUserLimit,
+      },
+      newLimits: {
+        properties: newConfig.maxProperties,
+        users: newUserLimit,
+      },
+      currentUsage: {
+        properties: activeContracts,
+        users: activeUsers,
+      },
+      willFreeze: {
+        properties: contractsWouldFreeze,
+        users: usersWouldFreeze,
+      },
+      willUnfreeze: {
+        properties: contractsWouldUnfreeze,
+        users: usersWouldUnfreeze,
+      },
+      isUpgrade,
       warning,
     };
   }

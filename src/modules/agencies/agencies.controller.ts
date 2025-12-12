@@ -79,6 +79,15 @@ export class AgenciesController {
     return this.agenciesService.enforcePlanLimits(id);
   }
 
+  @Post(':id/change-plan')
+  @ApiOperation({ summary: 'Change agency plan and enforce limits' })
+  async changePlan(
+    @Param('id') id: string,
+    @Body() data: { newPlan: string },
+  ) {
+    return this.agenciesService.changePlan(id, data.newPlan);
+  }
+
   @Get(':id/check-contract-creation')
   @ApiOperation({ summary: 'Check if contract creation is allowed for the agency' })
   async checkContractCreationAllowed(@Param('id') id: string) {
