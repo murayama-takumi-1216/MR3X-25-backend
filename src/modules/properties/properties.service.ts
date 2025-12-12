@@ -15,14 +15,28 @@ export class PropertiesService {
     private tokenGenerator: TokenGeneratorService,
   ) {}
 
-  async findAll(params: { skip?: number; take?: number; agencyId?: string; status?: string; ownerId?: string; createdById?: string }) {
-    const { skip = 0, take = 10, agencyId, status, ownerId, createdById } = params;
+  async findAll(params: { skip?: number; take?: number; agencyId?: string; status?: string; ownerId?: string; createdById?: string; search?: string }) {
+    const { skip = 0, take = 10, agencyId, status, ownerId, createdById, search } = params;
 
     const where: any = { deleted: false };
     if (agencyId) where.agencyId = BigInt(agencyId);
     if (status) where.status = status;
     if (ownerId) where.ownerId = BigInt(ownerId);
     if (createdById) where.createdBy = BigInt(createdById);
+
+    // Add search filter for name, address, or owner/broker name
+    if (search && search.trim()) {
+      const searchTerm = search.trim();
+      where.OR = [
+        { name: { contains: searchTerm } },
+        { address: { contains: searchTerm } },
+        { city: { contains: searchTerm } },
+        { neighborhood: { contains: searchTerm } },
+        { owner: { name: { contains: searchTerm } } },
+        { broker: { name: { contains: searchTerm } } },
+        { tenant: { name: { contains: searchTerm } } },
+      ];
+    }
 
     const [properties, total] = await Promise.all([
       this.prisma.property.findMany({

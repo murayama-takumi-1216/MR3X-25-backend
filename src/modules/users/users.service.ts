@@ -145,6 +145,7 @@ export class UsersService {
           state: true,
           cep: true,
           agencyId: true,
+          createdBy: true,
           createdAt: true,
           lastLogin: true,
           isFrozen: true,
@@ -164,6 +165,7 @@ export class UsersService {
         ...u,
         id: u.id.toString(),
         agencyId: u.agencyId?.toString(),
+        createdBy: u.createdBy?.toString() || null,
         frozenAt: u.frozenAt?.toISOString() || null,
         agency: u.agency ? { ...u.agency, id: u.agency.id.toString() } : null,
       })),
@@ -228,16 +230,8 @@ export class UsersService {
       }
     }
 
-    // Check agency plan limits if agencyId is provided
-    if (dto.agencyId) {
-      const agencyCheck = await this.planEnforcement.checkUserOperationAllowed(
-        dto.agencyId,
-        'create',
-      );
-      if (!agencyCheck.allowed) {
-        throw new ForbiddenException(agencyCheck.message || 'A agência atingiu o limite de usuários do plano.');
-      }
-    }
+    // Note: Agency user plan limits are checked AFTER determining finalAgencyId (see below)
+    // This ensures users created by AGENCY_ADMIN/AGENCY_MANAGER inherit the correct agencyId
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email: dto.email },
@@ -253,16 +247,40 @@ export class UsersService {
       : this.generateRandomPassword();
     const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
-    // For BROKER role, get the agencyId from the creator (manager)
+    // For agency users (BROKER, PROPRIETARIO, AGENCY_MANAGER), get the agencyId from the creator
     let finalAgencyId: bigint | null = dto.agencyId ? BigInt(dto.agencyId) : null;
 
+    // If no agencyId provided but the creator is an agency user, inherit their agencyId
+    const agencyRolesToInherit = ['BROKER', 'PROPRIETARIO', 'AGENCY_MANAGER'];
+    if (!finalAgencyId && creatorId && agencyRolesToInherit.includes(dto.role as string)) {
+      // Get creator's agencyId
+      const creator = await this.prisma.user.findUnique({
+        where: { id: BigInt(creatorId) },
+        select: { agencyId: true },
+      });
+      finalAgencyId = creator?.agencyId ?? null;
+    }
+
+    // Legacy fallback: for BROKER role with managerId
     if (dto.role === 'BROKER' && dto.managerId && !finalAgencyId) {
-      // Get manager's agencyId
       const manager = await this.prisma.user.findUnique({
         where: { id: BigInt(dto.managerId) },
         select: { agencyId: true },
       });
       finalAgencyId = manager?.agencyId ?? null;
+    }
+
+    // Check agency plan limits AFTER determining the final agencyId
+    // This ensures that users created by AGENCY_ADMIN/AGENCY_MANAGER are properly checked
+    const agencyUserRoles = ['BROKER', 'PROPRIETARIO', 'AGENCY_MANAGER'];
+    if (finalAgencyId && agencyUserRoles.includes(dto.role as string)) {
+      const agencyCheck = await this.planEnforcement.checkUserOperationAllowed(
+        finalAgencyId.toString(),
+        'create',
+      );
+      if (!agencyCheck.allowed) {
+        throw new ForbiddenException(agencyCheck.message || 'A agência atingiu o limite de usuários do plano.');
+      }
     }
 
     // Set ownerId when INDEPENDENT_OWNER creates a tenant (for plan limit tracking)
@@ -451,13 +469,16 @@ export class UsersService {
         if (!allowedRoles.includes(userRole)) {
           throw new ForbiddenException('Você não tem permissão para excluir este usuário.');
         }
-        // Check same agency
+        // Check same agency or created by this admin
         const deleter = await this.prisma.user.findUnique({
           where: { id: BigInt(deleterId) },
           select: { agencyId: true },
         });
-        if (!deleter?.agencyId || !user.agencyId || deleter.agencyId !== user.agencyId) {
-          throw new ForbiddenException('Você só pode excluir usuários da sua própria agência.');
+        const createdByDeleter = user.createdBy?.toString() === deleterId;
+        const sameAgency = deleter?.agencyId && user.agencyId && deleter.agencyId === user.agencyId;
+
+        if (!createdByDeleter && !sameAgency) {
+          throw new ForbiddenException('Você só pode excluir usuários da sua própria agência ou que você criou.');
         }
       }
       // AGENCY_MANAGER can delete BROKER, PROPRIETARIO in their agency
@@ -466,13 +487,16 @@ export class UsersService {
         if (!allowedRoles.includes(userRole)) {
           throw new ForbiddenException('Você não tem permissão para excluir este usuário.');
         }
-        // Check same agency
+        // Check same agency or created by this manager
         const deleter = await this.prisma.user.findUnique({
           where: { id: BigInt(deleterId) },
           select: { agencyId: true },
         });
-        if (!deleter?.agencyId || !user.agencyId || deleter.agencyId !== user.agencyId) {
-          throw new ForbiddenException('Você só pode excluir usuários da sua própria agência.');
+        const createdByDeleter = user.createdBy?.toString() === deleterId;
+        const sameAgency = deleter?.agencyId && user.agencyId && deleter.agencyId === user.agencyId;
+
+        if (!createdByDeleter && !sameAgency) {
+          throw new ForbiddenException('Você só pode excluir usuários da sua própria agência ou que você criou.');
         }
       }
       else {
@@ -543,7 +567,99 @@ export class UsersService {
         where: { userId: userBigInt },
       });
 
-      // Nullify user references in properties (broker, creator, tenant)
+      // Delete sales notifications
+      await tx.salesNotification.deleteMany({
+        where: { userId: userBigInt },
+      });
+
+      // Delete payments made by this user
+      await tx.payment.deleteMany({
+        where: { userId: userBigInt },
+      });
+
+      // Delete active chats for this user (not in chats we found earlier)
+      await tx.activeChat.deleteMany({
+        where: { userId: userBigInt },
+      });
+
+      // Nullify/delete inspection references
+      await tx.inspectionMedia.deleteMany({
+        where: { uploadedById: userBigInt },
+      });
+      // Note: inspectorId is required, so we can't nullify it - inspections will remain
+      await tx.inspection.updateMany({
+        where: { assignedById: userBigInt },
+        data: { assignedById: null },
+      });
+      await tx.inspection.updateMany({
+        where: { approvedById: userBigInt },
+        data: { approvedById: null },
+      });
+      await tx.inspection.updateMany({
+        where: { createdBy: userBigInt },
+        data: { createdBy: null },
+      });
+
+      // Delete property images uploaded by user
+      await tx.propertyImage.deleteMany({
+        where: { uploadedBy: userBigInt },
+      });
+
+      // Delete contract clause history edited by user
+      await tx.contractClauseHistory.deleteMany({
+        where: { editedBy: userBigInt },
+      });
+
+      // Nullify invoice references
+      await tx.invoice.updateMany({
+        where: { tenantId: userBigInt },
+        data: { tenantId: null },
+      });
+      await tx.invoice.updateMany({
+        where: { createdBy: userBigInt },
+        data: { createdBy: null },
+      });
+
+      // Delete transfers where user is recipient
+      await tx.transfer.deleteMany({
+        where: { recipientId: userBigInt },
+      });
+
+      // Delete extrajudicial notifications where user is creditor, debtor or creator
+      // First find the notifications to delete their related records
+      const extrajudicialNotifs = await tx.extrajudicialNotification.findMany({
+        where: {
+          OR: [
+            { creditorId: userBigInt },
+            { debtorId: userBigInt },
+            { createdBy: userBigInt },
+          ],
+        },
+        select: { id: true },
+      });
+      const extrajudicialIds = extrajudicialNotifs.map(n => n.id);
+
+      if (extrajudicialIds.length > 0) {
+        // Delete audit records (should cascade, but just in case)
+        await tx.extrajudicialNotificationAudit.deleteMany({
+          where: { notificationId: { in: extrajudicialIds } },
+        });
+        // Delete the notifications
+        await tx.extrajudicialNotification.deleteMany({
+          where: { id: { in: extrajudicialIds } },
+        });
+      }
+
+      // Delete tenant analysis records (requestedById is required)
+      await tx.tenantAnalysis.deleteMany({
+        where: { requestedById: userBigInt },
+      });
+
+      // Nullify owner references in properties
+      await tx.property.updateMany({
+        where: { ownerId: userBigInt },
+        data: { ownerId: null },
+      });
       await tx.property.updateMany({
         where: { brokerId: userBigInt },
         data: { brokerId: null },
@@ -556,6 +672,69 @@ export class UsersService {
         where: { tenantId: userBigInt },
         data: { tenantId: null },
       });
+
+      // Delete contracts where user is tenant (tenantId is required, can't nullify)
+      // First find contracts to delete related payments
+      const tenantContracts = await tx.contract.findMany({
+        where: { tenantId: userBigInt },
+        select: { id: true },
+      });
+      const contractIds = tenantContracts.map(c => c.id);
+
+      if (contractIds.length > 0) {
+        // Delete payments linked to these contracts
+        await tx.payment.deleteMany({
+          where: { contratoId: { in: contractIds } },
+        });
+        // Delete contracts
+        await tx.contract.deleteMany({
+          where: { tenantId: userBigInt },
+        });
+      }
+
+      // Nullify owner references in remaining contracts
+      await tx.contract.updateMany({
+        where: { ownerId: userBigInt },
+        data: { ownerId: null },
+      });
+
+      // Nullify owner references in invoices
+      await tx.invoice.updateMany({
+        where: { ownerId: userBigInt },
+        data: { ownerId: null },
+      });
+
+      // Nullify owner references in agreements
+      await tx.agreement.updateMany({
+        where: { ownerId: userBigInt },
+        data: { ownerId: null },
+      });
+      await tx.agreement.updateMany({
+        where: { tenantId: userBigInt },
+        data: { tenantId: null },
+      });
+
+      // Delete service contracts (ownerId is required, can't nullify)
+      // First find service contracts to delete related records
+      const serviceContracts = await tx.serviceContract.findMany({
+        where: { ownerId: userBigInt },
+        select: { id: true },
+      });
+      const serviceContractIds = serviceContracts.map(sc => sc.id);
+
+      if (serviceContractIds.length > 0) {
+        // Delete related records first
+        await tx.serviceContractProperty.deleteMany({
+          where: { serviceContractId: { in: serviceContractIds } },
+        });
+        await tx.serviceContractClauseHistory.deleteMany({
+          where: { serviceContractId: { in: serviceContractIds } },
+        });
+        // Now delete service contracts
+        await tx.serviceContract.deleteMany({
+          where: { ownerId: userBigInt },
+        });
+      }
 
       // Nullify user references in other users (broker, creator, owner)
       await tx.user.updateMany({

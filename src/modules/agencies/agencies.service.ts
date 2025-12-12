@@ -5,9 +5,12 @@ import { getPlanLimitsForEntity } from '../plans/plans.data';
 
 export interface AgencyCreateDTO {
   name: string;
+  tradeName?: string;
   cnpj: string;
   email: string;
   phone?: string;
+  representativeName?: string;
+  representativeDocument?: string;
   creci?: string;
   creciState?: string;
   address?: string;
@@ -22,8 +25,11 @@ export interface AgencyCreateDTO {
 
 export interface AgencyUpdateDTO {
   name?: string;
+  tradeName?: string;
   email?: string;
   phone?: string;
+  representativeName?: string;
+  representativeDocument?: string;
   creci?: string;
   creciState?: string;
   address?: string;
@@ -204,9 +210,12 @@ export class AgenciesService {
       select: {
         id: true,
         name: true,
+        tradeName: true,
         cnpj: true,
         email: true,
         phone: true,
+        representativeName: true,
+        representativeDocument: true,
         creci: true,
         creciState: true,
         address: true,
@@ -248,9 +257,12 @@ export class AgenciesService {
     return {
       id: agency.id.toString(),
       name: agency.name,
+      tradeName: agency.tradeName || '',
       cnpj: agency.cnpj,
       email: agency.email,
       phone: agency.phone || '',
+      representativeName: agency.representativeName || '',
+      representativeDocument: agency.representativeDocument || '',
       creci: agency.creci || '',
       creciState: agency.creciState || '',
       address: agency.address || '',
@@ -315,8 +327,11 @@ export class AgenciesService {
         where: { id: BigInt(id) },
         data: {
           name: data.name,
+          tradeName: data.tradeName,
           email: data.email,
           phone: data.phone,
+          representativeName: data.representativeName,
+          representativeDocument: data.representativeDocument,
           address: data.address,
           city: data.city,
           state: data.state,
@@ -331,9 +346,12 @@ export class AgenciesService {
         select: {
           id: true,
           name: true,
+          tradeName: true,
           cnpj: true,
           email: true,
           phone: true,
+          representativeName: true,
+          representativeDocument: true,
           address: true,
           city: true,
           state: true,
@@ -372,9 +390,12 @@ export class AgenciesService {
       return {
         id: updated.id.toString(),
         name: updated.name,
+        tradeName: updated.tradeName || '',
         cnpj: updated.cnpj,
         email: updated.email,
         phone: updated.phone || '',
+        representativeName: updated.representativeName || '',
+        representativeDocument: updated.representativeDocument || '',
         address: updated.address || '',
         city: updated.city || '',
         state: updated.state || '',
@@ -400,8 +421,11 @@ export class AgenciesService {
       where: { id: BigInt(id) },
       data: {
         name: data.name,
+        tradeName: data.tradeName,
         email: data.email,
         phone: data.phone,
+        representativeName: data.representativeName,
+        representativeDocument: data.representativeDocument,
         address: data.address,
         city: data.city,
         state: data.state,
@@ -412,9 +436,12 @@ export class AgenciesService {
       select: {
         id: true,
         name: true,
+        tradeName: true,
         cnpj: true,
         email: true,
         phone: true,
+        representativeName: true,
+        representativeDocument: true,
         address: true,
         city: true,
         state: true,
@@ -441,9 +468,12 @@ export class AgenciesService {
     return {
       id: updated.id.toString(),
       name: updated.name,
+      tradeName: updated.tradeName || '',
       cnpj: updated.cnpj,
       email: updated.email,
       phone: updated.phone || '',
+      representativeName: updated.representativeName || '',
+      representativeDocument: updated.representativeDocument || '',
       address: updated.address || '',
       city: updated.city || '',
       state: updated.state || '',

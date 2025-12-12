@@ -52,12 +52,14 @@ export class PropertiesController {
   @ApiQuery({ name: 'agencyId', required: false })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'ownerId', required: false })
+  @ApiQuery({ name: 'search', required: false, description: 'Search by name, address, or owner/broker name' })
   async findAll(
     @Query('skip') skip?: number,
     @Query('take') take?: number,
     @Query('agencyId') agencyId?: string,
     @Query('status') status?: string,
     @Query('ownerId') ownerId?: string,
+    @Query('search') search?: string,
     @CurrentUser() user?: any,
   ) {
     // Data isolation based on role:
@@ -90,7 +92,7 @@ export class PropertiesController {
       createdById = user?.sub;
     }
 
-    return this.propertiesService.findAll({ skip, take, agencyId: effectiveAgencyId, status, ownerId: effectiveOwnerId, createdById });
+    return this.propertiesService.findAll({ skip, take, agencyId: effectiveAgencyId, status, ownerId: effectiveOwnerId, createdById, search });
   }
 
   // ==================== Property Images Routes ====================

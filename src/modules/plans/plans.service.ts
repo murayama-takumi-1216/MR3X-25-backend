@@ -317,23 +317,26 @@ export class PlansService {
       },
     });
 
-    // Count active internal users (excluding tenants and property owners)
+    // Count active internal users (exclude AGENCY_ADMIN as they are the agency owner)
     const activeUsers = await this.prisma.user.count({
       where: {
         agencyId: BigInt(agencyId),
         isFrozen: false,
         status: 'ACTIVE',
         role: {
-          in: [UserRole.AGENCY_ADMIN, UserRole.AGENCY_MANAGER, UserRole.BROKER],
+          in: [UserRole.AGENCY_MANAGER, UserRole.BROKER, UserRole.PROPRIETARIO],
         },
       },
     });
 
-    // Count frozen users
+    // Count frozen users (exclude AGENCY_ADMIN)
     const frozenUsers = await this.prisma.user.count({
       where: {
         agencyId: BigInt(agencyId),
         isFrozen: true,
+        role: {
+          in: [UserRole.AGENCY_MANAGER, UserRole.BROKER, UserRole.PROPRIETARIO],
+        },
       },
     });
 

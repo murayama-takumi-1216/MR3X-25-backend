@@ -61,9 +61,14 @@ model Agency {
   id            BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
   token         String?  @unique @db.VarChar(50)
   name          String   @db.VarChar(255)
+  tradeName     String?  @map("trade_name") @db.VarChar(255) // Nome Fantasia
   cnpj          String   @unique @db.VarChar(20)
   email         String   @db.VarChar(191)
   phone         String?  @db.VarChar(30)
+
+  // Legal Representative (Representante Legal)
+  representativeName     String?  @map("representative_name") @db.VarChar(255)
+  representativeDocument String?  @map("representative_document") @db.VarChar(20) // CPF do representante
 
   // CRECI - Conselho Regional de Corretores de Imóveis (Required for real estate agencies)
   creci         String?  @db.VarChar(30)
@@ -168,7 +173,8 @@ model User {
   brokerId      BigInt?   @map("broker_id") @db.UnsignedBigInt
   createdBy     BigInt?   @map("created_by") @db.UnsignedBigInt
   phone         String?   @db.VarChar(30)
-  document      String?   @db.VarChar(30)
+  document      String?   @db.VarChar(30) // CPF
+  rg            String?   @db.VarChar(20) // RG (Registro Geral)
   birthDate     DateTime? @map("birth_date") @db.Date
   name          String?   @db.VarChar(50)
   address       String?   @db.VarChar(90)

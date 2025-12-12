@@ -27,6 +27,15 @@ async function main() {
   // Notifications
   await prisma.notification.deleteMany();
 
+  // Extrajudicial notifications
+  await prisma.extrajudicialNotificationAudit.deleteMany();
+  await prisma.extrajudicialNotification.deleteMany();
+
+  // Service contracts (references property via ServiceContractProperty)
+  await prisma.serviceContractClauseHistory.deleteMany();
+  await prisma.serviceContractProperty.deleteMany();
+  await prisma.serviceContract.deleteMany();
+
   // Financial tables
   await prisma.transfer.deleteMany();
   await prisma.invoice.deleteMany();
@@ -34,13 +43,18 @@ async function main() {
   await prisma.expense.deleteMany();
 
   // Contract related
+  await prisma.contractClauseHistory.deleteMany();
   await prisma.contractAudit.deleteMany();
   await prisma.contract.deleteMany();
 
-  // Property related
+  // Inspection related
+  await prisma.inspectionMedia.deleteMany();
+  await prisma.inspectionSignatureLink.deleteMany();
   await prisma.inspectionItem.deleteMany();
   await prisma.inspection.deleteMany();
   await prisma.inspectionTemplate.deleteMany();
+
+  // Property related
   await prisma.agreement.deleteMany();
   await prisma.agreementTemplate.deleteMany();
   await prisma.document.deleteMany();
