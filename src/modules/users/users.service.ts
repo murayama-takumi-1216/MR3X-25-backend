@@ -821,8 +821,27 @@ export class UsersService {
         state: true,
         photoUrl: true,
         creci: true,
+        creciState: true,
         agencyId: true,
         createdAt: true,
+        agency: {
+          select: {
+            id: true,
+            name: true,
+            tradeName: true,
+            cnpj: true,
+            email: true,
+            phone: true,
+            creci: true,
+            creciState: true,
+            address: true,
+            city: true,
+            state: true,
+            zipCode: true,
+            representativeName: true,
+            representativeDocument: true,
+          },
+        },
       },
     });
 
@@ -835,12 +854,17 @@ export class UsersService {
       id: user.id.toString(),
       agencyId: user.agencyId?.toString() || null,
       createdAt: user.createdAt?.toISOString() || null,
+      agency: user.agency ? {
+        ...user.agency,
+        id: user.agency.id.toString(),
+      } : null,
     };
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
     const user = await this.prisma.user.findUnique({
       where: { id: BigInt(userId) },
+      include: { agency: true },
     });
 
     if (!user) {
@@ -853,6 +877,51 @@ export class UsersService {
     if (dto.phone !== undefined) updateData.phone = dto.phone;
     if (dto.document !== undefined) updateData.document = dto.document;
     if (dto.address !== undefined) updateData.address = dto.address;
+    if (dto.cep !== undefined) updateData.cep = dto.cep;
+    if (dto.neighborhood !== undefined) updateData.neighborhood = dto.neighborhood;
+    if (dto.city !== undefined) updateData.city = dto.city;
+    if (dto.state !== undefined) updateData.state = dto.state;
+
+    // Parse and save user's CRECI field (e.g., "123456/SP" or "CRECI/SP 123456")
+    if (dto.creci !== undefined) {
+      const creciValue = dto.creci.trim();
+      if (creciValue.includes('/')) {
+        const parts = creciValue.split('/');
+        if (parts.length >= 2) {
+          // Handle formats like "123456/SP" or "CRECI/SP 123456"
+          const lastPart = parts[parts.length - 1].trim();
+          const stateMatch = lastPart.match(/^([A-Z]{2})/i);
+          if (stateMatch) {
+            updateData.creciState = stateMatch[1].toUpperCase();
+            // Remove state from creci number
+            const creciNumber = creciValue.replace(/\/[A-Z]{2}(-[A-Z])?$/i, '').trim();
+            updateData.creci = creciNumber;
+          } else {
+            updateData.creci = creciValue;
+          }
+        }
+      } else {
+        updateData.creci = creciValue;
+      }
+    }
+
+    // Update agency fields if user is AGENCY_ADMIN and has an agency
+    if (user.role === 'AGENCY_ADMIN' && user.agencyId) {
+      const agencyUpdateData: any = {};
+
+      if (dto.agencyName !== undefined) agencyUpdateData.name = dto.agencyName;
+      if (dto.agencyCnpj !== undefined) agencyUpdateData.cnpj = dto.agencyCnpj;
+      if (dto.representativeName !== undefined) agencyUpdateData.representativeName = dto.representativeName;
+      if (dto.representativeDocument !== undefined) agencyUpdateData.representativeDocument = dto.representativeDocument;
+
+      // Only update agency if there are changes
+      if (Object.keys(agencyUpdateData).length > 0) {
+        await this.prisma.agency.update({
+          where: { id: user.agencyId },
+          data: agencyUpdateData,
+        });
+      }
+    }
 
     const updated = await this.prisma.user.update({
       where: { id: BigInt(userId) },
@@ -866,6 +935,10 @@ export class UsersService {
         phone: true,
         document: true,
         address: true,
+        cep: true,
+        neighborhood: true,
+        city: true,
+        state: true,
         photoUrl: true,
       },
     });
@@ -998,7 +1071,6 @@ export class UsersService {
             document: true,
             birthDate: true,
             address: true,
-            number: true,
             cep: true,
             neighborhood: true,
             city: true,
@@ -1112,7 +1184,7 @@ export class UsersService {
         document: true,
         birthDate: true,
         address: true,
-        number: true,
+        complement: true,
         cep: true,
         neighborhood: true,
         city: true,
@@ -1127,6 +1199,18 @@ export class UsersService {
         maritalStatus: true,
         profession: true,
         rg: true,
+        employerName: true,
+        emergencyContactName: true,
+        emergencyContactPhone: true,
+        company: {
+          select: {
+            id: true,
+            name: true,
+            cnpj: true,
+            address: true,
+            responsible: true,
+          }
+        }
       },
     });
 
@@ -1139,7 +1223,7 @@ export class UsersService {
 
       // Serialize BigInt fields
       const result = tenants.map(tenant => {
-        const { createdBy, agencyId, ...rest } = tenant;
+        const { createdBy, agencyId, company, ...rest } = tenant;
         return {
           ...rest,
           id: tenant.id.toString(),
@@ -1147,6 +1231,13 @@ export class UsersService {
           createdBy: createdBy?.toString() || null,
           birthDate: tenant.birthDate?.toISOString() || null,
           createdAt: tenant.createdAt?.toISOString() || null,
+          company: company ? {
+            id: company.id.toString(),
+            name: company.name,
+            cnpj: company.cnpj,
+            address: company.address,
+            responsible: company.responsible,
+          } : null,
         };
       });
 
@@ -1230,7 +1321,6 @@ export class UsersService {
         phone: dto.phone,
         document: dto.document,
         address: dto.address,
-        number: dto.number,
         complement: dto.complement,
         cep: dto.cep,
         neighborhood: dto.neighborhood,

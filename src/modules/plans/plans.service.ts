@@ -317,26 +317,26 @@ export class PlansService {
       },
     });
 
-    // Count active users (exclude AGENCY_ADMIN as they are the agency owner)
-    // All user types count against the user limit: BROKER, PROPRIETARIO, INQUILINO, AGENCY_MANAGER
+    // Count active users (exclude AGENCY_ADMIN as they are the agency owner and never frozen)
+    // ALL users count against the user limit
     const activeUsers = await this.prisma.user.count({
       where: {
         agencyId: BigInt(agencyId),
         isFrozen: false,
         status: 'ACTIVE',
         role: {
-          in: [UserRole.AGENCY_MANAGER, UserRole.BROKER, UserRole.PROPRIETARIO, UserRole.INQUILINO],
+          not: UserRole.AGENCY_ADMIN, // AGENCY_ADMIN is exempt from limits
         },
       },
     });
 
-    // Count frozen users (exclude AGENCY_ADMIN)
+    // Count frozen users (AGENCY_ADMIN is never frozen)
     const frozenUsers = await this.prisma.user.count({
       where: {
         agencyId: BigInt(agencyId),
         isFrozen: true,
         role: {
-          in: [UserRole.AGENCY_MANAGER, UserRole.BROKER, UserRole.PROPRIETARIO, UserRole.INQUILINO],
+          not: UserRole.AGENCY_ADMIN,
         },
       },
     });
@@ -452,14 +452,14 @@ export class PlansService {
     const planName = agency?.plan || 'FREE';
     const planConfig = getPlanConfigByName(planName) || PLANS_CONFIG.FREE;
 
-    // Count ALL active users in the agency (all user types count against the limit)
+    // Count ALL active users in the agency (all user types count against the limit, except AGENCY_ADMIN)
     const userCount = await this.prisma.user.count({
       where: {
         agencyId: BigInt(agencyId),
         status: 'ACTIVE',
         isFrozen: false,
         role: {
-          in: [UserRole.AGENCY_MANAGER, UserRole.BROKER, UserRole.PROPRIETARIO, UserRole.INQUILINO],
+          not: UserRole.AGENCY_ADMIN, // AGENCY_ADMIN is exempt from limits
         },
       },
     });

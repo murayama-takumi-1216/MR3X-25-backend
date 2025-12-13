@@ -594,10 +594,15 @@ export class AgenciesService {
       throw new NotFoundException('Agency not found');
     }
 
+    // IMPORTANT: Enforce plan limits BEFORE updating the plan in DB
+    // This allows enforcePlanLimits to read the OLD plan value and correctly
+    // determine if this is an upgrade or downgrade
+    const enforcementResult = await this.planEnforcement.enforcePlanLimits(agencyId, newPlan);
+
     // Get new plan limits
     const newPlanLimits = getPlanLimitsForEntity(newPlan, 'agency');
 
-    // Update agency with new plan
+    // Update agency with new plan AFTER enforcement
     await this.prisma.agency.update({
       where: { id: BigInt(agencyId) },
       data: {
@@ -607,9 +612,6 @@ export class AgenciesService {
         lastPlanChange: new Date(),
       },
     });
-
-    // Enforce plan limits (freeze/unfreeze as needed)
-    const enforcementResult = await this.planEnforcement.enforcePlanLimits(agencyId, newPlan);
 
     // Get updated agency data
     const updatedAgency = await this.prisma.agency.findUnique({

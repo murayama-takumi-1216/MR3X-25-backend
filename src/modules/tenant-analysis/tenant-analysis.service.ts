@@ -40,7 +40,7 @@ export class TenantAnalysisService {
     // Verify LGPD acceptance
     if (!lgpdAccepted) {
       throw new BadRequestException(
-        'Você deve aceitar os termos da LGPD para realizar a consulta. O usuário se responsabiliza pelo uso indevido dos dados pesquisados conforme determina a LGPD.'
+        'Você deve aceitar o Termo de Responsabilidade para realizar a consulta. O usuário declara possuir base legal válida e assume total responsabilidade pelo uso das informações obtidas, nos termos da LGPD.'
       );
     }
 

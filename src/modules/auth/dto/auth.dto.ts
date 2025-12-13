@@ -164,11 +164,6 @@ export class CompleteRegisterDto {
   @IsString()
   neighborhood?: string;
 
-  @ApiPropertyOptional({ example: '123' })
-  @IsOptional()
-  @IsString()
-  number?: string;
-
   @ApiPropertyOptional({ example: 'São Paulo' })
   @IsOptional()
   @IsString()

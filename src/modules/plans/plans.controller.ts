@@ -207,13 +207,20 @@ export class PlansController {
   }
 
   @Post('agency/:agencyId/change-plan')
-  @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.PLATFORM_MANAGER)
+  @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.PLATFORM_MANAGER, UserRole.AGENCY_ADMIN)
   @ApiOperation({ summary: 'Change agency plan (enforces limits)' })
   async changePlan(
     @Param('agencyId') agencyId: string,
     @Body() body: { newPlan: string },
   ) {
     return this.planEnforcementService.enforcePlanLimits(agencyId, body.newPlan.toUpperCase());
+  }
+
+  @Post('agency/:agencyId/enforce-limits')
+  @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.PLATFORM_MANAGER, UserRole.AGENCY_ADMIN)
+  @ApiOperation({ summary: 'Enforce current plan limits (freeze excess users/contracts/properties)' })
+  async enforceCurrentPlanLimits(@Param('agencyId') agencyId: string) {
+    return this.planEnforcementService.enforceCurrentPlanLimits(agencyId);
   }
 
   // ==================== API ADD-ON ====================

@@ -402,7 +402,6 @@ export class AuthService {
         address: dto.address,
         cep: dto.cep,
         neighborhood: dto.neighborhood,
-        number: dto.number,
         city: dto.city,
         state: dto.state,
         status: 'ACTIVE',

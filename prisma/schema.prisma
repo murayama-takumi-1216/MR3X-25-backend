@@ -180,7 +180,6 @@ model User {
   address       String?   @db.VarChar(90)
   cep           String?   @db.VarChar(20)
   neighborhood  String?   @db.VarChar(100)
-  number        String?   @db.VarChar(20)
   city          String?   @db.VarChar(100)
   state         String?   @db.VarChar(10)
   userType      String?   @map("user_type") @db.VarChar(2)

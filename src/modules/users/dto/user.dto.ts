@@ -156,11 +156,6 @@ export class CreateTenantDto {
   @IsString()
   address?: string;
 
-  @ApiPropertyOptional({ example: '123' })
-  @IsOptional()
-  @IsString()
-  number?: string;
-
   @ApiPropertyOptional({ example: 'Apto 101' })
   @IsOptional()
   @IsString()
@@ -349,4 +344,50 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  @ApiPropertyOptional({ example: '01310-100' })
+  @IsOptional()
+  @IsString()
+  cep?: string;
+
+  @ApiPropertyOptional({ example: 'Bela Vista' })
+  @IsOptional()
+  @IsString()
+  neighborhood?: string;
+
+  @ApiPropertyOptional({ example: 'São Paulo' })
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiPropertyOptional({ example: 'SP' })
+  @IsOptional()
+  @IsString()
+  state?: string;
+
+  // Agency fields (only for AGENCY_ADMIN)
+  @ApiPropertyOptional({ example: 'My Agency Name' })
+  @IsOptional()
+  @IsString()
+  agencyName?: string;
+
+  @ApiPropertyOptional({ example: '123456/SP', description: 'User CRECI number with state, e.g., 123456/SP' })
+  @IsOptional()
+  @IsString()
+  creci?: string;
+
+  @ApiPropertyOptional({ example: '00.000.000/0000-00' })
+  @IsOptional()
+  @IsString()
+  agencyCnpj?: string;
+
+  @ApiPropertyOptional({ example: 'John Representative' })
+  @IsOptional()
+  @IsString()
+  representativeName?: string;
+
+  @ApiPropertyOptional({ example: '000.000.000-00' })
+  @IsOptional()
+  @IsString()
+  representativeDocument?: string;
 }

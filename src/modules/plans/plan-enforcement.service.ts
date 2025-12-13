@@ -209,14 +209,14 @@ export class PlanEnforcementService {
 
     // For create, check if agency has reached user limit
     if (operation === 'create') {
-      // Count all users (exclude AGENCY_ADMIN as they are the agency owner)
+      // Count ALL users (except AGENCY_ADMIN who is never frozen)
       const activeUserCount = await this.prisma.user.count({
         where: {
           agencyId: BigInt(agencyId),
           isFrozen: false,
           status: 'ACTIVE',
           role: {
-            in: [UserRole.AGENCY_MANAGER, UserRole.BROKER, UserRole.PROPRIETARIO, UserRole.INQUILINO],
+            not: UserRole.AGENCY_ADMIN,
           },
         },
       });
@@ -574,6 +574,77 @@ export class PlanEnforcementService {
   }
 
   /**
+   * Enforce current plan limits for an agency
+   * This is used to apply limits on existing users/contracts/properties that exceed the current plan
+   */
+  async enforceCurrentPlanLimits(agencyId: string): Promise<EnforcementResult> {
+    const agency = await this.prisma.agency.findUnique({
+      where: { id: BigInt(agencyId) },
+      select: { id: true, plan: true },
+    });
+
+    if (!agency) {
+      throw new NotFoundException('Agência não encontrada');
+    }
+
+    const currentPlan = agency.plan || 'FREE';
+    const planConfig = getPlanByName(currentPlan) || PLANS_CONFIG.FREE;
+
+    let result: EnforcementResult = {
+      contractsFrozen: 0,
+      usersFrozen: 0,
+      propertiesFrozen: 0,
+      tenantsFrozen: 0,
+      contractsUnfrozen: 0,
+      usersUnfrozen: 0,
+      propertiesUnfrozen: 0,
+      tenantsUnfrozen: 0,
+      message: '',
+    };
+
+    // Freeze excess contracts
+    const contractResult = await this.freezeExcessContracts(agencyId, planConfig.maxActiveContracts);
+    result.contractsFrozen = contractResult.frozen;
+
+    // Freeze excess users (internal)
+    const userLimit = planConfig.maxInternalUsers === -1 ? 9999 : planConfig.maxInternalUsers;
+    const userResult = await this.freezeExcessUsers(agencyId, userLimit);
+    result.usersFrozen = userResult.frozen;
+
+    // Freeze excess properties
+    const propertyResult = await this.freezeExcessProperties(agencyId, planConfig.maxProperties);
+    result.propertiesFrozen = propertyResult.frozen;
+
+    // Freeze excess tenants
+    const tenantResult = await this.freezeExcessTenants(agencyId, planConfig.maxTenants);
+    result.tenantsFrozen = tenantResult.frozen;
+
+    const frozen: string[] = [];
+    if (result.contractsFrozen > 0) frozen.push(`${result.contractsFrozen} contrato(s)`);
+    if (result.usersFrozen > 0) frozen.push(`${result.usersFrozen} usuário(s)`);
+    if (result.propertiesFrozen > 0) frozen.push(`${result.propertiesFrozen} imóvel(is)`);
+    if (result.tenantsFrozen > 0) frozen.push(`${result.tenantsFrozen} inquilino(s)`);
+
+    result.message = frozen.length > 0
+      ? `Limites do plano ${planConfig.displayName} aplicados. ${frozen.join(', ')} foram congelados.`
+      : `Todos os recursos estão dentro dos limites do plano ${planConfig.displayName}. Nenhuma alteração necessária.`;
+
+    // Update frozen counts
+    await this.prisma.agency.update({
+      where: { id: BigInt(agencyId) },
+      data: {
+        frozenContractsCount: await this.countFrozenContracts(agencyId),
+        frozenUsersCount: await this.countFrozenUsers(agencyId),
+      },
+    });
+
+    // Log the enforcement action
+    await this.logEnforcementAction(agencyId, 'PLAN_LIMITS_ENFORCED', result);
+
+    return result;
+  }
+
+  /**
    * Enforce plan limits when agency plan changes
    * This is the main entry point for plan enforcement
    */
@@ -797,7 +868,7 @@ export class PlanEnforcementService {
 
   /**
    * Freeze contracts exceeding the limit
-   * Keeps the most recently created contracts active
+   * Keeps the oldest (first registered) contracts active and freezes the newest ones
    */
   async freezeExcessContracts(agencyId: string, limit: number): Promise<FreezeResult> {
     // Get all active (non-frozen, non-deleted) contracts for agency
@@ -808,7 +879,7 @@ export class PlanEnforcementService {
         isFrozen: false,
         status: { in: ['ATIVO', 'ACTIVE', 'PENDENTE', 'PENDING'] },
       },
-      orderBy: { createdAt: 'desc' }, // Most recent first
+      orderBy: { createdAt: 'asc' }, // Oldest first - keep these active
       select: {
         id: true,
         status: true,
@@ -826,8 +897,9 @@ export class PlanEnforcementService {
       };
     }
 
-    // Keep the most recent 'limit' contracts active
+    // Keep the oldest 'limit' contracts active (first registered)
     const toKeepActive = activeContracts.slice(0, limit);
+    // Freeze the newest contracts (registered after the limit was reached)
     const toFreeze = activeContracts.slice(limit);
 
     // Freeze excess contracts
@@ -854,36 +926,26 @@ export class PlanEnforcementService {
 
   /**
    * Freeze users exceeding the limit
-   * Keeps the most recently created users active
+   * Keeps the oldest (first registered) users active and freezes the newest ones
+   * ALL users count against a single limit (except AGENCY_ADMIN who is never frozen)
    */
   async freezeExcessUsers(agencyId: string, limit: number): Promise<FreezeResult> {
-    // Get all active (non-frozen) internal users for agency
+    // Get all active (non-frozen) users for agency (ALL roles except AGENCY_ADMIN)
     const activeUsers = await this.prisma.user.findMany({
       where: {
         agencyId: BigInt(agencyId),
         isFrozen: false,
         status: 'ACTIVE',
         role: {
-          in: [UserRole.AGENCY_MANAGER, UserRole.BROKER],
-          // AGENCY_ADMIN never frozen
+          not: UserRole.AGENCY_ADMIN, // AGENCY_ADMIN never frozen and doesn't count against limit
         },
       },
-      orderBy: { createdAt: 'desc' }, // Most recent first
+      orderBy: { createdAt: 'asc' }, // Oldest first - keep these active
       select: { id: true, name: true, email: true, role: true, createdAt: true },
     });
 
-    // Count AGENCY_ADMIN separately (they don't count against limit and never freeze)
-    const agencyAdmins = await this.prisma.user.count({
-      where: {
-        agencyId: BigInt(agencyId),
-        isFrozen: false,
-        status: 'ACTIVE',
-        role: UserRole.AGENCY_ADMIN,
-      },
-    });
-
     // If unlimited users
-    if (limit >= 9999) {
+    if (limit >= 9999 || limit === -1) {
       return {
         frozen: 0,
         kept: activeUsers.map(u => u.id.toString()),
@@ -891,11 +953,8 @@ export class PlanEnforcementService {
       };
     }
 
-    // Effective limit for non-admin users
-    const effectiveLimit = Math.max(0, limit - agencyAdmins);
-
     // If within limit, nothing to freeze
-    if (activeUsers.length <= effectiveLimit) {
+    if (activeUsers.length <= limit) {
       return {
         frozen: 0,
         kept: activeUsers.map(u => u.id.toString()),
@@ -903,9 +962,10 @@ export class PlanEnforcementService {
       };
     }
 
-    // Keep the most recent users up to the effective limit
-    const toKeepActive = activeUsers.slice(0, effectiveLimit);
-    const toFreeze = activeUsers.slice(effectiveLimit);
+    // Keep the oldest users up to the limit (first registered)
+    const toKeepActive = activeUsers.slice(0, limit);
+    // Freeze the newest users (registered after the limit was reached)
+    const toFreeze = activeUsers.slice(limit);
 
     // Freeze excess users
     const frozenIds: string[] = [];
@@ -987,16 +1047,17 @@ export class PlanEnforcementService {
 
   /**
    * Unfreeze users up to the new limit
+   * ALL users count against a single limit (except AGENCY_ADMIN)
    */
   async unfreezeUsers(agencyId: string, newLimit: number): Promise<UnfreezeResult> {
-    // Get current active users count (exclude AGENCY_ADMIN as they are the agency owner)
+    // Get current active users count (ALL roles except AGENCY_ADMIN)
     const activeCount = await this.prisma.user.count({
       where: {
         agencyId: BigInt(agencyId),
         isFrozen: false,
         status: 'ACTIVE',
         role: {
-          in: [UserRole.AGENCY_MANAGER, UserRole.BROKER, UserRole.PROPRIETARIO, UserRole.INQUILINO],
+          not: UserRole.AGENCY_ADMIN,
         },
       },
     });
@@ -1042,7 +1103,7 @@ export class PlanEnforcementService {
 
   /**
    * Freeze properties exceeding the limit
-   * Keeps the most recently created properties active
+   * Keeps the oldest (first registered) properties active and freezes the newest ones
    */
   async freezeExcessProperties(agencyId: string, limit: number): Promise<FreezeResult> {
     // Get all active (non-frozen, non-deleted) properties for agency
@@ -1052,7 +1113,7 @@ export class PlanEnforcementService {
         deleted: false,
         isFrozen: false,
       },
-      orderBy: { createdAt: 'desc' }, // Most recent first
+      orderBy: { createdAt: 'asc' }, // Oldest first - keep these active
       select: {
         id: true,
         status: true,
@@ -1070,8 +1131,9 @@ export class PlanEnforcementService {
       };
     }
 
-    // Keep the most recent 'limit' properties active
+    // Keep the oldest 'limit' properties active (first registered)
     const toKeepActive = activeProperties.slice(0, limit);
+    // Freeze the newest properties (registered after the limit was reached)
     const toFreeze = activeProperties.slice(limit);
 
     // Freeze excess properties
@@ -1098,6 +1160,7 @@ export class PlanEnforcementService {
 
   /**
    * Freeze properties for independent owner exceeding the limit
+   * Keeps the oldest (first registered) properties active and freezes the newest ones
    */
   async freezeExcessPropertiesForOwner(ownerId: string, limit: number): Promise<FreezeResult> {
     // Get all active (non-frozen, non-deleted) properties for owner
@@ -1107,7 +1170,7 @@ export class PlanEnforcementService {
         deleted: false,
         isFrozen: false,
       },
-      orderBy: { createdAt: 'desc' }, // Most recent first
+      orderBy: { createdAt: 'asc' }, // Oldest first - keep these active
       select: {
         id: true,
         status: true,
@@ -1125,8 +1188,9 @@ export class PlanEnforcementService {
       };
     }
 
-    // Keep the most recent 'limit' properties active
+    // Keep the oldest 'limit' properties active (first registered)
     const toKeepActive = activeProperties.slice(0, limit);
+    // Freeze the newest properties (registered after the limit was reached)
     const toFreeze = activeProperties.slice(limit);
 
     // Freeze excess properties
@@ -1261,7 +1325,7 @@ export class PlanEnforcementService {
 
   /**
    * Freeze tenants exceeding the limit
-   * Keeps the most recently created tenants active
+   * Keeps the oldest (first registered) tenants active and freezes the newest ones
    */
   async freezeExcessTenants(agencyId: string, limit: number): Promise<FreezeResult> {
     // If unlimited tenants (9999), nothing to freeze
@@ -1281,7 +1345,7 @@ export class PlanEnforcementService {
         status: 'ACTIVE',
         role: UserRole.INQUILINO,
       },
-      orderBy: { createdAt: 'desc' }, // Most recent first
+      orderBy: { createdAt: 'asc' }, // Oldest first - keep these active
       select: { id: true, name: true, email: true, createdAt: true },
     });
 
@@ -1294,8 +1358,9 @@ export class PlanEnforcementService {
       };
     }
 
-    // Keep the most recent 'limit' tenants active
+    // Keep the oldest 'limit' tenants active (first registered)
     const toKeepActive = activeTenants.slice(0, limit);
+    // Freeze the newest tenants (registered after the limit was reached)
     const toFreeze = activeTenants.slice(limit);
 
     // Freeze excess tenants
@@ -1319,6 +1384,7 @@ export class PlanEnforcementService {
 
   /**
    * Freeze tenants for independent owner exceeding the limit
+   * Keeps the oldest (first registered) tenants active and freezes the newest ones
    */
   async freezeExcessTenantsForOwner(ownerId: string, limit: number): Promise<FreezeResult> {
     // If unlimited tenants (9999), nothing to freeze
@@ -1338,7 +1404,7 @@ export class PlanEnforcementService {
         status: 'ACTIVE',
         role: UserRole.INQUILINO,
       },
-      orderBy: { createdAt: 'desc' }, // Most recent first
+      orderBy: { createdAt: 'asc' }, // Oldest first - keep these active
       select: { id: true, name: true, email: true, createdAt: true },
     });
 
@@ -1351,8 +1417,9 @@ export class PlanEnforcementService {
       };
     }
 
-    // Keep the most recent 'limit' tenants active
+    // Keep the oldest 'limit' tenants active (first registered)
     const toKeepActive = activeTenants.slice(0, limit);
+    // Freeze the newest tenants (registered after the limit was reached)
     const toFreeze = activeTenants.slice(limit);
 
     // Freeze excess tenants
@@ -1627,27 +1694,27 @@ export class PlanEnforcementService {
       }),
     ]);
 
-    // Count users (exclude AGENCY_ADMIN as they are the agency owner, not a "registered user")
+    // Count ALL users (except AGENCY_ADMIN who is never frozen)
     const [activeUsers, frozenUsers, totalUsers] = await Promise.all([
       this.prisma.user.count({
         where: {
           agencyId: BigInt(agencyId),
           isFrozen: false,
           status: 'ACTIVE',
-          role: { in: [UserRole.AGENCY_MANAGER, UserRole.BROKER, UserRole.PROPRIETARIO, UserRole.INQUILINO] },
+          role: { not: UserRole.AGENCY_ADMIN },
         },
       }),
       this.prisma.user.count({
         where: {
           agencyId: BigInt(agencyId),
           isFrozen: true,
-          role: { in: [UserRole.AGENCY_MANAGER, UserRole.BROKER, UserRole.PROPRIETARIO, UserRole.INQUILINO] },
+          role: { not: UserRole.AGENCY_ADMIN },
         },
       }),
       this.prisma.user.count({
         where: {
           agencyId: BigInt(agencyId),
-          role: { in: [UserRole.AGENCY_MANAGER, UserRole.BROKER, UserRole.PROPRIETARIO, UserRole.INQUILINO] },
+          role: { not: UserRole.AGENCY_ADMIN },
         },
       }),
     ]);
@@ -1793,7 +1860,7 @@ export class PlanEnforcementService {
         agencyId: BigInt(agencyId),
         isFrozen: false,
         status: 'ACTIVE',
-        role: { in: [UserRole.AGENCY_MANAGER, UserRole.BROKER, UserRole.PROPRIETARIO, UserRole.INQUILINO] },
+        role: { not: UserRole.AGENCY_ADMIN },
       },
     });
 
@@ -1870,7 +1937,7 @@ export class PlanEnforcementService {
 
   private async countFrozenUsers(agencyId: string): Promise<number> {
     return this.prisma.user.count({
-      where: { agencyId: BigInt(agencyId), isFrozen: true },
+      where: { agencyId: BigInt(agencyId), isFrozen: true, role: { not: UserRole.AGENCY_ADMIN } },
     });
   }
 

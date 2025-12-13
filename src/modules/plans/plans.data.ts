@@ -129,7 +129,7 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
 
     features: [
       '1 contrato ativo',
-      '2 usuários internos',
+      '2 usuários',
       'Contratos extras: R$ 4,90/cada',
       'Vistorias: R$ 3,90/cada',
       'Acordos: R$ 6,90/cada',
@@ -178,7 +178,7 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
 
     features: [
       '20 contratos ativos',
-      '5 usuários internos',
+      '5 usuários',
       'Vistorias ilimitadas',
       'Contratos extras: R$ 2,90/cada',
       'Acordos: R$ 4,90/cada',
@@ -228,7 +228,7 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
 
     features: [
       '60 contratos ativos',
-      '10 usuários internos',
+      '10 usuários',
       'Todos os recursos liberados',
       'Vistorias ilimitadas',
       'Acordos ilimitados',

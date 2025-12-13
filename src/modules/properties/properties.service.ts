@@ -52,7 +52,7 @@ export class PropertiesService {
               phone: true,
               document: true,
               address: true,
-              number: true,
+              complement: true,
               neighborhood: true,
               city: true,
               state: true,
@@ -62,6 +62,18 @@ export class PropertiesService {
               profession: true,
               rg: true,
               birthDate: true,
+              employerName: true,
+              creci: true,
+              creciState: true,
+              company: {
+                select: {
+                  id: true,
+                  name: true,
+                  cnpj: true,
+                  address: true,
+                  responsible: true,
+                }
+              }
             }
           },
           tenant: {
@@ -72,7 +84,7 @@ export class PropertiesService {
               phone: true,
               document: true,
               address: true,
-              number: true,
+              complement: true,
               neighborhood: true,
               city: true,
               state: true,
@@ -82,9 +94,21 @@ export class PropertiesService {
               profession: true,
               rg: true,
               birthDate: true,
+              employerName: true,
+              emergencyContactName: true,
+              emergencyContactPhone: true,
+              company: {
+                select: {
+                  id: true,
+                  name: true,
+                  cnpj: true,
+                  address: true,
+                  responsible: true,
+                }
+              }
             }
           },
-          broker: { select: { id: true, name: true, email: true, document: true } },
+          broker: { select: { id: true, name: true, email: true, document: true, creci: true, creciState: true } },
           agency: {
             select: {
               id: true,
@@ -130,7 +154,7 @@ export class PropertiesService {
             phone: true,
             document: true,
             address: true,
-            number: true,
+            complement: true,
             neighborhood: true,
             city: true,
             state: true,
@@ -140,6 +164,18 @@ export class PropertiesService {
             profession: true,
             rg: true,
             birthDate: true,
+            employerName: true,
+            creci: true,
+            creciState: true,
+            company: {
+              select: {
+                id: true,
+                name: true,
+                cnpj: true,
+                address: true,
+                responsible: true,
+              }
+            }
           }
         },
         tenant: {
@@ -150,7 +186,7 @@ export class PropertiesService {
             phone: true,
             document: true,
             address: true,
-            number: true,
+            complement: true,
             neighborhood: true,
             city: true,
             state: true,
@@ -160,9 +196,21 @@ export class PropertiesService {
             profession: true,
             rg: true,
             birthDate: true,
+            employerName: true,
+            emergencyContactName: true,
+            emergencyContactPhone: true,
+            company: {
+              select: {
+                id: true,
+                name: true,
+                cnpj: true,
+                address: true,
+                responsible: true,
+              }
+            }
           }
         },
-        broker: { select: { id: true, name: true, email: true, document: true } },
+        broker: { select: { id: true, name: true, email: true, document: true, creci: true, creciState: true } },
         agency: true,
         images: true,
         contracts: { orderBy: { createdAt: 'desc' }, take: 5 },
@@ -363,7 +411,6 @@ export class PropertiesService {
             phone: true,
             document: true,
             address: true,
-            number: true,
             neighborhood: true,
             city: true,
             state: true,
@@ -383,7 +430,6 @@ export class PropertiesService {
             phone: true,
             document: true,
             address: true,
-            number: true,
             neighborhood: true,
             city: true,
             state: true,
@@ -453,7 +499,6 @@ export class PropertiesService {
             phone: true,
             document: true,
             address: true,
-            number: true,
             neighborhood: true,
             city: true,
             state: true,
@@ -473,7 +518,6 @@ export class PropertiesService {
             phone: true,
             document: true,
             address: true,
-            number: true,
             neighborhood: true,
             city: true,
             state: true,
