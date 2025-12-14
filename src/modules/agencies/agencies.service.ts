@@ -254,6 +254,15 @@ export class AgenciesService {
       throw new NotFoundException('Agency not found');
     }
 
+    // Automatically enforce plan limits when loading agency data
+    // This ensures excess contracts/users are frozen
+    try {
+      await this.planEnforcement.enforceCurrentPlanLimits(id);
+    } catch (error) {
+      // Log error but don't fail the request
+      console.error('Error enforcing plan limits:', error);
+    }
+
     return {
       id: agency.id.toString(),
       name: agency.name,

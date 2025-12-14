@@ -232,11 +232,239 @@ Fica eleito o foro da comarca de [FORO_CIDADE_ESTADO] para dirimir conflitos des
 };
 
 // ========================================
+// CONTRATO 2: ADMINISTRAÇÃO DE IMÓVEL
+// (Apenas Imobiliária e Proprietário - Sem Locatário)
+// ========================================
+
+const administracaoImovel: ContractTemplate = {
+  id: "administracao-imovel",
+  name: "Contrato de Administração de Imóvel",
+  description: "Contrato de administração entre Imobiliária e Proprietário (sem locatário)",
+  type: "CTR",
+  allowedUserTypes: ['AGENCY'],
+  propertyType: 'RESIDENTIAL',
+  landlordType: 'PF',
+  category: 'ADMINISTRATION',
+  content: `CONTRATO 2 – CONTRATO DE ADMINISTRAÇÃO DE IMÓVEL
+
+═══════════════════════════════════════════════════════════════════════════════
+
+IDENTIFICAÇÃO DAS PARTES
+
+IMOBILIÁRIA / ADMINISTRADORA
+Razão Social: [IMOBILIARIA_RAZAO_SOCIAL]
+Nome Fantasia: [IMOBILIARIA_NOME_FANTASIA]
+CNPJ: [IMOBILIARIA_CNPJ]
+CRECI: [IMOBILIARIA_CRECI]
+Endereço Completo: [IMOBILIARIA_ENDERECO]
+Representante Legal: [IMOBILIARIA_REPRESENTANTE]
+Documento: [IMOBILIARIA_REP_DOC]
+Telefone: [IMOBILIARIA_TELEFONE]
+E-mail: [IMOBILIARIA_EMAIL]
+
+LOCADOR / PROPRIETÁRIO — PESSOA FÍSICA
+Nome Completo: [LOCADOR_NOME]
+Nacionalidade: [LOCADOR_NACIONALIDADE]
+Estado Civil: [LOCADOR_ESTADO_CIVIL]
+Profissão: [LOCADOR_PROFISSAO]
+CPF: [LOCADOR_CPF]
+RG: [LOCADOR_RG]
+Data de Nascimento: [LOCADOR_DATA_NASC]
+Endereço Completo: [LOCADOR_ENDERECO]
+Telefone: [LOCADOR_TELEFONE]
+E-mail: [LOCADOR_EMAIL]
+
+═══════════════════════════════════════════════════════════════════════════════
+
+IMÓVEL OBJETO DA ADMINISTRAÇÃO
+
+Endereço Completo: [IMOVEL_ENDERECO]
+Tipo: [IMOVEL_TIPO]
+Matrícula / Registro: [IMOVEL_MATRICULA]
+Área Construída: [IMOVEL_AREA_CONSTRUIDA]
+Área Total: [IMOVEL_AREA_TOTAL]
+Descrição: [IMOVEL_DESCRICAO]
+Mobílias / Itens: [IMOVEL_MOVEIS]
+Condomínio: [IMOVEL_CONDOMINIO]
+Valor Condomínio: [IMOVEL_CONDOMINIO_VALOR]
+IPTU (anual/mensal): [IMOVEL_IPTU_VALOR]
+
+═══════════════════════════════════════════════════════════════════════════════
+
+OBJETO DO CONTRATO
+
+Este contrato tem como objeto:
+a) autorizar a IMOBILIÁRIA a administrar o imóvel acima identificado;
+b) permitir que a IMOBILIÁRIA realize locação, cobrança, repasse, intermediação e procedimentos administrativos;
+c) executar serviços de rotina de administração imobiliária.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+PODERES OUTORGADOS À IMOBILIÁRIA
+
+O LOCADOR autoriza a IMOBILIÁRIA a:
+• divulgar o imóvel em plataformas digitais e impressas;
+• realizar visitas e agendamentos;
+• assinar contrato de locação em nome do LOCADOR, quando autorizado: [AUTORIZA_ASSINATURA_LOCACAO];
+• cobrar aluguel, encargos e repasses;
+• emitir boletos, notificações e relatórios;
+• contratar serviços de manutenção até R$ [VALOR_LIMITE_MANUTENCAO] sem necessidade de prévia autorização;
+• intermediar relações com síndico e condomínio;
+• realizar vistorias digitalmente.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+REMUNERAÇÃO DA IMOBILIÁRIA
+
+A IMOBILIÁRIA receberá:
+
+Taxa de Administração
+Percentual: [TAXA_ADMINISTRACAO]% sobre o valor do aluguel recebido.
+
+Taxa de Intermediação / Locação
+Valor fixo: R$ [VALOR_TAXA_INTERMEDIACAO]
+ou
+Percentual: [TAXA_INTERMEDIACAO_PORCENTAGEM]%
+
+Outras Taxas (se houver)
+• emissão de 2ª via de boleto: R$ [VALOR_2VIA]
+• relatório especial / laudos adicionais: R$ [VALOR_LAUDO_EXTRA]
+
+Todas as taxas poderão ser atualizadas pelo índice [INDICE_REAJUSTE].
+
+═══════════════════════════════════════════════════════════════════════════════
+
+REPASSE E CONTABILIDADE
+
+Os repasses ao LOCADOR ocorrerão até o dia [DIA_REPASSE], já descontados:
+• taxa de administração
+• manutenções autorizadas
+• impostos
+• tarifas bancárias
+• valores pagos ao condomínio, se autorizados
+• multas ou encargos pagos via sistema
+
+Relatórios serão disponibilizados digitalmente.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+VISTORIAS (DIGITAL E PRESENCIAL)
+
+Vistoria Inicial
+Realizada antes da locação.
+Data: [DATA_VISTORIA_INICIAL]
+Responsável: [RESP_VISTORIA_INICIAL]
+Anexos digitais: [ANEXO_VISTORIA_INICIAL]
+
+Vistoria Final
+Realizada após a devolução do imóvel.
+Comparação automática com fotos, vídeos e laudo inicial.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+OBRIGAÇÕES DO LOCADOR
+
+O LOCADOR se compromete a:
+• entregar o imóvel em condições de uso;
+• manter impostos e encargos de responsabilidade do proprietário;
+• realizar reparos estruturais;
+• informar alterações cadastrais;
+• permitir acesso para manutenção e vistoria;
+• entregar documentação necessária para locação.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+OBRIGAÇÕES DA IMOBILIÁRIA
+
+A IMOBILIÁRIA deverá:
+• administrar o imóvel conforme boas práticas;
+• realizar cobranças e intermediações;
+• acompanhar pagamentos;
+• emitir relatórios periódicos;
+• conduzir vistorias;
+• atuar com transparência e diligência;
+• comunicar ao LOCADOR irregularidades na locação.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+RESPONSABILIDADES
+
+A IMOBILIÁRIA não se responsabiliza por:
+• inadimplência do locatário (salvo se contratado plano específico [PLANO_GARANTIA_ALUGUEL]);
+• danos causados pelo locatário;
+• vícios ocultos no imóvel;
+• valores não quitados diretamente pelo LOCADOR.
+
+O LOCADOR autoriza a IMOBILIÁRIA a agir em situações emergenciais com gasto de até R$ [VALOR_EMERGENCIA].
+
+═══════════════════════════════════════════════════════════════════════════════
+
+PRAZO
+
+O presente contrato tem validade de [PRAZO_MESES] meses a partir de [DATA_INICIO], renovando-se automaticamente, salvo manifestação das partes.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+RESCISÃO
+
+Pode haver rescisão:
+• por decisão unilateral, com aviso prévio de [DIAS_AVISO_PREVIO] dias;
+• por descumprimento contratual, com rescisão imediata;
+• por encerramento da atividade da imobiliária.
+
+Multa por rescisão sem aviso prévio: R$ [VALOR_MULTA_RESCISAO]
+
+═══════════════════════════════════════════════════════════════════════════════
+
+MULTAS E PENALIDADES
+
+• Multa de atraso na taxa de administração: [MULTA_ATRASO]%
+• Juros: [JUROS_ATRASO]% ao mês
+• Atualização monetária pelo índice [INDICE_REAJUSTE]
+
+═══════════════════════════════════════════════════════════════════════════════
+
+TRATAMENTO DE DADOS (LGPD)
+
+A IMOBILIÁRIA poderá armazenar, tratar e compartilhar dados exclusivamente para:
+• administração do imóvel
+• emissão de documentos
+• notificações e cobranças
+• integrações com bancos e gateways
+• auditorias e segurança
+
+Com base na Lei 13.709/2018.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+FORO
+
+Fica eleito o foro da comarca de [FORO_CIDADE_ESTADO].
+
+═══════════════════════════════════════════════════════════════════════════════
+
+ASSINATURA DIGITAL
+
+Documento válido por assinatura eletrônica.
+HASH: [HASH_DOCUMENTO]
+IP Imobiliária: [IP_IMOBILIARIA]
+IP Locador: [IP_LOCADOR]
+
+═══════════════════════════════════════════════════════════════════════════════
+
+ASSINAM DIGITALMENTE
+
+IMOBILIÁRIA: [IMOBILIARIA_RAZAO_SOCIAL] – [DATA_ASS_IMOBILIARIA]
+LOCADOR: [LOCADOR_NOME] – [DATA_ASS_LOCADOR]`
+};
+
+// ========================================
 // EXPORTAÇÃO DOS CONTRATOS
 // ========================================
 
 export const contractTemplates: ContractTemplate[] = [
   adminImobiliariaPfLocatario,
+  administracaoImovel,
 ];
 
 // ========================================

@@ -33,6 +33,16 @@ export class ContractsService {
   async findAll(params: { skip?: number; take?: number; agencyId?: string; status?: string; createdById?: string; userId?: string; search?: string }) {
     const { skip = 0, take = 10, agencyId, status, createdById, userId, search } = params;
 
+    // Enforce plan limits when fetching contracts for an agency
+    // This ensures excess contracts are frozen before returning data
+    if (agencyId) {
+      try {
+        await this.planEnforcement.enforceCurrentPlanLimits(agencyId);
+      } catch (error) {
+        console.error('Error enforcing plan limits on contract list:', error);
+      }
+    }
+
     const where: any = { deleted: false };
     if (status) where.status = status;
 
@@ -97,7 +107,11 @@ export class ContractsService {
     const contract = await this.prisma.contract.findUnique({
       where: { id: BigInt(id) },
       include: {
-        property: true,
+        property: {
+          include: {
+            owner: true, // Include property owner for template variables
+          },
+        },
         tenantUser: true,
         ownerUser: true,
         agency: true,
@@ -450,6 +464,18 @@ export class ContractsService {
         brokerId: contract.property.brokerId?.toString() || null,
         createdBy: contract.property.createdBy?.toString() || null,
       };
+      // Serialize nested property.owner object
+      if (contract.property.owner) {
+        serialized.property.owner = {
+          ...contract.property.owner,
+          id: contract.property.owner.id?.toString() || null,
+          agencyId: contract.property.owner.agencyId?.toString() || null,
+          companyId: contract.property.owner.companyId?.toString() || null,
+          brokerId: contract.property.owner.brokerId?.toString() || null,
+          createdBy: contract.property.owner.createdBy?.toString() || null,
+          ownerId: contract.property.owner.ownerId?.toString() || null,
+        };
+      }
     }
 
     // Serialize nested tenantUser object

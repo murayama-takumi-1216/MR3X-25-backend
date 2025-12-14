@@ -5,6 +5,7 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../../config/prisma.service';
+import { PlanEnforcementService } from '../plans/plan-enforcement.service';
 import { RegisterDto, LoginDto, VerifyEmailRequestDto, VerifyEmailConfirmDto, ForgotPasswordDto, ResetPasswordDto, CompleteRegisterDto } from './dto/auth.dto';
 import { UserRole } from '@prisma/client';
 
@@ -17,6 +18,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private planEnforcement: PlanEnforcementService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -96,6 +98,17 @@ export class AuthService {
       where: { id: user.id },
       data: { lastLogin: new Date() },
     });
+
+    // Enforce plan limits on login for agency users
+    // This ensures excess contracts/users are frozen
+    if (user.agencyId) {
+      try {
+        await this.planEnforcement.enforceCurrentPlanLimits(user.agencyId.toString());
+      } catch (error) {
+        // Log error but don't fail login
+        console.error('Error enforcing plan limits on login:', error);
+      }
+    }
 
     const payload = {
       sub: user.id.toString(),

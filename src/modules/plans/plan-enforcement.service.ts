@@ -6,7 +6,7 @@ import { UserRole } from '@prisma/client';
 // Message templates in Portuguese
 export const PLAN_MESSAGES = {
   CONTRACT_FROZEN: 'Este contrato está congelado. Seu plano atual permite apenas {limit} contrato(s) ativo(s). Faça upgrade para desbloquear.',
-  USER_FROZEN: 'Este usuário está desativado devido ao limite do plano. Faça upgrade para reativar.',
+  USER_FROZEN: 'Este usuário está congelados devido ao limite do plano. Faça upgrade para reativar.',
   CREATE_CONTRACT_BLOCKED: 'Você atingiu o limite de {limit} contrato(s) ativo(s) do seu plano {plan}. Você pode adicionar contratos extras por R$ {price}/cada ou fazer upgrade.',
   CREATE_USER_BLOCKED: 'Você atingiu o limite de {limit} usuário(s) do seu plano {plan}. Faça upgrade para adicionar mais usuários.',
   CREATE_PROPERTY_BLOCKED: 'Você atingiu o limite de {limit} imóvel(is) do seu plano {plan}. Faça upgrade para adicionar mais imóveis.',
@@ -984,7 +984,7 @@ export class PlanEnforcementService {
     return {
       frozen: toFreeze.length,
       kept: toKeepActive.map(u => u.id.toString()),
-      message: `${toFreeze.length} usuário(s) foram desativados devido ao limite do plano.`,
+      message: `${toFreeze.length} usuário(s) foram congelados devido ao limite do plano.`,
     };
   }
 
