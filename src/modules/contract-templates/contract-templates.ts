@@ -247,11 +247,11 @@ const administracaoImovel: ContractTemplate = {
   category: 'ADMINISTRATION',
   content: `CONTRATO 2 – CONTRATO DE ADMINISTRAÇÃO DE IMÓVEL
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-IDENTIFICAÇÃO DAS PARTES
+**IDENTIFICAÇÃO DAS PARTES**
 
-IMOBILIÁRIA / ADMINISTRADORA
+**IMOBILIÁRIA / ADMINISTRADORA**
 Razão Social: [IMOBILIARIA_RAZAO_SOCIAL]
 Nome Fantasia: [IMOBILIARIA_NOME_FANTASIA]
 CNPJ: [IMOBILIARIA_CNPJ]
@@ -262,7 +262,9 @@ Documento: [IMOBILIARIA_REP_DOC]
 Telefone: [IMOBILIARIA_TELEFONE]
 E-mail: [IMOBILIARIA_EMAIL]
 
-LOCADOR / PROPRIETÁRIO — PESSOA FÍSICA
+────────────────────────────────────────────────────
+
+**LOCADOR / PROPRIETÁRIO — PESSOA FÍSICA**
 Nome Completo: [LOCADOR_NOME]
 Nacionalidade: [LOCADOR_NACIONALIDADE]
 Estado Civil: [LOCADOR_ESTADO_CIVIL]
@@ -274,9 +276,9 @@ Endereço Completo: [LOCADOR_ENDERECO]
 Telefone: [LOCADOR_TELEFONE]
 E-mail: [LOCADOR_EMAIL]
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-IMÓVEL OBJETO DA ADMINISTRAÇÃO
+**IMÓVEL OBJETO DA ADMINISTRAÇÃO**
 
 Endereço Completo: [IMOVEL_ENDERECO]
 Tipo: [IMOVEL_TIPO]
@@ -289,18 +291,18 @@ Condomínio: [IMOVEL_CONDOMINIO]
 Valor Condomínio: [IMOVEL_CONDOMINIO_VALOR]
 IPTU (anual/mensal): [IMOVEL_IPTU_VALOR]
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-OBJETO DO CONTRATO
+**OBJETO DO CONTRATO**
 
 Este contrato tem como objeto:
 a) autorizar a IMOBILIÁRIA a administrar o imóvel acima identificado;
 b) permitir que a IMOBILIÁRIA realize locação, cobrança, repasse, intermediação e procedimentos administrativos;
 c) executar serviços de rotina de administração imobiliária.
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-PODERES OUTORGADOS À IMOBILIÁRIA
+**PODERES OUTORGADOS À IMOBILIÁRIA**
 
 O LOCADOR autoriza a IMOBILIÁRIA a:
 • divulgar o imóvel em plataformas digitais e impressas;
@@ -312,9 +314,9 @@ O LOCADOR autoriza a IMOBILIÁRIA a:
 • intermediar relações com síndico e condomínio;
 • realizar vistorias digitalmente.
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-REMUNERAÇÃO DA IMOBILIÁRIA
+**REMUNERAÇÃO DA IMOBILIÁRIA**
 
 A IMOBILIÁRIA receberá:
 
@@ -332,9 +334,9 @@ Outras Taxas (se houver)
 
 Todas as taxas poderão ser atualizadas pelo índice [INDICE_REAJUSTE].
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-REPASSE E CONTABILIDADE
+**REPASSE E CONTABILIDADE**
 
 Os repasses ao LOCADOR ocorrerão até o dia [DIA_REPASSE], já descontados:
 • taxa de administração
@@ -346,9 +348,9 @@ Os repasses ao LOCADOR ocorrerão até o dia [DIA_REPASSE], já descontados:
 
 Relatórios serão disponibilizados digitalmente.
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-VISTORIAS (DIGITAL E PRESENCIAL)
+**VISTORIAS (DIGITAL E PRESENCIAL)**
 
 Vistoria Inicial
 Realizada antes da locação.
@@ -360,9 +362,9 @@ Vistoria Final
 Realizada após a devolução do imóvel.
 Comparação automática com fotos, vídeos e laudo inicial.
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-OBRIGAÇÕES DO LOCADOR
+**OBRIGAÇÕES DO LOCADOR**
 
 O LOCADOR se compromete a:
 • entregar o imóvel em condições de uso;
@@ -372,9 +374,9 @@ O LOCADOR se compromete a:
 • permitir acesso para manutenção e vistoria;
 • entregar documentação necessária para locação.
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-OBRIGAÇÕES DA IMOBILIÁRIA
+**OBRIGAÇÕES DA IMOBILIÁRIA**
 
 A IMOBILIÁRIA deverá:
 • administrar o imóvel conforme boas práticas;
@@ -385,9 +387,9 @@ A IMOBILIÁRIA deverá:
 • atuar com transparência e diligência;
 • comunicar ao LOCADOR irregularidades na locação.
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-RESPONSABILIDADES
+**RESPONSABILIDADES**
 
 A IMOBILIÁRIA não se responsabiliza por:
 • inadimplência do locatário (salvo se contratado plano específico [PLANO_GARANTIA_ALUGUEL]);
@@ -397,34 +399,34 @@ A IMOBILIÁRIA não se responsabiliza por:
 
 O LOCADOR autoriza a IMOBILIÁRIA a agir em situações emergenciais com gasto de até R$ [VALOR_EMERGENCIA].
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-PRAZO
+**PRAZO**
 
 O presente contrato tem validade de [PRAZO_MESES] meses a partir de [DATA_INICIO], renovando-se automaticamente, salvo manifestação das partes.
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-RESCISÃO
+**RESCISÃO**
 
 Pode haver rescisão:
 • por decisão unilateral, com aviso prévio de [DIAS_AVISO_PREVIO] dias;
 • por descumprimento contratual, com rescisão imediata;
 • por encerramento da atividade da imobiliária.
 
-Multa por rescisão sem aviso prévio: R$ [VALOR_MULTA_RESCISAO]
+Multa por rescisão sem aviso prévio: [VALOR_MULTA_RESCISAO]
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-MULTAS E PENALIDADES
+**MULTAS E PENALIDADES**
 
 • Multa de atraso na taxa de administração: [MULTA_ATRASO]%
 • Juros: [JUROS_ATRASO]% ao mês
 • Atualização monetária pelo índice [INDICE_REAJUSTE]
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-TRATAMENTO DE DADOS (LGPD)
+**TRATAMENTO DE DADOS (LGPD)**
 
 A IMOBILIÁRIA poderá armazenar, tratar e compartilhar dados exclusivamente para:
 • administração do imóvel
@@ -435,24 +437,244 @@ A IMOBILIÁRIA poderá armazenar, tratar e compartilhar dados exclusivamente par
 
 Com base na Lei 13.709/2018.
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-FORO
+**FORO**
 
 Fica eleito o foro da comarca de [FORO_CIDADE_ESTADO].
 
-═══════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────
 
-ASSINATURA DIGITAL
+**ASSINAM DIGITALMENTE**
 
-Documento válido por assinatura eletrônica.
-HASH: [HASH_DOCUMENTO]
-IP Imobiliária: [IP_IMOBILIARIA]
-IP Locador: [IP_LOCADOR]
+IMOBILIÁRIA: [IMOBILIARIA_RAZAO_SOCIAL] – [DATA_ASS_IMOBILIARIA]
+LOCADOR: [LOCADOR_NOME] – [DATA_ASS_LOCADOR]`
+};
 
-═══════════════════════════════════════════════════════════════════════════════
+// ========================================
+// CONTRATO 3: ADMINISTRAÇÃO DE IMÓVEL
+// IMOBILIÁRIA / LOCADOR (SEM LOCATÁRIO)
+// ========================================
 
-ASSINAM DIGITALMENTE
+const contratoAdministracaoImovel: ContractTemplate = {
+  id: "contrato-administracao-imovel",
+  name: "Contrato de Administração de Imóvel",
+  description: "Contrato de administração de imóvel entre Imobiliária e Proprietário/Locador",
+  type: "CTR",
+  allowedUserTypes: ['AGENCY'],
+  propertyType: 'RESIDENTIAL',
+  landlordType: 'PF',
+  category: 'ADMINISTRATION',
+  content: `CONTRATO DE ADMINISTRAÇÃO DE IMÓVEL
+
+────────────────────────────────────────────────────
+
+**IDENTIFICAÇÃO DAS PARTES**
+
+────────────────────────────────────────────────────
+
+**IMOBILIÁRIA / ADMINISTRADORA**
+
+Razão Social: [IMOBILIARIA_RAZAO_SOCIAL]
+Nome Fantasia: [IMOBILIARIA_NOME_FANTASIA]
+CNPJ: [IMOBILIARIA_CNPJ]
+CRECI: [IMOBILIARIA_CRECI]
+Endereço Completo: [IMOBILIARIA_ENDERECO]
+Representante Legal: [IMOBILIARIA_REPRESENTANTE]
+Documento: [IMOBILIARIA_REP_DOC]
+Telefone: [IMOBILIARIA_TELEFONE]
+E-mail: [IMOBILIARIA_EMAIL]
+
+────────────────────────────────────────────────────
+
+**LOCADOR / PROPRIETÁRIO**
+
+Nome Completo: [LOCADOR_NOME]
+Nacionalidade: [LOCADOR_NACIONALIDADE]
+Estado Civil: [LOCADOR_ESTADO_CIVIL]
+Profissão: [LOCADOR_PROFISSAO]
+CPF: [LOCADOR_CPF]
+RG: [LOCADOR_RG]
+Endereço Completo: [LOCADOR_ENDERECO]
+Telefone: [LOCADOR_TELEFONE]
+E-mail: [LOCADOR_EMAIL]
+
+────────────────────────────────────────────────────
+
+**IMÓVEL OBJETO**
+
+Endereço Completo: [IMOVEL_ENDERECO]
+Bairro / Localidade: [IMOVEL_BAIRRO]
+Tipo do Imóvel: [IMOVEL_TIPO]
+Matrícula / Registro: [IMOVEL_MATRICULA]
+Área Total / Construída: [IMOVEL_AREA]
+Descrição Complementar: [IMOVEL_DESCRICAO]
+Mobílias / Itens: [IMOVEL_MOVEIS]
+
+────────────────────────────────────────────────────
+
+**OBJETO DO CONTRATO**
+
+O LOCADOR confere à IMOBILIÁRIA poderes para:
+• administrar o imóvel identificado;
+• intermediar contratos de locação;
+• promover divulgação para fins de locação;
+• cobrar aluguéis e encargos;
+• emitir recibos, notificações, boletos e relatórios;
+• efetuar repasses financeiros;
+• praticar atos necessários para administração rotineira.
+
+────────────────────────────────────────────────────
+
+**PODERES OUTORGADOS À IMOBILIÁRIA**
+
+O LOCADOR autoriza a IMOBILIÁRIA a:
+• receber aluguéis, encargos e quaisquer valores;
+• promover cobrança amigável;
+• aplicar penalidades previstas na Lei 8.245/91;
+• contestar inadimplências;
+• efetuar e contratar reparos essenciais até [VALOR_LIMITE_MANUTENCAO] sem prévia consulta;
+• acompanhar ações condominiais;
+• contratar prestadores de serviço quando necessário;
+• representar o LOCADOR perante órgãos públicos quando ligado à administração.
+
+────────────────────────────────────────────────────
+
+**TAXA DE ADMINISTRAÇÃO**
+
+O LOCADOR pagará à IMOBILIÁRIA:
+
+Percentual mensal: [TAXA_ADMINISTRACAO]%
+Incidência: sobre o valor do aluguel efetivamente recebido.
+Possibilidade de atualização monetária: [INDICE_REAJUSTE]
+
+────────────────────────────────────────────────────
+
+**TAXA DE INTERMEDIAÇÃO (LOCAÇÃO)**
+
+A IMOBILIÁRIA fará jus a:
+• Valor fixo: [VALOR_TAXA_INTERMEDIACAO], ou
+• Percentual: [PERCENTUAL_INTERMEDIACAO]% do primeiro aluguel.
+
+Pago pelo LOCADOR após fechamento da locação.
+
+────────────────────────────────────────────────────
+
+**REPASSES AO LOCADOR**
+
+Os repasses ocorrerão até o dia [DIA_REPASSE], descontados:
+• taxa de administração
+• taxa de intermediação (quando aplicável)
+• manutenções autorizadas
+• valores pagos ao condomínio (se autorizado)
+• tarifas bancárias
+• impostos e tributos retidos
+
+A IMOBILIÁRIA emitirá demonstrativo digital de repasse.
+
+────────────────────────────────────────────────────
+
+**ENCARGOS QUE NÃO SÃO RESPONSABILIDADE DA IMOBILIÁRIA**
+
+A IMOBILIÁRIA não se responsabiliza por:
+• inadimplência do locatário (salvo plano contratado: [PLANO_GARANTIA]);
+• danos ao imóvel causados por terceiros, vandalismo ou uso indevido;
+• vícios ocultos estruturais;
+• débitos anteriores à administração;
+• pagamento de contas inadimplidas pelo locatário.
+
+────────────────────────────────────────────────────
+
+**OBRIGAÇÕES DO LOCADOR**
+
+O LOCADOR deverá:
+• manter IPTU e tributos sob responsabilidade do proprietário;
+• providenciar certidões ou documentos necessários;
+• permitir entrada para vistorias e reparos;
+• autorizar previamente obras não emergenciais;
+• garantir condições adequadas de uso para locação;
+• comunicar mudanças de dados pessoais e bancários.
+
+────────────────────────────────────────────────────
+
+**OBRIGAÇÕES DA IMOBILIÁRIA**
+
+A IMOBILIÁRIA compromete-se a:
+• agir com diligência e transparência;
+• administrar o imóvel conforme normas do setor;
+• manter registros, recibos, comprovantes e laudos digitais;
+• realizar vistoria digital inicial e final;
+• comunicar irregularidades ao LOCADOR;
+• emitir boletos, recibos, relatórios e notificações;
+• promover intermediação profissional entre locador e locatário.
+
+────────────────────────────────────────────────────
+
+**VISTORIAS**
+
+**Vistoria Inicial**
+Data: [DATA_VISTORIA_INICIAL]
+Responsável: [RESP_VISTORIA_INICIAL]
+Laudo: [ANEXO_VISTORIA_INICIAL]
+
+**Vistoria Final**
+Comparada com o laudo inicial, considerando desgaste natural.
+Laudo: [ANEXO_VISTORIA_FINAL]
+
+────────────────────────────────────────────────────
+
+**RESPONSABILIDADES FINANCEIRAS**
+
+A IMOBILIÁRIA poderá autorizar serviços até [VALOR_LIMITE_SERVICOS].
+Valores superiores dependem de autorização do LOCADOR: [MODELO_AUTORIZACAO]
+
+────────────────────────────────────────────────────
+
+**PRAZO DO CONTRATO**
+
+O presente contrato tem validade de [PRAZO_MESES] meses a partir de [DATA_INICIO], renovando-se automaticamente, salvo manifestação das partes com [DIAS_AVISO_PREVIO] dias de antecedência.
+
+────────────────────────────────────────────────────
+
+**RESCISÃO**
+
+A rescisão pode ocorrer:
+• por iniciativa de qualquer parte com aviso prévio de [DIAS_AVISO_PREVIO] dias;
+• por descumprimento contratual;
+• imediatamente em caso de fraude, má-fé ou uso indevido de poderes.
+
+Multa por rescisão sem aviso prévio: [VALOR_MULTA_RESCISAO]
+
+────────────────────────────────────────────────────
+
+**MULTAS E CORREÇÕES**
+
+• Multa: [MULTA_ATRASO]%
+• Juros: [JUROS_ATRASO]% ao mês
+• Correção: índice [INDICE_REAJUSTE]
+
+────────────────────────────────────────────────────
+
+**TRATAMENTO DE DADOS (LGPD)**
+
+Os dados poderão ser utilizados para:
+• administração do imóvel
+• emissão de documentos
+• segurança e auditorias
+• integrações bancárias
+• notificações e comunicação
+
+Conforme Lei 13.709/2018.
+
+────────────────────────────────────────────────────
+
+**FORO**
+
+Fica eleito o foro de [FORO_CIDADE_ESTADO].
+
+────────────────────────────────────────────────────
+
+**ASSINAM**
 
 IMOBILIÁRIA: [IMOBILIARIA_RAZAO_SOCIAL] – [DATA_ASS_IMOBILIARIA]
 LOCADOR: [LOCADOR_NOME] – [DATA_ASS_LOCADOR]`
@@ -465,6 +687,7 @@ LOCADOR: [LOCADOR_NOME] – [DATA_ASS_LOCADOR]`
 export const contractTemplates: ContractTemplate[] = [
   adminImobiliariaPfLocatario,
   administracaoImovel,
+  contratoAdministracaoImovel,
 ];
 
 // ========================================

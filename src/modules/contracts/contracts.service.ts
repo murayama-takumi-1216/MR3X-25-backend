@@ -283,26 +283,55 @@ export class ContractsService {
       throw new ForbiddenException(`Não é possível excluir este contrato: ${immutabilityCheck.reason}`);
     }
 
-    await this.prisma.contract.update({
-      where: { id: BigInt(id) },
-      data: {
-        deleted: true,
-        deletedAt: new Date(),
-        deletedBy: BigInt(userId),
-      },
+    const contractIdBigInt = BigInt(id);
+
+    // Delete related records first (to avoid foreign key constraints)
+    // Tables with REQUIRED contractId - must delete
+    await this.prisma.contractClauseHistory.deleteMany({
+      where: { contractId: contractIdBigInt },
     });
 
-    // Log deletion in audit
-    await this.prisma.contractAudit.create({
-      data: {
-        contractId: BigInt(id),
-        action: 'CONTRACT_DELETED',
-        performedBy: BigInt(userId),
-        details: JSON.stringify({
-          timestamp: new Date().toISOString(),
-          previousStatus: contract.status,
-        }),
-      },
+    await this.prisma.contractAudit.deleteMany({
+      where: { contractId: contractIdBigInt },
+    });
+
+    await this.prisma.signatureLink.deleteMany({
+      where: { contractId: contractIdBigInt },
+    });
+
+    await this.prisma.invoice.deleteMany({
+      where: { contractId: contractIdBigInt },
+    });
+
+    // Tables with OPTIONAL contractId - set to null
+    await this.prisma.payment.updateMany({
+      where: { contratoId: contractIdBigInt },
+      data: { contratoId: null },
+    });
+
+    await this.prisma.inspection.updateMany({
+      where: { contractId: contractIdBigInt },
+      data: { contractId: null },
+    });
+
+    await this.prisma.agreement.updateMany({
+      where: { contractId: contractIdBigInt },
+      data: { contractId: null },
+    });
+
+    await this.prisma.microtransaction.updateMany({
+      where: { contractId: contractIdBigInt },
+      data: { contractId: null },
+    });
+
+    await this.prisma.extrajudicialNotification.updateMany({
+      where: { contractId: contractIdBigInt },
+      data: { contractId: null },
+    });
+
+    // Finally, hard delete the contract from the database
+    await this.prisma.contract.delete({
+      where: { id: contractIdBigInt },
     });
 
     return { message: 'Contract deleted successfully' };

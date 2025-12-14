@@ -367,6 +367,16 @@ model Property {
   previousStatus String?   @map("previous_status") @db.VarChar(50)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
 
+  // Additional property details for contracts
+  registrationNumber String?   @map("registration_number") @db.VarChar(100)
+  builtArea          Decimal?  @map("built_area") @db.Decimal(10, 2)
+  totalArea          Decimal?  @map("total_area") @db.Decimal(10, 2)
+  description        String?   @db.Text
+  furnitureList      String?   @map("furniture_list") @db.Text
+  condominiumName    String?   @map("condominium_name") @db.VarChar(255)
+  condominiumFee     Decimal?  @map("condominium_fee") @db.Decimal(12, 2)
+  iptuValue          Decimal?  @map("iptu_value") @db.Decimal(12, 2)
+
   owner         User?   @relation("PropertyOwner", fields: [ownerId], references: [id])
   agency        Agency? @relation(fields: [agencyId], references: [id])
   broker        User?   @relation("PropertyBroker", fields: [brokerId], references: [id])

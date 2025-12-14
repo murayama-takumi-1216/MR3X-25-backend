@@ -257,6 +257,15 @@ export class PropertiesService {
         agencyId: agencyId ? BigInt(agencyId) : null,
         brokerId: data.brokerId ? BigInt(data.brokerId) : null,
         createdBy: BigInt(userId),
+        // Additional property details for contracts
+        registrationNumber: data.registrationNumber || null,
+        builtArea: data.builtArea || null,
+        totalArea: data.totalArea || null,
+        description: data.description || null,
+        furnitureList: data.furnitureList || null,
+        condominiumName: data.condominiumName || null,
+        condominiumFee: data.condominiumFee || null,
+        iptuValue: data.iptuValue || null,
       },
     });
 
@@ -308,36 +317,32 @@ export class PropertiesService {
   async remove(id: string, userId: string) {
     const property = await this.prisma.property.findUnique({
       where: { id: BigInt(id) },
+      include: {
+        contracts: { where: { deleted: false }, take: 1 },
+      },
     });
 
     if (!property) {
       throw new NotFoundException('Property not found');
     }
 
-    // Get all images for this property to delete from filesystem
-    const images = await this.prisma.propertyImage.findMany({
-      where: { propertyId: BigInt(id) },
-    });
-
-    // Delete image files from filesystem
-    for (const image of images) {
-      try {
-        if (image.path && fs.existsSync(image.path)) {
-          fs.unlinkSync(image.path);
-        }
-      } catch (error) {
-        console.error(`Error deleting image file ${image.path}:`, error);
-      }
+    if (property.deleted) {
+      throw new NotFoundException('Property already deleted');
     }
 
-    // Delete property images from database
-    await this.prisma.propertyImage.deleteMany({
-      where: { propertyId: BigInt(id) },
-    });
+    // Check if property has active contracts
+    if (property.contracts && property.contracts.length > 0) {
+      throw new ForbiddenException('Não é possível excluir este imóvel pois possui contratos ativos. Exclua os contratos primeiro.');
+    }
 
-    // Hard delete the property (permanently remove from database)
-    await this.prisma.property.delete({
+    // Soft delete the property (maintains referential integrity)
+    await this.prisma.property.update({
       where: { id: BigInt(id) },
+      data: {
+        deleted: true,
+        deletedAt: new Date(),
+        deletedBy: BigInt(userId),
+      },
     });
 
     return { message: 'Property deleted successfully' };
@@ -360,6 +365,11 @@ export class PropertiesService {
       isFrozen: property.isFrozen || false,
       frozenReason: property.frozenReason || null,
       previousStatus: property.previousStatus || null,
+      // Additional property details for contracts
+      builtArea: property.builtArea?.toString() || null,
+      totalArea: property.totalArea?.toString() || null,
+      condominiumFee: property.condominiumFee?.toString() || null,
+      iptuValue: property.iptuValue?.toString() || null,
       owner: property.owner ? { ...property.owner, id: property.owner.id.toString() } : null,
       tenant: property.tenant ? { ...property.tenant, id: property.tenant.id.toString() } : null,
       broker: property.broker ? { ...property.broker, id: property.broker.id.toString() } : null,

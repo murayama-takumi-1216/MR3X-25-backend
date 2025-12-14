@@ -177,6 +177,42 @@ export class TemplateVariableService {
     { key: 'ASSINATURA_TESTEMUNHA', label: 'Assinatura da Testemunha', source: 'contract', required: false, description: 'Assinatura digital da testemunha' },
     { key: 'HASH_CONTRATO', label: 'Hash do Contrato', source: 'contract', required: false, description: 'Hash SHA-256 do contrato' },
     { key: 'VERIFICACAO_URL', label: 'URL de Verificação', source: 'contract', required: false, description: 'URL para validação do contrato' },
+
+    // Property Variables - Extended for Contract 3
+    { key: 'IMOVEL_ENDERECO', label: 'Endereço do Imóvel', source: 'property', required: false, description: 'Endereço completo do imóvel' },
+    { key: 'IMOVEL_BAIRRO', label: 'Bairro do Imóvel', source: 'property', required: false, description: 'Bairro/Localidade do imóvel' },
+    { key: 'IMOVEL_TIPO', label: 'Tipo do Imóvel', source: 'property', required: false, description: 'Tipo do imóvel (residencial, comercial, etc.)' },
+    { key: 'IMOVEL_MATRICULA', label: 'Matrícula do Imóvel', source: 'property', required: false, description: 'Número de matrícula/registro do imóvel' },
+    { key: 'IMOVEL_AREA', label: 'Área do Imóvel', source: 'property', required: false, description: 'Área total/construída do imóvel' },
+    { key: 'IMOVEL_DESCRICAO', label: 'Descrição do Imóvel', source: 'property', required: false, description: 'Descrição complementar do imóvel' },
+    { key: 'IMOVEL_MOVEIS', label: 'Mobílias/Itens do Imóvel', source: 'property', required: false, description: 'Lista de mobílias e itens inclusos' },
+
+    // Contract Variables - Administration Contract 3
+    { key: 'VALOR_LIMITE_MANUTENCAO', label: 'Limite Manutenção', source: 'contract', required: false, description: 'Valor limite para manutenção sem consulta prévia' },
+    { key: 'TAXA_ADMINISTRACAO', label: 'Taxa de Administração', source: 'contract', required: false, description: 'Percentual da taxa de administração' },
+    { key: 'VALOR_TAXA_INTERMEDIACAO', label: 'Valor Taxa Intermediação', source: 'contract', required: false, description: 'Valor fixo da taxa de intermediação' },
+    { key: 'PERCENTUAL_INTERMEDIACAO', label: 'Percentual Intermediação', source: 'contract', required: false, description: 'Percentual da taxa de intermediação' },
+    { key: 'DIA_REPASSE', label: 'Dia de Repasse', source: 'contract', required: false, description: 'Dia do mês para repasse ao locador' },
+    { key: 'PLANO_GARANTIA', label: 'Plano de Garantia', source: 'contract', required: false, description: 'Se possui plano de garantia contra inadimplência' },
+    { key: 'VALOR_LIMITE_SERVICOS', label: 'Limite para Serviços', source: 'contract', required: false, description: 'Valor limite para autorização de serviços' },
+    { key: 'MODELO_AUTORIZACAO', label: 'Modelo de Autorização', source: 'contract', required: false, description: 'Modelo de autorização (digital/sistema)' },
+    { key: 'DIAS_AVISO_PREVIO', label: 'Dias de Aviso Prévio', source: 'contract', required: false, description: 'Quantidade de dias para aviso prévio' },
+    { key: 'VALOR_MULTA_RESCISAO', label: 'Valor Multa Rescisão', source: 'contract', required: false, description: 'Valor da multa por rescisão sem aviso' },
+    { key: 'JUROS_ATRASO', label: 'Juros por Atraso', source: 'contract', required: false, description: 'Percentual de juros por atraso' },
+    { key: 'FORO_CIDADE_ESTADO', label: 'Foro/Comarca', source: 'contract', required: false, description: 'Cidade e estado do foro eleito' },
+
+    // Inspection/Vistoria Variables
+    { key: 'DATA_VISTORIA_INICIAL', label: 'Data Vistoria Inicial', source: 'contract', required: false, description: 'Data da vistoria inicial' },
+    { key: 'RESP_VISTORIA_INICIAL', label: 'Responsável Vistoria Inicial', source: 'contract', required: false, description: 'Responsável pela vistoria inicial' },
+    { key: 'ANEXO_VISTORIA_INICIAL', label: 'Anexo Vistoria Inicial', source: 'contract', required: false, description: 'Referência ao laudo de vistoria inicial' },
+    { key: 'ANEXO_VISTORIA_FINAL', label: 'Anexo Vistoria Final', source: 'contract', required: false, description: 'Referência ao laudo de vistoria final' },
+
+    // Digital Signature Variables
+    { key: 'HASH_DOCUMENTO', label: 'Hash do Documento', source: 'system', required: false, description: 'Hash SHA-256 do documento' },
+    { key: 'IP_IMOBILIARIA', label: 'IP da Imobiliária', source: 'system', required: false, description: 'Endereço IP da assinatura da imobiliária' },
+    { key: 'IP_LOCADOR', label: 'IP do Locador', source: 'system', required: false, description: 'Endereço IP da assinatura do locador' },
+    { key: 'DATA_ASS_IMOBILIARIA', label: 'Data Assinatura Imobiliária', source: 'system', required: false, description: 'Data da assinatura da imobiliária' },
+    { key: 'DATA_ASS_LOCADOR', label: 'Data Assinatura Locador', source: 'system', required: false, description: 'Data da assinatura do locador' },
   ];
 
   /**
@@ -262,12 +298,38 @@ export class TemplateVariableService {
 
     switch (key) {
       case 'ENDERECO_IMOVEL':
-        const parts = [property.address, property.number, property.complement, property.neighborhood, property.city, property.state, property.cep].filter(Boolean);
+      case 'IMOVEL_ENDERECO':
+        const parts = [property.address, property.number, property.complement, property.neighborhood, property.city, property.stateNumber || property.state, property.cep].filter(Boolean);
         return parts.join(', ');
       case 'DESCRICAO_IMOVEL':
+      case 'IMOVEL_DESCRICAO':
         return property.description || property.name || null;
       case 'MATRICULA':
+      case 'IMOVEL_MATRICULA':
         return property.registrationNumber || null;
+      case 'IMOVEL_BAIRRO':
+        return property.neighborhood || null;
+      case 'IMOVEL_TIPO':
+        // Map property type to human-readable format
+        const typeMap: Record<string, string> = {
+          'RESIDENTIAL': 'Residencial',
+          'COMMERCIAL': 'Comercial',
+          'INDUSTRIAL': 'Industrial',
+          'RURAL': 'Rural',
+          'LAND': 'Terreno',
+        };
+        return typeMap[property.propertyType] || property.propertyType || 'Residencial';
+      case 'IMOVEL_AREA':
+        // Return built area with unit, or total area as fallback
+        if (property.builtArea) {
+          return `${property.builtArea} m²`;
+        }
+        if (property.totalArea) {
+          return `${property.totalArea} m²`;
+        }
+        return null;
+      case 'IMOVEL_MOVEIS':
+        return property.furnitureList || null;
       default:
         return null;
     }
@@ -452,6 +514,41 @@ export class TemplateVariableService {
           return this.formatSignature(contract.witnessName, contract.witnessSignedAt, null, contract.witnessSignature);
         }
         return '[Aguardando assinatura da testemunha]';
+      // Contract 3 - Administration Contract Variables
+      case 'VALOR_LIMITE_MANUTENCAO':
+        return contract.maintenanceLimit ? this.formatCurrency(contract.maintenanceLimit) : 'R$ 500,00';
+      case 'TAXA_ADMINISTRACAO':
+        return contract.adminFeePercent ? `${contract.adminFeePercent}%` : '10%';
+      case 'VALOR_TAXA_INTERMEDIACAO':
+        return contract.intermediationFee ? this.formatCurrency(contract.intermediationFee) : null;
+      case 'PERCENTUAL_INTERMEDIACAO':
+        // Note: Template already has % after placeholder, so don't add % here
+        return contract.intermediationFeePercent ? `${contract.intermediationFeePercent}` : '100';
+      case 'DIA_REPASSE':
+        return contract.transferDay?.toString() || '10';
+      case 'PLANO_GARANTIA':
+        return contract.hasGuaranteePlan ? 'Sim' : 'Não';
+      case 'VALOR_LIMITE_SERVICOS':
+        return contract.serviceLimit ? this.formatCurrency(contract.serviceLimit) : 'R$ 300,00';
+      case 'MODELO_AUTORIZACAO':
+        return contract.authorizationModel || 'Sistema digital da imobiliária';
+      case 'DIAS_AVISO_PREVIO':
+        return contract.noticeDays?.toString() || '30';
+      case 'VALOR_MULTA_RESCISAO':
+        return contract.terminationPenalty ? this.formatCurrency(contract.terminationPenalty) : 'R$ 5.000,00';
+      case 'JUROS_ATRASO':
+        return contract.lateInterestPercent ? `${contract.lateInterestPercent}%` : '1%';
+      case 'FORO_CIDADE_ESTADO':
+        return contract.jurisdiction || `${contract.property?.city || 'São Paulo'}/${contract.property?.stateNumber || contract.property?.state || 'SP'}`;
+      // Inspection/Vistoria Variables
+      case 'DATA_VISTORIA_INICIAL':
+        return contract.initialInspectionDate ? this.formatDate(contract.initialInspectionDate) : '[A ser agendada]';
+      case 'RESP_VISTORIA_INICIAL':
+        return contract.initialInspectionResponsible || 'IMOBILIÁRIA';
+      case 'ANEXO_VISTORIA_INICIAL':
+        return contract.initialInspectionAttachment || 'Anexo I - Laudo de Vistoria Inicial';
+      case 'ANEXO_VISTORIA_FINAL':
+        return contract.finalInspectionAttachment || 'Anexo II - Laudo de Vistoria Final';
       default:
         return null;
     }
@@ -499,6 +596,17 @@ export class TemplateVariableService {
         return this.formatDate(new Date());
       case 'ENDERECO_MR3X':
         return 'São Paulo/SP - Brasil';
+      // Digital Signature System Variables for Contract 3
+      case 'HASH_DOCUMENTO':
+        return context.contract?.contractHash || context.contract?.hashFinal || '[Hash será gerado após assinatura]';
+      case 'IP_IMOBILIARIA':
+        return context.contract?.agencySignedIP || '[IP registrado na assinatura]';
+      case 'IP_LOCADOR':
+        return context.contract?.ownerSignedIP || '[IP registrado na assinatura]';
+      case 'DATA_ASS_IMOBILIARIA':
+        return context.contract?.agencySignedAt ? this.formatDateTime(context.contract.agencySignedAt) : '[Data de assinatura]';
+      case 'DATA_ASS_LOCADOR':
+        return context.contract?.ownerSignedAt ? this.formatDateTime(context.contract.ownerSignedAt) : '[Data de assinatura]';
       default:
         return null;
     }
