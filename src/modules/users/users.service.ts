@@ -276,6 +276,8 @@ export class UsersService {
         neighborhood: dto.neighborhood,
         city: dto.city,
         state: dto.state,
+        // Store CRECI exactly as received in a single field
+        creci: dto.creci || null,
         birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
         brokerId: dto.managerId ? BigInt(dto.managerId) : null,
         status: 'ACTIVE',
@@ -337,6 +339,11 @@ export class UsersService {
     if (dto.neighborhood !== undefined) updateData.neighborhood = dto.neighborhood;
     if (dto.city !== undefined) updateData.city = dto.city;
     if (dto.state !== undefined) updateData.state = dto.state;
+    if (dto.creci !== undefined) {
+      // Keep full CRECI string in a single field
+      updateData.creci = dto.creci;
+    }
+
     if (dto.birthDate !== undefined) {
       updateData.birthDate = dto.birthDate ? new Date(dto.birthDate) : null;
     }
@@ -730,7 +737,6 @@ export class UsersService {
         state: true,
         photoUrl: true,
         creci: true,
-        creciState: true,
         agencyId: true,
         createdAt: true,
         agency: {
@@ -741,8 +747,7 @@ export class UsersService {
             cnpj: true,
             email: true,
             phone: true,
-            creci: true,
-            creciState: true,
+        creci: true,
             address: true,
             city: true,
             state: true,
@@ -761,12 +766,8 @@ export class UsersService {
     return {
       ...user,
       id: user.id.toString(),
-      agencyId: user.agencyId?.toString() || null,
-      createdAt: user.createdAt?.toISOString() || null,
-      agency: user.agency ? {
-        ...user.agency,
-        id: user.agency.id.toString(),
-      } : null,
+        agencyId: user.agencyId?.toString() || null,
+        createdAt: user.createdAt?.toISOString() || null,
     };
   }
 
@@ -792,23 +793,8 @@ export class UsersService {
     if (dto.state !== undefined) updateData.state = dto.state;
 
     if (dto.creci !== undefined) {
-      const creciValue = dto.creci.trim();
-      if (creciValue.includes('/')) {
-        const parts = creciValue.split('/');
-        if (parts.length >= 2) {
-          const lastPart = parts[parts.length - 1].trim();
-          const stateMatch = lastPart.match(/^([A-Z]{2})/i);
-          if (stateMatch) {
-            updateData.creciState = stateMatch[1].toUpperCase();
-            const creciNumber = creciValue.replace(/\/[A-Z]{2}(-[A-Z])?$/i, '').trim();
-            updateData.creci = creciNumber;
-          } else {
-            updateData.creci = creciValue;
-          }
-        }
-      } else {
-        updateData.creci = creciValue;
-      }
+      // Keep full CRECI string in single column
+      updateData.creci = dto.creci;
     }
 
     if (user.role === 'AGENCY_ADMIN' && user.agencyId) {

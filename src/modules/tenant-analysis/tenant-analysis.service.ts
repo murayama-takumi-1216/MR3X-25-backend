@@ -4,7 +4,8 @@ import { PrismaService } from '../../config/prisma.service';
 import { CellereService } from './integrations/cellere.service';
 import { InfoSimplesService } from './integrations/infosimples.service';
 import { AnalyzeTenantDto, AnalysisType, GetAnalysisHistoryDto } from './dto';
-import { TenantAnalysisStatus, RiskLevel } from '@prisma/client';
+import { TenantAnalysisStatus, RiskLevel, UserRole } from '@prisma/client';
+import { TenantVisibilityService } from './tenant-visibility.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -262,8 +263,8 @@ export class TenantAnalysisService {
       this.prisma.tenantAnalysis.count({ where }),
     ]);
 
-    return {
-      data: data.map(item => ({
+    const dataWithVisibility = data.map(item => {
+      const formatted = {
         id: item.id.toString(),
         token: item.token,
         document: item.document,
@@ -279,23 +280,35 @@ export class TenantAnalysisService {
           name: item.requestedBy.name,
           email: item.requestedBy.email,
         },
-        basicData: item.documentType === 'CPF' ? {
-          type: 'CPF',
-          phone: item.personPhone,
-          birthDate: item.birthDate || null,
-          address: item.personAddress,
-          city: item.personCity,
-          state: item.personState,
-          zipCode: item.personZipCode,
-        } : {
-          type: 'CNPJ',
-          phone: item.companyPhone,
-          address: item.companyAddress,
-          city: item.companyCity,
-          state: item.companyState,
-          zipCode: item.companyZipCode,
-        },
-      })),
+        basicData: item.documentType === 'CPF'
+          ? {
+              type: 'CPF',
+              phone: item.personPhone,
+              birthDate: item.birthDate || null,
+              address: item.personAddress,
+              city: item.personCity,
+              state: item.personState,
+              zipCode: item.personZipCode,
+            }
+          : {
+              type: 'CNPJ',
+              phone: item.companyPhone,
+              address: item.companyAddress,
+              city: item.companyCity,
+              state: item.companyState,
+              zipCode: item.companyZipCode,
+            },
+      };
+
+      return TenantVisibilityService.applyVisibility(
+        formatted,
+        userRole as UserRole,
+        userId,
+      );
+    });
+
+    return {
+      data: dataWithVisibility,
       total,
       page,
       limit,
@@ -335,7 +348,12 @@ export class TenantAnalysisService {
       throw new NotFoundException('Análise não encontrada');
     }
 
-    return this.formatAnalysisResponse(analysis);
+    const formatted = this.formatAnalysisResponse(analysis);
+    return TenantVisibilityService.applyVisibility(
+      formatted,
+      userRole as UserRole,
+      userId,
+    );
   }
 
   async getAnalysisStats(userId: bigint, userRole: string, agencyId?: bigint) {

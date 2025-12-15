@@ -69,8 +69,8 @@ model Agency {
   representativeName     String?  @map("representative_name") @db.VarChar(255)
   representativeDocument String?  @map("representative_document") @db.VarChar(20)
 
+  // Store full CRECI (with UF) in a single column, e.g. "123456/SP"
   creci         String?  @db.VarChar(30)
-  creciState    String?  @map("creci_state") @db.VarChar(2)
 
   address       String?  @db.VarChar(255)
   city          String?  @db.VarChar(100)
@@ -190,9 +190,6 @@ model User {
   pixKey      String?  @map("pix_key") @db.VarChar(100)
 
   creci           String?   @db.VarChar(30)
-  creciState      String?   @map("creci_state") @db.VarChar(2)
-  creciValidUntil DateTime? @map("creci_valid_until") @db.Date
-  creciVerifiedAt DateTime? @map("creci_verified_at") @db.Timestamp(0)
 
   legalRepresentativeId   BigInt?   @unique @map("legal_representative_id") @db.UnsignedBigInt
   status                  String    @default("ACTIVE") @db.VarChar(20)

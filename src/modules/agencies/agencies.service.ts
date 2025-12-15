@@ -11,8 +11,8 @@ export interface AgencyCreateDTO {
   phone?: string;
   representativeName?: string;
   representativeDocument?: string;
+  // CRECI is now always stored as full string (e.g. "123456/SP")
   creci?: string;
-  creciState?: string;
   address?: string;
   city?: string;
   state?: string;
@@ -31,7 +31,6 @@ export interface AgencyUpdateDTO {
   representativeName?: string;
   representativeDocument?: string;
   creci?: string;
-  creciState?: string;
   address?: string;
   city?: string;
   state?: string;
@@ -77,8 +76,8 @@ export class AgenciesService {
         cnpj: cleanCnpj,
         email: data.email,
         phone: data.phone || null,
+        // Store full CRECI string in single column
         creci: data.creci || null,
-        creciState: data.creciState || null,
         address: data.address || null,
         city: data.city || null,
         state: data.state || null,
@@ -98,7 +97,6 @@ export class AgenciesService {
         email: true,
         phone: true,
         creci: true,
-        creciState: true,
         address: true,
         city: true,
         state: true,
@@ -129,7 +127,6 @@ export class AgenciesService {
       email: agency.email,
       phone: agency.phone || '',
       creci: agency.creci || '',
-      creciState: agency.creciState || '',
       address: agency.address || '',
       city: agency.city || '',
       state: agency.state || '',
@@ -158,7 +155,6 @@ export class AgenciesService {
         email: true,
         phone: true,
         creci: true,
-        creciState: true,
         address: true,
         city: true,
         state: true,
@@ -185,7 +181,6 @@ export class AgenciesService {
       email: agency.email,
       phone: agency.phone || '',
       creci: agency.creci || '',
-      creciState: agency.creciState || '',
       address: agency.address || '',
       city: agency.city || '',
       state: agency.state || '',
@@ -213,7 +208,6 @@ export class AgenciesService {
         representativeName: true,
         representativeDocument: true,
         creci: true,
-        creciState: true,
         address: true,
         city: true,
         state: true,
@@ -266,7 +260,6 @@ export class AgenciesService {
       representativeName: agency.representativeName || '',
       representativeDocument: agency.representativeDocument || '',
       creci: agency.creci || '',
-      creciState: agency.creciState || '',
       address: agency.address || '',
       city: agency.city || '',
       state: agency.state || '',

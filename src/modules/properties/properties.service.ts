@@ -63,7 +63,6 @@ export class PropertiesService {
               birthDate: true,
               employerName: true,
               creci: true,
-              creciState: true,
               bankName: true,
               bankBranch: true,
               bankAccount: true,
@@ -111,7 +110,7 @@ export class PropertiesService {
               }
             }
           },
-          broker: { select: { id: true, name: true, email: true, document: true, creci: true, creciState: true } },
+          broker: { select: { id: true, name: true, email: true, document: true, creci: true } },
           agency: {
             select: {
               id: true,
@@ -119,7 +118,6 @@ export class PropertiesService {
               tradeName: true,
               cnpj: true,
               creci: true,
-              creciState: true,
               email: true,
               phone: true,
               address: true,
@@ -169,7 +167,6 @@ export class PropertiesService {
             birthDate: true,
             employerName: true,
             creci: true,
-            creciState: true,
             bankName: true,
             bankBranch: true,
             bankAccount: true,
@@ -217,7 +214,7 @@ export class PropertiesService {
             }
           }
         },
-        broker: { select: { id: true, name: true, email: true, document: true, creci: true, creciState: true } },
+        broker: { select: { id: true, name: true, email: true, document: true, creci: true } },
         agency: true,
         images: true,
         contracts: { orderBy: { createdAt: 'desc' }, take: 5 },
@@ -453,7 +450,6 @@ export class PropertiesService {
             tradeName: true,
             cnpj: true,
             creci: true,
-            creciState: true,
             email: true,
             phone: true,
             address: true,
@@ -542,7 +538,6 @@ export class PropertiesService {
             tradeName: true,
             cnpj: true,
             creci: true,
-            creciState: true,
             email: true,
             phone: true,
             address: true,

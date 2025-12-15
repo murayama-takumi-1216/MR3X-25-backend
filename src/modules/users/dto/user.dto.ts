@@ -70,6 +70,11 @@ export class CreateUserDto {
   @IsString()
   state?: string;
 
+  @ApiPropertyOptional({ example: '123456/SP', description: 'Broker CRECI number with state, e.g., 123456/SP' })
+  @IsOptional()
+  @IsString()
+  creci?: string;
+
   @ApiPropertyOptional({ example: '1990-01-01' })
   @IsOptional()
   birthDate?: string;

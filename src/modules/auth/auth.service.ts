@@ -394,8 +394,8 @@ export class AuthService {
           plan: dto.plan,
           maxProperties: limits.maxProperties,
           maxUsers: limits.maxUsers,
+          // Store full CRECI string in single column
           creci: dto.agencyCreci || null,
-          creciState: dto.agencyCreciState || null,
           representativeName: dto.representativeName || null,
           representativeDocument: dto.representativeDocument || null,
         },
