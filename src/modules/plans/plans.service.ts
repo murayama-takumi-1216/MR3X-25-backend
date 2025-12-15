@@ -86,7 +86,6 @@ export interface ApiAddOnDTO {
 export class PlansService {
   constructor(private prisma: PrismaService) {}
 
-  // Get all plans with runtime updates applied
   private getPlansWithUpdates(): Plan[] {
     const now = new Date();
     const updates = getPlanUpdates();
@@ -103,19 +102,15 @@ export class PlansService {
         userLimit: update?.maxInternalUsers ?? defaultPlan.userLimit,
         features: update?.features ?? defaultPlan.features,
         description: update?.description ?? defaultPlan.description,
-        isActive: true, // All configured plans are active
-        subscribers: 0, // Will be calculated separately
+        isActive: true,
+        subscribers: 0,
         createdAt: baseDate,
         updatedAt: now,
       };
     }).sort((a, b) => a.price - b.price);
   }
 
-  /**
-   * Get all plans for display (new format with full configuration)
-   */
   async getAllPlans(): Promise<PlanConfig[]> {
-    // Calculate subscriber counts from database
     const agencyCounts = await this.prisma.agency.groupBy({
       by: ['plan'],
       _count: { plan: true },
@@ -128,12 +123,10 @@ export class PlansService {
 
     return getAllPlansForDisplay().map(plan => ({
       ...plan,
-      // Add subscriber count dynamically
     }));
   }
 
   async getPlans() {
-    // Calculate subscriber counts from database
     const agencyCounts = await this.prisma.agency.groupBy({
       by: ['plan'],
       _count: { plan: true },
@@ -152,7 +145,6 @@ export class PlansService {
       planCounts.set(item.plan, (planCounts.get(item.plan) || 0) + item._count.plan);
     });
 
-    // Get plans with updates and apply subscriber counts
     const plans = this.getPlansWithUpdates();
     return plans.map(plan => ({
       ...plan,
@@ -195,16 +187,10 @@ export class PlansService {
     };
   }
 
-  /**
-   * Get full plan configuration by name (new format)
-   */
   getPlanConfig(planName: string): PlanConfig | null {
     return getPlanConfigByName(planName);
   }
 
-  /**
-   * Get microtransaction pricing for an agency's plan
-   */
   async getMicrotransactionPricingForAgency(agencyId: string): Promise<MicrotransactionPricing> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -215,9 +201,6 @@ export class PlansService {
     return getMicrotransactionPricing(planName);
   }
 
-  /**
-   * Get the price for a specific feature based on agency's plan
-   */
   async getFeaturePriceForAgency(
     agencyId: string,
     feature: 'inspection' | 'settlement' | 'screening' | 'extraContract' | 'apiAddOn'
@@ -231,9 +214,6 @@ export class PlansService {
     return getFeaturePrice(planName, feature);
   }
 
-  /**
-   * Check if a feature requires payment for an agency
-   */
   async isFeaturePayPerUseForAgency(
     agencyId: string,
     feature: 'inspection' | 'settlement' | 'screening' | 'extraContract'
@@ -247,9 +227,6 @@ export class PlansService {
     return isFeaturePayPerUse(planName, feature);
   }
 
-  /**
-   * Check if a feature is available (unlimited) for an agency
-   */
   async isFeatureUnlimitedForAgency(
     agencyId: string,
     feature: 'inspections' | 'settlements' | 'api' | 'advancedReports' | 'automations' | 'whiteLabel'
@@ -262,7 +239,6 @@ export class PlansService {
     const planName = agency?.plan || 'FREE';
     const planConfig = getPlanConfigByName(planName);
 
-    // Special handling for API - check if add-on is enabled for PROFESSIONAL
     if (feature === 'api') {
       if (planConfig?.apiAccessIncluded) return true;
       if (planConfig?.apiAccessOptional && agency?.apiAddOnEnabled) return true;
@@ -272,9 +248,6 @@ export class PlansService {
     return isPlanFeatureAvailable(planName, feature);
   }
 
-  /**
-   * Get comprehensive plan usage for an agency (contract-based)
-   */
   async getAgencyPlanUsage(agencyId: string): Promise<PlanUsageDTO> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -298,7 +271,6 @@ export class PlansService {
     const planName = agency.plan || 'FREE';
     const planConfig = getPlanConfigByName(planName) || PLANS_CONFIG.FREE;
 
-    // Count active contracts
     const activeContracts = await this.prisma.contract.count({
       where: {
         agencyId: BigInt(agencyId),
@@ -308,7 +280,6 @@ export class PlansService {
       },
     });
 
-    // Count frozen contracts
     const frozenContracts = await this.prisma.contract.count({
       where: {
         agencyId: BigInt(agencyId),
@@ -317,20 +288,17 @@ export class PlansService {
       },
     });
 
-    // Count active users (exclude AGENCY_ADMIN as they are the agency owner and never frozen)
-    // ALL users count against the user limit
     const activeUsers = await this.prisma.user.count({
       where: {
         agencyId: BigInt(agencyId),
         isFrozen: false,
         status: 'ACTIVE',
         role: {
-          not: UserRole.AGENCY_ADMIN, // AGENCY_ADMIN is exempt from limits
+          not: UserRole.AGENCY_ADMIN,
         },
       },
     });
 
-    // Count frozen users (AGENCY_ADMIN is never frozen)
     const frozenUsers = await this.prisma.user.count({
       where: {
         agencyId: BigInt(agencyId),
@@ -375,9 +343,6 @@ export class PlansService {
     };
   }
 
-  /**
-   * Check if agency can create a new contract
-   */
   async canCreateContract(agencyId: string): Promise<{ allowed: boolean; message?: string; pricing?: number }> {
     const usage = await this.getAgencyPlanUsage(agencyId);
 
@@ -385,7 +350,6 @@ export class PlansService {
       return { allowed: true };
     }
 
-    // Over limit - offer extra contract purchase
     return {
       allowed: false,
       message: `Você atingiu o limite de ${usage.contracts.limit} contratos ativos do plano ${usage.planDisplayName}. Você pode adicionar contratos extras por R$ ${usage.pricing.extraContract.toFixed(2)}/cada ou fazer upgrade.`,
@@ -393,9 +357,6 @@ export class PlansService {
     };
   }
 
-  /**
-   * Check if agency can perform an inspection
-   */
   async canPerformInspection(agencyId: string): Promise<{ allowed: boolean; requiresPayment: boolean; price?: number }> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -416,9 +377,6 @@ export class PlansService {
     };
   }
 
-  /**
-   * Check if agency can create a settlement/agreement
-   */
   async canCreateSettlement(agencyId: string): Promise<{ allowed: boolean; requiresPayment: boolean; price?: number }> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -439,10 +397,6 @@ export class PlansService {
     };
   }
 
-  /**
-   * Check if agency can create a new tenant (counts towards user limit)
-   * Tenants are users like BROKER, PROPRIETARIO, etc. - all count towards maxInternalUsers
-   */
   async canCreateTenant(agencyId: string): Promise<{ allowed: boolean; message?: string; current: number; limit: number }> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -452,22 +406,19 @@ export class PlansService {
     const planName = agency?.plan || 'FREE';
     const planConfig = getPlanConfigByName(planName) || PLANS_CONFIG.FREE;
 
-    // Count ALL active users in the agency (all user types count against the limit, except AGENCY_ADMIN)
     const userCount = await this.prisma.user.count({
       where: {
         agencyId: BigInt(agencyId),
         status: 'ACTIVE',
         isFrozen: false,
         role: {
-          not: UserRole.AGENCY_ADMIN, // AGENCY_ADMIN is exempt from limits
+          not: UserRole.AGENCY_ADMIN,
         },
       },
     });
 
-    // Use maxInternalUsers limit (all users count)
     const limit = planConfig.maxInternalUsers === -1 ? 9999 : planConfig.maxInternalUsers;
 
-    // -1 or 9999 means unlimited
     if (limit >= 9999) {
       return { allowed: true, current: userCount, limit: 9999 };
     }
@@ -484,10 +435,6 @@ export class PlansService {
     };
   }
 
-  /**
-   * Check if user (INDEPENDENT_OWNER) can create a new tenant (counts towards user limit)
-   * Tenants are users - all count towards maxInternalUsers for the owner
-   */
   async canCreateTenantForOwner(userId: string): Promise<{ allowed: boolean; message?: string; current: number; limit: number }> {
     const user = await this.prisma.user.findUnique({
       where: { id: BigInt(userId) },
@@ -501,7 +448,6 @@ export class PlansService {
     const planName = user.plan || 'FREE';
     const planConfig = getPlanConfigByName(planName) || PLANS_CONFIG.FREE;
 
-    // Count ALL active users created by this owner (tenants are users)
     const userCount = await this.prisma.user.count({
       where: {
         OR: [
@@ -516,10 +462,8 @@ export class PlansService {
       },
     });
 
-    // Use maxInternalUsers limit (tenants count as users)
     const limit = planConfig.maxInternalUsers === -1 ? 9999 : planConfig.maxInternalUsers;
 
-    // -1 or 9999 means unlimited
     if (limit >= 9999) {
       return { allowed: true, current: userCount, limit: 9999 };
     }
@@ -536,9 +480,6 @@ export class PlansService {
     };
   }
 
-  /**
-   * Get tenant screening price for agency
-   */
   async getScreeningPrice(agencyId: string): Promise<number> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -551,9 +492,6 @@ export class PlansService {
     return planConfig.screeningPrice;
   }
 
-  /**
-   * Enable API add-on for PROFESSIONAL plan
-   */
   async enableApiAddOn(agencyId: string): Promise<ApiAddOnDTO> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -566,17 +504,14 @@ export class PlansService {
 
     const planConfig = getPlanConfigByName(agency.plan);
 
-    // Check if API is already included
     if (planConfig?.apiAccessIncluded) {
       throw new BadRequestException('API access is already included in your plan');
     }
 
-    // Check if API add-on is available
     if (!planConfig?.apiAccessOptional) {
       throw new BadRequestException('API add-on is not available for your plan. Please upgrade to PROFESSIONAL or ENTERPRISE.');
     }
 
-    // Check if already enabled
     if (agency.apiAddOnEnabled) {
       throw new BadRequestException('API add-on is already enabled');
     }
@@ -585,7 +520,6 @@ export class PlansService {
     const endDate = new Date(now);
     endDate.setMonth(endDate.getMonth() + 1);
 
-    // Generate API key
     const apiKey = this.generateApiKey();
 
     await this.prisma.agency.update({
@@ -600,11 +534,10 @@ export class PlansService {
       },
     });
 
-    // Create microtransaction record
     await this.prisma.microtransaction.create({
       data: {
         agencyId: BigInt(agencyId),
-        type: MicrotransactionType.API_CALL, // Using API_CALL type for add-on
+        type: MicrotransactionType.API_CALL,
         amount: planConfig.apiAddOnPrice || 29.00,
         description: 'API Add-On Subscription',
         status: MicrotransactionStatus.PENDING,
@@ -619,9 +552,6 @@ export class PlansService {
     };
   }
 
-  /**
-   * Disable API add-on
-   */
   async disableApiAddOn(agencyId: string): Promise<void> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -634,7 +564,6 @@ export class PlansService {
 
     const planConfig = getPlanConfigByName(agency.plan);
 
-    // Can't disable if API is included in plan
     if (planConfig?.apiAccessIncluded) {
       throw new BadRequestException('Cannot disable API access as it is included in your plan');
     }
@@ -653,9 +582,6 @@ export class PlansService {
     });
   }
 
-  /**
-   * Calculate upgrade cost between plans
-   */
   async calculateUpgrade(agencyId: string, targetPlan: string): Promise<{
     currentPlan: string;
     targetPlan: string;
@@ -685,7 +611,6 @@ export class PlansService {
       throw new BadRequestException(`Invalid target plan: ${targetPlan}`);
     }
 
-    // Calculate days remaining in current period
     let daysRemaining = 30;
     if (agency.currentPeriodEnd) {
       const now = new Date();
@@ -695,7 +620,6 @@ export class PlansService {
 
     const { proratedAmount, newMonthlyPrice } = calculateUpgradeCost(currentPlanName, targetPlan, daysRemaining);
 
-    // Determine new features
     const newFeatures: string[] = [];
     if (!currentConfig?.unlimitedInspections && targetConfig.unlimitedInspections) {
       newFeatures.push('Vistorias ilimitadas');
@@ -756,9 +680,7 @@ export class PlansService {
       throw new NotFoundException('Plan not found');
     }
 
-    // CEO can update directly
     if (userRole === UserRole.CEO) {
-      // Convert PlanUpdateDTO to Partial<PlanConfig>
       const updateData: Partial<PlanConfig> = {
         price: data.price,
         maxActiveContracts: data.contractLimit ?? data.propertyLimit,
@@ -770,7 +692,6 @@ export class PlansService {
       return this.getPlanByName(plan.name);
     }
 
-    // ADMIN creates a modification request
     if (userRole === UserRole.ADMIN) {
       return this.createModificationRequest(plan.name, data, userId);
     }
@@ -786,9 +707,7 @@ export class PlansService {
       throw new NotFoundException('Plan not found');
     }
 
-    // CEO can update directly
     if (userRole === UserRole.CEO) {
-      // Convert PlanUpdateDTO to Partial<PlanConfig>
       const updateData: Partial<PlanConfig> = {
         price: data.price,
         maxActiveContracts: data.contractLimit ?? data.propertyLimit,
@@ -800,7 +719,6 @@ export class PlansService {
       return this.getPlanByName(name);
     }
 
-    // ADMIN creates a modification request
     if (userRole === UserRole.ADMIN) {
       return this.createModificationRequest(name, data, userId);
     }
@@ -808,7 +726,6 @@ export class PlansService {
     throw new ForbiddenException('You do not have permission to modify plans');
   }
 
-  // Create a modification request for ADMIN users
   private async createModificationRequest(planName: string, data: PlanUpdateDTO, requestedById: string) {
     const currentPlan = await this.getPlanByName(planName);
 
@@ -835,7 +752,6 @@ export class PlansService {
       },
     });
 
-    // Send notification to CEO users
     await this.notifyCEOAboutRequest(request.id, planName, requestedById);
 
     return {
@@ -845,9 +761,7 @@ export class PlansService {
     };
   }
 
-  // Notify CEO users about new modification request
   private async notifyCEOAboutRequest(requestId: bigint, planName: string, requestedById: string) {
-    // Find all CEO users
     const ceoUsers = await this.prisma.user.findMany({
       where: { role: UserRole.CEO, status: 'ACTIVE' },
       select: { id: true },
@@ -858,7 +772,6 @@ export class PlansService {
       select: { name: true },
     });
 
-    // Create in-app notification
     for (const ceo of ceoUsers) {
       await this.prisma.auditLog.create({
         data: {
@@ -877,7 +790,6 @@ export class PlansService {
     }
   }
 
-  // Get all pending modification requests (for CEO)
   async getPendingModificationRequests(): Promise<PlanModificationRequestDTO[]> {
     const requests = await this.prisma.planModificationRequest.findMany({
       where: { status: 'PENDING' },
@@ -892,7 +804,6 @@ export class PlansService {
     return requests.map(r => this.formatModificationRequest(r));
   }
 
-  // Get all modification requests (for history)
   async getAllModificationRequests(): Promise<PlanModificationRequestDTO[]> {
     const requests = await this.prisma.planModificationRequest.findMany({
       include: {
@@ -909,7 +820,6 @@ export class PlansService {
     return requests.map(r => this.formatModificationRequest(r));
   }
 
-  // Approve a modification request (CEO only)
   async approveModificationRequest(requestId: string, reviewerId: string) {
     const request = await this.prisma.planModificationRequest.findUnique({
       where: { id: BigInt(requestId) },
@@ -923,7 +833,6 @@ export class PlansService {
       throw new ForbiddenException('This request has already been processed');
     }
 
-    // Apply the changes to the plan
     const updateData: any = {};
     if (request.requestedPrice !== null) updateData.price = Number(request.requestedPrice);
     if (request.requestedPropertyLimit !== null) updateData.propertyLimit = request.requestedPropertyLimit;
@@ -936,7 +845,6 @@ export class PlansService {
       updatedAt: new Date(),
     });
 
-    // Update the request status
     const updatedRequest = await this.prisma.planModificationRequest.update({
       where: { id: BigInt(requestId) },
       data: {
@@ -954,7 +862,6 @@ export class PlansService {
       },
     });
 
-    // Notify the admin who made the request
     await this.prisma.auditLog.create({
       data: {
         event: 'PLAN_MODIFICATION_APPROVED',
@@ -975,7 +882,6 @@ export class PlansService {
     };
   }
 
-  // Reject a modification request (CEO only)
   async rejectModificationRequest(requestId: string, reviewerId: string, reason?: string) {
     const request = await this.prisma.planModificationRequest.findUnique({
       where: { id: BigInt(requestId) },
@@ -989,7 +895,6 @@ export class PlansService {
       throw new ForbiddenException('This request has already been processed');
     }
 
-    // Update the request status
     const updatedRequest = await this.prisma.planModificationRequest.update({
       where: { id: BigInt(requestId) },
       data: {
@@ -1008,7 +913,6 @@ export class PlansService {
       },
     });
 
-    // Notify the admin who made the request
     await this.prisma.auditLog.create({
       data: {
         event: 'PLAN_MODIFICATION_REJECTED',
@@ -1030,7 +934,6 @@ export class PlansService {
     };
   }
 
-  // Helper to format modification request
   private formatModificationRequest(r: any): PlanModificationRequestDTO {
     return {
       id: r.id.toString(),
@@ -1066,7 +969,6 @@ export class PlansService {
     };
   }
 
-  // Check if a user has reached their plan limits (legacy - for backward compatibility)
   async checkPlanLimits(userId: string, limitType: 'property' | 'user' | 'tenant' | 'contract'): Promise<{ allowed: boolean; current: number; limit: number; message?: string }> {
     const user = await this.prisma.user.findUnique({
       where: { id: BigInt(userId) },
@@ -1077,7 +979,6 @@ export class PlansService {
       return { allowed: false, current: 0, limit: 0, message: 'Usuário não encontrado' };
     }
 
-    // If user belongs to an agency, check agency limits
     if (user.agencyId) {
       const agency = await this.prisma.agency.findUnique({
         where: { id: user.agencyId },
@@ -1139,7 +1040,6 @@ export class PlansService {
           });
 
           const limit = planConfig?.maxTenants || 2;
-          // 9999 means unlimited
           if (limit >= 9999) {
             return { allowed: true, current: tenantCount, limit: -1 };
           }
@@ -1155,7 +1055,6 @@ export class PlansService {
       }
     }
 
-    // For independent owners, check their personal plan limits
     const planName = user.plan || 'FREE';
     const planConfig = getPlanConfigByName(planName);
 
@@ -1176,7 +1075,6 @@ export class PlansService {
     }
 
     if (limitType === 'tenant' || limitType === 'user') {
-      // Count tenants created by this independent owner
       const tenantCount = await this.prisma.user.count({
         where: {
           createdBy: user.id,
@@ -1187,7 +1085,6 @@ export class PlansService {
       });
 
       const limit = planConfig?.maxTenants || 2;
-      // 9999 means unlimited
       if (limit >= 9999) {
         return { allowed: true, current: tenantCount, limit: -1 };
       }
@@ -1224,7 +1121,6 @@ export class PlansService {
     return { allowed: true, current: 0, limit: -1 };
   }
 
-  // Get current usage for a user (legacy - for backward compatibility)
   async getPlanUsage(userId: string): Promise<{ properties: { current: number; limit: number }; tenants: { current: number; limit: number }; users: { current: number; limit: number }; contracts: { current: number; limit: number }; plan: string }> {
     const user = await this.prisma.user.findUnique({
       where: { id: BigInt(userId) },
@@ -1241,7 +1137,6 @@ export class PlansService {
       };
     }
 
-    // If user belongs to an agency
     if (user.agencyId) {
       const agency = await this.prisma.agency.findUnique({
         where: { id: user.agencyId },
@@ -1251,7 +1146,6 @@ export class PlansService {
       const planConfig = getPlanConfigByName(agency?.plan || 'FREE');
       const usage = await this.getAgencyPlanUsage(user.agencyId.toString());
 
-      // Count properties for agency
       const propertyCount = await this.prisma.property.count({
         where: {
           agencyId: user.agencyId,
@@ -1260,7 +1154,6 @@ export class PlansService {
         },
       });
 
-      // Count tenants for agency
       const tenantCount = await this.prisma.user.count({
         where: {
           agencyId: user.agencyId,
@@ -1309,7 +1202,6 @@ export class PlansService {
   }
 
   async updateSubscriberCounts() {
-    // Calculate subscriber counts from database
     const agencyCounts = await this.prisma.agency.groupBy({
       by: ['plan'],
       _count: { plan: true },
@@ -1328,8 +1220,6 @@ export class PlansService {
       planCounts.set(item.plan, (planCounts.get(item.plan) || 0) + item._count.plan);
     });
 
-    // Subscriber counts are now stored in database per agency, not in plan config
-    // This method returns the current counts for reporting purposes
     return {
       updated: planCounts.size,
       counts: Object.fromEntries(planCounts),

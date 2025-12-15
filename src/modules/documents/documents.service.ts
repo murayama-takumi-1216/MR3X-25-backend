@@ -63,17 +63,14 @@ export class DocumentsService {
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
 
-        // Header
         doc.fontSize(20).font('Helvetica-Bold').text('RECIBO DE PAGAMENTO', { align: 'center' });
         doc.moveDown();
         doc.fontSize(12).font('Helvetica').text(`Nº ${data.receiptNumber}`, { align: 'center' });
         doc.moveDown(2);
 
-        // Horizontal line
         doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
         doc.moveDown();
 
-        // Payment info
         doc.fontSize(11).font('Helvetica-Bold').text('DADOS DO PAGAMENTO');
         doc.moveDown(0.5);
         doc.font('Helvetica');
@@ -82,7 +79,6 @@ export class DocumentsService {
         doc.text(`Mês de Referência: ${data.referenceMonth}`);
         doc.moveDown();
 
-        // Owner info
         doc.font('Helvetica-Bold').text('PROPRIETÁRIO (RECEBEDOR)');
         doc.moveDown(0.5);
         doc.font('Helvetica');
@@ -90,7 +86,6 @@ export class DocumentsService {
         doc.text(`CPF/CNPJ: ${data.ownerDocument}`);
         doc.moveDown();
 
-        // Tenant info
         doc.font('Helvetica-Bold').text('INQUILINO (PAGADOR)');
         doc.moveDown(0.5);
         doc.font('Helvetica');
@@ -98,30 +93,25 @@ export class DocumentsService {
         doc.text(`CPF/CNPJ: ${data.tenantDocument}`);
         doc.moveDown();
 
-        // Property info
         doc.font('Helvetica-Bold').text('IMÓVEL');
         doc.moveDown(0.5);
         doc.font('Helvetica');
         doc.text(`Endereço: ${data.propertyAddress}`);
         doc.moveDown();
 
-        // Amount
         doc.font('Helvetica-Bold').text('VALOR RECEBIDO');
         doc.moveDown(0.5);
         doc.fontSize(16).text(this.formatCurrency(data.amount), { align: 'center' });
         doc.moveDown();
 
-        // Description
         doc.fontSize(11).font('Helvetica-Bold').text('DESCRIÇÃO');
         doc.moveDown(0.5);
         doc.font('Helvetica').text(data.description);
         doc.moveDown(2);
 
-        // Horizontal line
         doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
         doc.moveDown(2);
 
-        // Declaration
         doc.fontSize(10).text(
           `Declaro ter recebido a quantia de ${this.formatCurrency(data.amount)} ` +
           `(${this.numberToWords(data.amount)}) referente a ${data.description}.`,
@@ -129,13 +119,11 @@ export class DocumentsService {
         );
         doc.moveDown(3);
 
-        // Signature
         doc.text('_'.repeat(50), { align: 'center' });
         doc.text(data.ownerName, { align: 'center' });
         doc.text('Proprietário', { align: 'center' });
         doc.moveDown(2);
 
-        // Footer
         doc.fontSize(8).text(
           `Documento gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`,
           { align: 'center' }
@@ -158,17 +146,14 @@ export class DocumentsService {
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
 
-        // Header
         doc.fontSize(20).font('Helvetica-Bold').text('FATURA DE ALUGUEL', { align: 'center' });
         doc.moveDown();
         doc.fontSize(12).font('Helvetica').text(`Nº ${data.invoiceNumber}`, { align: 'center' });
         doc.moveDown(2);
 
-        // Horizontal line
         doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
         doc.moveDown();
 
-        // Invoice info
         doc.fontSize(11).font('Helvetica-Bold').text('DADOS DA FATURA');
         doc.moveDown(0.5);
         doc.font('Helvetica');
@@ -177,7 +162,6 @@ export class DocumentsService {
         doc.text(`Mês de Referência: ${data.referenceMonth}`);
         doc.moveDown();
 
-        // Owner info
         doc.font('Helvetica-Bold').text('LOCADOR (PROPRIETÁRIO)');
         doc.moveDown(0.5);
         doc.font('Helvetica');
@@ -187,7 +171,6 @@ export class DocumentsService {
         doc.text(`${data.ownerCity} - ${data.ownerState}, CEP: ${data.ownerZipCode}`);
         doc.moveDown();
 
-        // Tenant info
         doc.font('Helvetica-Bold').text('LOCATÁRIO (INQUILINO)');
         doc.moveDown(0.5);
         doc.font('Helvetica');
@@ -195,18 +178,15 @@ export class DocumentsService {
         doc.text(`CPF/CNPJ: ${data.tenantDocument}`);
         doc.moveDown();
 
-        // Property info
         doc.font('Helvetica-Bold').text('IMÓVEL LOCADO');
         doc.moveDown(0.5);
         doc.font('Helvetica');
         doc.text(`Endereço: ${data.propertyAddress}`);
         doc.moveDown();
 
-        // Values table
         doc.font('Helvetica-Bold').text('DISCRIMINAÇÃO DOS VALORES');
         doc.moveDown(0.5);
 
-        // Table header
         const tableTop = doc.y;
         const col1 = 50;
         const col2 = 400;
@@ -218,7 +198,6 @@ export class DocumentsService {
         doc.moveTo(50, doc.y + 5).lineTo(550, doc.y + 5).stroke();
         doc.moveDown();
 
-        // Table rows
         const rowHeight = 20;
         let currentY = doc.y;
 
@@ -247,13 +226,11 @@ export class DocumentsService {
         doc.moveTo(50, currentY + 5).lineTo(550, currentY + 5).stroke();
         currentY += 15;
 
-        // Total
         doc.font('Helvetica-Bold');
         doc.text('VALOR TOTAL', col1, currentY);
         doc.fontSize(14).text(this.formatCurrency(data.finalValue), col2, currentY);
         doc.moveDown(2);
 
-        // Instructions
         if (data.instructions) {
           doc.fontSize(11).font('Helvetica-Bold').text('INSTRUÇÕES DE PAGAMENTO');
           doc.moveDown(0.5);
@@ -262,7 +239,6 @@ export class DocumentsService {
 
         doc.moveDown(2);
 
-        // Footer
         doc.fontSize(8).text(
           `Documento gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`,
           { align: 'center' }

@@ -11,25 +11,19 @@ export class PaymentsService {
     try {
       const where: any = {};
 
-      // CEO can see all payments
       if (role === 'CEO') {
-        // No additional filtering - can see all payments
       }
-      // ADMIN sees only payments for properties they created (each admin is independent)
       else if (role === 'ADMIN') {
         where.property = {
           createdBy: BigInt(userId),
         };
       }
-      // AGENCY_ADMIN can see all payments in their agency
       else if (role === 'AGENCY_ADMIN' && userAgencyId) {
         where.agencyId = BigInt(userAgencyId);
       }
-      // AGENCY_MANAGER can see all payments in their agency
       else if (role === 'AGENCY_MANAGER' && userAgencyId) {
         where.agencyId = BigInt(userAgencyId);
       }
-      // BROKER can see payments for properties assigned to them or their agency
       else if (role === 'BROKER') {
         if (userBrokerId) {
           where.property = {
@@ -39,32 +33,25 @@ export class PaymentsService {
           where.agencyId = BigInt(userAgencyId);
         }
       }
-      // PROPRIETARIO can only see payments for their properties
       else if (role === 'PROPRIETARIO') {
         where.property = {
           ownerId: BigInt(userId),
         };
       }
-      // INDEPENDENT_OWNER can only see payments for properties they created
       else if (role === 'INDEPENDENT_OWNER') {
         where.property = {
           createdBy: BigInt(userId),
         };
       }
-      // INQUILINO can only see their own payments
       else if (role === 'INQUILINO') {
         where.userId = BigInt(userId);
       }
-      // LEGAL_AUDITOR can see all payments (read-only)
       else if (role === 'LEGAL_AUDITOR') {
-        // No additional filtering - can see all payments
       }
-      // Other roles have no access
       else {
-        where.id = BigInt(-1); // This will return no results
+        where.id = BigInt(-1);
       }
 
-      // Add search filter
       if (search && search.trim()) {
         where.OR = [
           { property: { name: { contains: search.trim() } } },
@@ -201,13 +188,11 @@ export class PaymentsService {
       throw new NotFoundException('Payment not found');
     }
 
-    // Check access permissions
     if (role === 'PROPRIETARIO' || role === 'GESTOR') {
       if (payment.property?.ownerId?.toString() !== userId) {
         throw new ForbiddenException('Access denied');
       }
     } else if (role === 'INDEPENDENT_OWNER') {
-      // INDEPENDENT_OWNER checks by createdBy field
       const property = await this.prisma.property.findUnique({
         where: { id: payment.propertyId },
         select: { createdBy: true },
@@ -249,7 +234,6 @@ export class PaymentsService {
       console.log('Creating payment with data:', JSON.stringify(data));
       console.log('User ID:', userId);
 
-      // Verify property exists
       const property = await this.prisma.property.findUnique({
         where: { id: BigInt(data.propertyId) },
       });
@@ -258,7 +242,6 @@ export class PaymentsService {
         throw new NotFoundException('Property not found');
       }
 
-      // Verify contract exists if provided
       if (data.contratoId) {
         const contract = await this.prisma.contract.findUnique({
           where: { id: BigInt(data.contratoId) },
@@ -309,7 +292,6 @@ export class PaymentsService {
         },
       });
 
-      // Update contract's last payment date if contract exists
       if (data.contratoId) {
         await this.prisma.contract.update({
           where: { id: BigInt(data.contratoId) },
@@ -319,7 +301,6 @@ export class PaymentsService {
         });
       }
 
-      // Update property's next due date if dueDate is provided
       if (data.dueDate) {
         await this.prisma.property.update({
           where: { id: BigInt(data.propertyId) },
@@ -375,7 +356,6 @@ export class PaymentsService {
       throw new NotFoundException('Payment not found');
     }
 
-    // Check permissions
     if (role !== 'ADMIN' && role !== 'CEO' && existing.property?.ownerId?.toString() !== userId) {
       throw new ForbiddenException('Access denied');
     }
@@ -415,7 +395,6 @@ export class PaymentsService {
       throw new NotFoundException('Payment not found');
     }
 
-    // Check permissions
     if (role !== 'ADMIN' && role !== 'CEO' && existing.property?.ownerId?.toString() !== userId) {
       throw new ForbiddenException('Access denied');
     }
@@ -440,60 +419,46 @@ export class PaymentsService {
         },
       };
 
-      // CEO and LEGAL_AUDITOR can see all payments
       if (role === 'CEO' || role === 'LEGAL_AUDITOR') {
-        // No additional filtering - can see all payments
       }
-      // ADMIN sees only payments for properties they created
       else if (role === 'ADMIN') {
         where.property = {
           createdBy: BigInt(userId),
         };
       }
-      // AGENCY_ADMIN can see all payments in their agency
       else if (role === 'AGENCY_ADMIN' && userAgencyId) {
         where.agencyId = BigInt(userAgencyId);
       }
-      // AGENCY_MANAGER can see all payments in their agency
       else if (role === 'AGENCY_MANAGER' && userAgencyId) {
         where.agencyId = BigInt(userAgencyId);
       }
-      // PROPRIETARIO can only see payments for their properties
       else if (role === 'PROPRIETARIO' || role === 'GESTOR') {
         where.property = {
           ownerId: BigInt(userId),
         };
       }
-      // INDEPENDENT_OWNER can only see payments for properties they created
       else if (role === 'INDEPENDENT_OWNER') {
         where.property = {
           createdBy: BigInt(userId),
         };
       }
-      // INQUILINO can only see their own payments
       else if (role === 'INQUILINO') {
         where.userId = BigInt(userId);
       }
-      // Other roles have no access
       else {
-        where.id = BigInt(-1); // This will return no results
+        where.id = BigInt(-1);
       }
 
-      // Use parallel queries for better performance
       const [aggregateResult, totalCount] = await Promise.all([
-        // Get total sum
         this.prisma.payment.aggregate({
           where,
           _sum: {
             valorPago: true,
           },
         }),
-        // Get count
         this.prisma.payment.count({ where }),
       ]);
 
-      // Get payments only with necessary fields for monthly grouping
-      // Limit to essential data to reduce memory and transfer time
       const payments = await this.prisma.payment.findMany({
         where,
         select: {
@@ -505,7 +470,6 @@ export class PaymentsService {
         orderBy: { dataPagamento: 'asc' },
       });
 
-      // Group by month in memory (faster than multiple DB queries)
       const monthlyData = Array.from({ length: 12 }, (_, i) => ({
         month: i + 1,
         monthName: new Date(targetYear, i, 1).toLocaleDateString('pt-BR', { month: 'long' }),
@@ -539,8 +503,6 @@ export class PaymentsService {
         total: totalYear,
         totalPayments: totalCount,
         monthly: monthlyData,
-        // Don't return all payments - only return summary data for chart
-        // This significantly reduces response size and improves performance
         payments: [],
       };
     } catch (error: any) {

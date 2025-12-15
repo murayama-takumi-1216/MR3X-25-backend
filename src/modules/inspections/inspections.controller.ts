@@ -69,23 +69,17 @@ export class InspectionsController {
     @Query('search') search?: string,
     @CurrentUser() user?: any,
   ) {
-    // Data isolation based on role
     let createdById: string | undefined;
     let effectiveAgencyId: string | undefined = agencyId;
 
     if (user?.role === 'CEO') {
-      // CEO sees all - no filtering
     } else if (user?.role === 'ADMIN') {
-      // ADMIN sees only inspections they created
       createdById = user.sub;
     } else if (user?.role === 'INDEPENDENT_OWNER') {
-      // INDEPENDENT_OWNER sees only their own inspections
       createdById = user.sub;
     } else if (user?.agencyId) {
-      // Agency users see only their agency's inspections
       effectiveAgencyId = user.agencyId;
     } else {
-      // For any other role without agency, only show their own created inspections
       createdById = user?.sub;
     }
 
@@ -112,7 +106,6 @@ export class InspectionsController {
     let agencyId: string | undefined;
 
     if (user?.role === 'CEO') {
-      // CEO sees all
     } else if (user?.role === 'ADMIN' || user?.role === 'INDEPENDENT_OWNER') {
       createdById = user.sub;
     } else if (user?.agencyId) {
@@ -137,7 +130,6 @@ export class InspectionsController {
   ) {
     let effectiveAgencyId = agencyId;
 
-    // Agency users can only see their agency's templates and default templates
     if (user?.agencyId && !agencyId) {
       effectiveAgencyId = user.agencyId;
     }
@@ -251,8 +243,6 @@ export class InspectionsController {
     return this.inspectionsService.remove(id);
   }
 
-  // ==================== PDF Generation ====================
-
   @Get(':id/pdf/provisional')
   @ApiOperation({ summary: 'Generate provisional PDF (with watermark)' })
   async generateProvisionalPdf(
@@ -310,8 +300,6 @@ export class InspectionsController {
     res.end(pdfBuffer);
   }
 
-  // ==================== Electronic Signature ====================
-
   @Post(':id/sign/:signerType')
   @ApiOperation({ summary: 'Sign inspection with electronic signature' })
   @OwnerPermission('inspections', OwnerAction.SIGN)
@@ -352,8 +340,6 @@ export class InspectionsController {
     return { message: 'Vistoria finalizada com sucesso' };
   }
 
-  // ==================== Signature Links ====================
-
   @Post(':id/signature-links')
   @ApiOperation({ summary: 'Create signature invitation links' })
   @OwnerPermission('inspections', OwnerAction.EDIT)
@@ -388,8 +374,6 @@ export class InspectionsController {
     await this.signatureLinkService.revokeAllInspectionLinks(BigInt(id));
     return { message: 'Todos os links de assinatura foram revogados' };
   }
-
-  // ==================== Audit Log ====================
 
   @Get(':id/audit-log')
   @ApiOperation({ summary: 'Get audit log for inspection' })

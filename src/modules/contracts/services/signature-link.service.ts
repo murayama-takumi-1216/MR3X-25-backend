@@ -27,9 +27,6 @@ export class SignatureLinkService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Create a signature invitation link
-   */
   async createSignatureLink(
     contractId: bigint,
     signerType: 'tenant' | 'owner' | 'agency' | 'witness',
@@ -37,7 +34,6 @@ export class SignatureLinkService {
     signerName?: string,
     expiresInHours: number = this.defaultExpiryHours,
   ): Promise<SignatureLinkResult> {
-    // Verify contract exists and is in pending_signatures status
     const contract = await this.prisma.contract.findUnique({
       where: { id: contractId },
       select: { id: true, status: true, contractToken: true },
@@ -47,7 +43,6 @@ export class SignatureLinkService {
       throw new NotFoundException('Contrato não encontrado');
     }
 
-    // Check if there's already an active link for this signer type
     const existingLink = await this.prisma.signatureLink.findFirst({
       where: {
         contractId,
@@ -58,7 +53,6 @@ export class SignatureLinkService {
     });
 
     if (existingLink) {
-      // Return existing link if still valid
       const signatureUrl = this.getSignatureUrl(existingLink.token);
       return {
         token: existingLink.token,
@@ -69,12 +63,10 @@ export class SignatureLinkService {
       };
     }
 
-    // Generate new token
     const token = randomUUID();
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + expiresInHours);
 
-    // Create signature link
     const link = await this.prisma.signatureLink.create({
       data: {
         contractId,
@@ -97,9 +89,6 @@ export class SignatureLinkService {
     };
   }
 
-  /**
-   * Validate a signature link
-   */
   async validateSignatureLink(token: string): Promise<ValidateSignatureLinkResult> {
     const link = await this.prisma.signatureLink.findUnique({
       where: { token },
@@ -121,7 +110,6 @@ export class SignatureLinkService {
       };
     }
 
-    // Check if already used
     if (link.usedAt) {
       return {
         valid: false,
@@ -130,7 +118,6 @@ export class SignatureLinkService {
       };
     }
 
-    // Check if expired
     if (new Date() > link.expiresAt) {
       return {
         valid: false,
@@ -149,9 +136,6 @@ export class SignatureLinkService {
     };
   }
 
-  /**
-   * Mark a signature link as used
-   */
   async markLinkUsed(token: string): Promise<void> {
     const link = await this.prisma.signatureLink.findUnique({
       where: { token },
@@ -171,9 +155,6 @@ export class SignatureLinkService {
     });
   }
 
-  /**
-   * Mark a signature link as sent
-   */
   async markLinkSent(token: string): Promise<void> {
     await this.prisma.signatureLink.update({
       where: { token },
@@ -181,9 +162,6 @@ export class SignatureLinkService {
     });
   }
 
-  /**
-   * Get all signature links for a contract
-   */
   async getContractSignatureLinks(contractId: bigint): Promise<any[]> {
     const links = await this.prisma.signatureLink.findMany({
       where: { contractId },
@@ -204,19 +182,13 @@ export class SignatureLinkService {
     }));
   }
 
-  /**
-   * Revoke a signature link
-   */
   async revokeSignatureLink(token: string): Promise<void> {
     await this.prisma.signatureLink.update({
       where: { token },
-      data: { expiresAt: new Date() }, // Set expiry to now
+      data: { expiresAt: new Date() },
     });
   }
 
-  /**
-   * Revoke all signature links for a contract
-   */
   async revokeAllContractLinks(contractId: bigint): Promise<void> {
     await this.prisma.signatureLink.updateMany({
       where: {
@@ -227,17 +199,11 @@ export class SignatureLinkService {
     });
   }
 
-  /**
-   * Get the signature URL for a token
-   */
   private getSignatureUrl(token: string): string {
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     return `${baseUrl}/sign/${token}`;
   }
 
-  /**
-   * Create signature links for all required parties
-   */
   async createSignatureLinksForContract(
     contractId: bigint,
     parties: Array<{
@@ -263,9 +229,6 @@ export class SignatureLinkService {
     return results;
   }
 
-  /**
-   * Get contract data for external signing page
-   */
   async getContractDataForSigning(token: string): Promise<any> {
     const validation = await this.validateSignatureLink(token);
 
@@ -307,7 +270,6 @@ export class SignatureLinkService {
       throw new NotFoundException('Contrato não encontrado');
     }
 
-    // Return only necessary data for signing page (no sensitive info)
     return {
       contractToken: contract.contractToken,
       signerType: validation.signerType,

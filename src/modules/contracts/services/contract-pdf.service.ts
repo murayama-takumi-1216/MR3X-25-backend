@@ -61,7 +61,6 @@ export class ContractPdfService {
     this.uploadsDir = path.join(process.cwd(), 'uploads', 'contracts');
     this.templatesDir = path.join(__dirname, '..', 'templates');
 
-    // Ensure directories exist
     this.ensureDirectoryExists(path.join(this.uploadsDir, 'provisional'));
     this.ensureDirectoryExists(path.join(this.uploadsDir, 'final'));
   }
@@ -72,9 +71,6 @@ export class ContractPdfService {
     }
   }
 
-  /**
-   * Generate unique token in format MR3X-CTR-YEAR-XXXX-XXXX
-   */
   generateContractToken(): string {
     const year = new Date().getFullYear();
     const random1 = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -82,9 +78,6 @@ export class ContractPdfService {
     return `MR3X-CTR-${year}-${random1}-${random2}`;
   }
 
-  /**
-   * Generate barcode as base64 PNG
-   */
   async generateBarcodeBase64(token: string): Promise<string> {
     try {
       const png = await bwipjs.toBuffer({
@@ -102,9 +95,6 @@ export class ContractPdfService {
     }
   }
 
-  /**
-   * Generate QR code as base64 PNG
-   */
   async generateQRCodeBase64(url: string): Promise<string> {
     try {
       const qrDataUrl = await QRCode.toDataURL(url, {
@@ -122,9 +112,6 @@ export class ContractPdfService {
     }
   }
 
-  /**
-   * Get contract data for PDF generation
-   */
   private async getContractData(contractId: bigint): Promise<ContractData> {
     const contract = await this.prisma.contract.findUnique({
       where: { id: contractId },
@@ -219,9 +206,6 @@ export class ContractPdfService {
     };
   }
 
-  /**
-   * Render HTML template with data
-   */
   private async renderHtmlTemplate(data: ContractData, isProvisional: boolean): Promise<string> {
     const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify/${data.token}`;
     const barcodeBase64 = await this.generateBarcodeBase64(data.token);
@@ -240,14 +224,10 @@ export class ContractPdfService {
       endDateFormatted: data.endDate.toLocaleDateString('pt-BR'),
     };
 
-    // Get HTML template
     const html = this.getContractHtmlTemplate(templateData);
     return html;
   }
 
-  /**
-   * Generate provisional PDF (with watermark)
-   */
   async generateProvisionalPdf(contractId: bigint): Promise<Buffer> {
     const data = await this.getContractData(contractId);
     const html = await this.renderHtmlTemplate(data, true);
@@ -272,10 +252,8 @@ export class ContractPdfService {
         },
       });
 
-      // Convert Uint8Array to Buffer
       const pdfBuffer = Buffer.from(pdfUint8Array);
 
-      // Save provisional PDF
       const timestamp = Date.now();
       const filename = `contract-provisional-${timestamp}.pdf`;
       const filePath = path.join(this.uploadsDir, 'provisional', data.id, filename);
@@ -283,7 +261,6 @@ export class ContractPdfService {
       this.ensureDirectoryExists(path.dirname(filePath));
       fs.writeFileSync(filePath, pdfBuffer);
 
-      // Generate and store provisional hash
       const hash = this.hashService.generateHash(pdfBuffer);
       await this.prisma.contract.update({
         where: { id: contractId },
@@ -300,9 +277,6 @@ export class ContractPdfService {
     }
   }
 
-  /**
-   * Generate final PDF (no watermark, with all signatures)
-   */
   async generateFinalPdf(contractId: bigint): Promise<Buffer> {
     const data = await this.getContractData(contractId);
     const html = await this.renderHtmlTemplate(data, false);
@@ -327,10 +301,8 @@ export class ContractPdfService {
         },
       });
 
-      // Convert Uint8Array to Buffer
       const pdfBuffer = Buffer.from(pdfUint8Array);
 
-      // Save final PDF
       const timestamp = Date.now();
       const filename = `contract-final-${timestamp}.pdf`;
       const filePath = path.join(this.uploadsDir, 'final', data.id, filename);
@@ -338,7 +310,6 @@ export class ContractPdfService {
       this.ensureDirectoryExists(path.dirname(filePath));
       fs.writeFileSync(filePath, pdfBuffer);
 
-      // Generate and store final hash
       const hash = this.hashService.generateHash(pdfBuffer);
       const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify/${data.token}`;
 
@@ -357,9 +328,6 @@ export class ContractPdfService {
     }
   }
 
-  /**
-   * Get contract HTML template
-   */
   private getContractHtmlTemplate(data: any): string {
     return `
 <!DOCTYPE html>
@@ -395,7 +363,6 @@ export class ContractPdfService {
       position: relative;
     }
 
-    /* Watermark for provisional */
     ${data.isProvisional ? `
     .watermark {
       position: fixed;
@@ -411,7 +378,6 @@ export class ContractPdfService {
     }
     ` : ''}
 
-    /* Sidebar barcode */
     .sidebar-barcode {
       position: fixed;
       right: 5mm;
@@ -425,7 +391,6 @@ export class ContractPdfService {
       height: auto;
     }
 
-    /* QR Code */
     .qrcode-container {
       position: fixed;
       bottom: 25mm;
@@ -445,7 +410,6 @@ export class ContractPdfService {
       margin-top: 2mm;
     }
 
-    /* Header */
     .header {
       text-align: center;
       margin-bottom: 20px;
@@ -465,7 +429,6 @@ export class ContractPdfService {
       font-family: 'Courier New', monospace;
     }
 
-    /* Sections */
     .section {
       margin-bottom: 20px;
     }
@@ -479,7 +442,6 @@ export class ContractPdfService {
       margin-bottom: 10px;
     }
 
-    /* Parties info */
     .parties {
       display: flex;
       gap: 20px;
@@ -509,7 +471,6 @@ export class ContractPdfService {
       font-weight: bold;
     }
 
-    /* Property info */
     .property-info {
       background: #f9f9f9;
       padding: 15px;
@@ -517,7 +478,6 @@ export class ContractPdfService {
       margin-bottom: 20px;
     }
 
-    /* Contract details */
     .contract-details {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -543,7 +503,6 @@ export class ContractPdfService {
       color: #333;
     }
 
-    /* Clauses */
     .clauses {
       text-align: justify;
     }
@@ -557,7 +516,6 @@ export class ContractPdfService {
       margin-bottom: 5px;
     }
 
-    /* Signatures */
     .signatures {
       margin-top: 40px;
       page-break-inside: avoid;
@@ -606,7 +564,6 @@ export class ContractPdfService {
       margin-top: 3px;
     }
 
-    /* Footer */
     .footer {
       position: fixed;
       bottom: 10mm;
@@ -845,9 +802,6 @@ export class ContractPdfService {
     `;
   }
 
-  /**
-   * Calculate duration between two dates
-   */
   private calculateDuration(startDate: Date, endDate: Date): string {
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -863,9 +817,6 @@ export class ContractPdfService {
     return `${months} mês${months > 1 ? 'es' : ''}`;
   }
 
-  /**
-   * Render clauses from JSON
-   */
   private renderClauses(clauses: any): string {
     if (!clauses || typeof clauses !== 'object') {
       return '';
@@ -889,9 +840,6 @@ export class ContractPdfService {
     return html;
   }
 
-  /**
-   * Convert number to Roman numeral
-   */
   private toRoman(num: number): string {
     const roman: { [key: string]: number } = {
       M: 1000,
@@ -919,9 +867,6 @@ export class ContractPdfService {
     return result;
   }
 
-  /**
-   * Get stored PDF file
-   */
   async getStoredPdf(contractId: bigint, type: 'provisional' | 'final'): Promise<Buffer | null> {
     const contract = await this.prisma.contract.findUnique({
       where: { id: contractId },

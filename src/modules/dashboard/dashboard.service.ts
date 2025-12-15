@@ -112,7 +112,6 @@ export class DashboardService {
       const now = new Date();
       const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      // Platform-wide statistics
       const totalAgencies = await this.prisma.agency.count({
         where: { status: 'ACTIVE' },
       }).catch(() => 0);
@@ -137,7 +136,6 @@ export class DashboardService {
         where: { deleted: false, status: 'ATIVO' },
       }).catch(() => 0);
 
-      // Calculate monthly revenue (all payments this month)
       const paymentsThisMonth = await this.prisma.payment.findMany({
         where: {
           dataPagamento: {
@@ -151,10 +149,8 @@ export class DashboardService {
         return sum + value;
       }, 0);
 
-      // Calculate MR3X platform fee (2% of revenue)
       const platformFee = Number(monthlyRevenue) * 0.02;
 
-      // Get overdue properties
       const overdueProperties = await this.prisma.property.findMany({
         where: {
           deleted: false,
@@ -167,16 +163,13 @@ export class DashboardService {
 
       const overdueCount = overdueProperties.length;
 
-      // Calculate overdue revenue
       const overdueRevenue = (overdueProperties as any[]).reduce((sum: number, prop: any) => {
         const rent = Number(prop.monthlyRent) || 0;
         return sum + rent;
       }, 0);
 
-      // Calculate received revenue (paid this month)
       const receivedRevenue = monthlyRevenue;
 
-      // Get pending payments count
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       const pendingPayments = await this.prisma.contract.count({
         where: {
@@ -189,7 +182,6 @@ export class DashboardService {
         },
       }).catch(() => 0);
 
-      // Get recent payments
       const recentPayments = await this.prisma.payment.findMany({
         orderBy: {
           dataPagamento: 'desc',
@@ -218,7 +210,6 @@ export class DashboardService {
         },
       }).catch(() => []);
 
-      // Get top agencies by property count
       const agenciesWithStats = await this.prisma.agency.findMany({
         where: { status: 'ACTIVE' },
         include: {
@@ -236,7 +227,6 @@ export class DashboardService {
         take: 5,
       }).catch(() => []);
 
-      // Calculate default rate
       const totalDueProperties = await this.prisma.property.count({
         where: {
           deleted: false,
@@ -246,7 +236,6 @@ export class DashboardService {
       }).catch(() => 0);
       const defaultRate = totalDueProperties > 0 ? (overdueCount / totalDueProperties) * 100 : 0;
 
-      // Property status breakdown
       const maintenanceCount = await this.prisma.property.count({
         where: { deleted: false, status: 'MANUTENCAO' },
       }).catch(() => 0);
@@ -357,7 +346,6 @@ export class DashboardService {
     }
   }
 
-  // Dashboard for ADMIN users - shows only data they created (each admin is independent)
   async getAdminDashboard(userId: string) {
     try {
       const now = new Date();
@@ -365,7 +353,6 @@ export class DashboardService {
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       const adminId = BigInt(userId);
 
-      // Properties created by this admin
       const [properties, contracts, paymentsThisMonth, recentPayments, agencies] = await Promise.all([
         this.prisma.property.findMany({
           where: {
@@ -429,7 +416,6 @@ export class DashboardService {
             },
           },
         }),
-        // Get agencies that have properties created by this admin
         this.prisma.agency.findMany({
           where: {
             status: 'ACTIVE',
@@ -459,10 +445,8 @@ export class DashboardService {
         return contract.lastPaymentDate < thirtyDaysAgo;
       });
 
-      // Build base dashboard response
       const baseDashboard = this.buildDashboardResponse(properties, contracts, paymentsThisMonth, pendingContracts, recentPayments);
 
-      // Add topAgencies for ADMIN
       const topAgencies = agencies.map((agency: any) => ({
         id: agency.id.toString(),
         name: agency.name,
@@ -482,7 +466,6 @@ export class DashboardService {
     }
   }
 
-  // Dashboard for INDEPENDENT_OWNER - shows only properties they created (by createdBy, not ownerId)
   async getIndependentOwnerDashboard(userId: string) {
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -687,7 +670,6 @@ export class DashboardService {
   }
 
   async getTenantDashboard(userId: string) {
-    // Get tenant's property
     const property = await this.prisma.property.findFirst({
       where: {
         tenantId: BigInt(userId),
@@ -705,7 +687,6 @@ export class DashboardService {
       },
     });
 
-    // Get active contract
     const contract = await this.prisma.contract.findFirst({
       where: {
         tenantId: BigInt(userId),
@@ -714,7 +695,6 @@ export class DashboardService {
       },
     });
 
-    // Get payment history
     const payments = await this.prisma.payment.findMany({
       where: {
         userId: BigInt(userId),
@@ -725,7 +705,6 @@ export class DashboardService {
       take: 12,
     });
 
-    // Calculate next due date
     let nextDueDate: Date | null = null;
     let daysUntilDue: number | null = null;
 
@@ -763,7 +742,6 @@ export class DashboardService {
   }
 
   async getTenantDocuments(userId: string) {
-    // Get tenant's property
     const property = await this.prisma.property.findFirst({
       where: {
         tenantId: BigInt(userId),
@@ -775,7 +753,6 @@ export class DashboardService {
       return [];
     }
 
-    // Get documents associated with the property
     const documents = await this.prisma.document.findMany({
       where: {
         propertyId: property.id,
@@ -794,7 +771,6 @@ export class DashboardService {
   }
 
   async getDueDates(userId: string, role?: string, userAgencyId?: string | null, userBrokerId?: string | null) {
-    // CEO should see all properties, ADMIN sees only properties they created
     const whereClause: any = {
       deleted: false,
       status: 'ALUGADO',
@@ -802,12 +778,9 @@ export class DashboardService {
     };
 
     if (role === 'CEO') {
-      // no extra filter - sees all
     } else if (role === 'ADMIN') {
-      // ADMIN sees only properties they created
       whereClause.createdBy = BigInt(userId);
     } else if (role === 'INDEPENDENT_OWNER') {
-      // INDEPENDENT_OWNER sees only properties they created
       whereClause.createdBy = BigInt(userId);
     } else if (role === 'AGENCY_ADMIN') {
       if (!userAgencyId) {
@@ -837,7 +810,6 @@ export class DashboardService {
       },
     };
 
-    // Include agency for CEO/ADMIN
     if (role === 'CEO' || role === 'ADMIN' || role === 'AGENCY_ADMIN') {
       includeClause.agency = {
         select: {
@@ -1217,10 +1189,6 @@ export class DashboardService {
     return this.buildDashboardResponse(properties, contracts, paymentsThisMonth, pendingContracts, recentPayments);
   }
 
-  /**
-   * Get platform revenue from agencies and independent owners
-   * This shows subscription payments made to the MR3X platform
-   */
   async getPlatformRevenue() {
     try {
       const now = new Date();
@@ -1228,7 +1196,6 @@ export class DashboardService {
       const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-      // Get all agencies with payment info
       const agencies = await this.prisma.agency.findMany({
         where: { status: 'ACTIVE' },
         select: {
@@ -1256,7 +1223,6 @@ export class DashboardService {
         orderBy: { totalSpent: 'desc' },
       });
 
-      // Get independent owners with their plan info
       const independentOwners = await this.prisma.user.findMany({
         where: {
           role: 'INDEPENDENT_OWNER',
@@ -1273,7 +1239,6 @@ export class DashboardService {
         orderBy: { createdAt: 'desc' },
       });
 
-      // Get microtransactions this month (from agencies)
       const agencyMicrotransactionsThisMonth = await this.prisma.microtransaction.findMany({
         where: {
           agencyId: { not: null },
@@ -1288,11 +1253,10 @@ export class DashboardService {
         orderBy: { createdAt: 'desc' },
       });
 
-      // Get microtransactions this month (from independent owners)
       const ownerMicrotransactionsThisMonth = await this.prisma.microtransaction.findMany({
         where: {
           userId: { not: null },
-          agencyId: null, // Only from independent owners (no agency)
+          agencyId: null,
           createdAt: { gte: firstDayOfMonth },
           status: 'PAID',
         },
@@ -1304,7 +1268,6 @@ export class DashboardService {
         orderBy: { createdAt: 'desc' },
       });
 
-      // Calculate totals
       const totalAgencyRevenue = agencies.reduce((sum, a) => sum + Number(a.totalSpent || 0), 0);
       const monthlyAgencyMicrotransactions = agencyMicrotransactionsThisMonth.reduce(
         (sum, m) => sum + Number(m.amount || 0),
@@ -1315,7 +1278,6 @@ export class DashboardService {
         0
       );
 
-      // Count by plan
       const agencyPlanCounts: Record<string, number> = {};
       const ownerPlanCounts: Record<string, number> = {};
 
@@ -1327,7 +1289,6 @@ export class DashboardService {
         ownerPlanCounts[o.plan || 'FREE'] = (ownerPlanCounts[o.plan || 'FREE'] || 0) + 1;
       });
 
-      // Get recent payments (agencies that paid recently)
       const recentAgencyPayments = agencies
         .filter(a => a.lastPaymentAt)
         .sort((a, b) => new Date(b.lastPaymentAt!).getTime() - new Date(a.lastPaymentAt!).getTime())
@@ -1343,7 +1304,6 @@ export class DashboardService {
           totalSpent: Number(a.totalSpent || 0),
         }));
 
-      // Format agencies for response
       const formattedAgencies = agencies.map(a => ({
         id: a.id.toString(),
         name: a.name,
@@ -1363,7 +1323,6 @@ export class DashboardService {
         },
       }));
 
-      // Format independent owners for response
       const formattedOwners = independentOwners.map(o => ({
         id: o.id.toString(),
         name: o.name,

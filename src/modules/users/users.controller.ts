@@ -16,7 +16,6 @@ import { UserRole } from '@prisma/client';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // ===== Profile Endpoints =====
 
   @Get('me')
   @ApiOperation({ summary: 'Get current user profile' })
@@ -50,7 +49,6 @@ export class UsersController {
     return this.usersService.changePassword(userId, dto.currentPassword, dto.newPassword);
   }
 
-  // ===== User Management Endpoints =====
 
   @Get()
   @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.AGENCY_MANAGER, UserRole.PROPRIETARIO, UserRole.INDEPENDENT_OWNER, UserRole.BROKER)
@@ -76,40 +74,28 @@ export class UsersController {
     @Query('excludeFrozen') excludeFrozen?: string,
     @CurrentUser() user?: any,
   ) {
-    // CEO sees all users
-    // ADMIN sees:
-    //   - All AGENCY_ADMIN users (for "Diretor Agência" page)
-    //   - All INDEPENDENT_OWNER users (for "Agências" page)
-    //   - Only users they created for other roles
-    // AGENCY_ADMIN/AGENCY_MANAGER sees all users in their agency (including tenants)
     let createdById: string | undefined;
     let finalAgencyId: string | undefined = agencyId;
 
     if (user?.role === UserRole.ADMIN) {
-      // If filtering by AGENCY_ADMIN or INDEPENDENT_OWNER role, ADMIN can see all
       if (role === UserRole.AGENCY_ADMIN || role === UserRole.INDEPENDENT_OWNER) {
-        createdById = undefined; // See all users of these roles
+        createdById = undefined;
       } else {
-        createdById = user.sub; // For other roles, only see users they created
+        createdById = user.sub;
       }
     } else if (user?.role === UserRole.AGENCY_ADMIN || user?.role === UserRole.AGENCY_MANAGER) {
-      // Agency users see all users in their agency (including tenants)
       if (user.agencyId) {
         finalAgencyId = user.agencyId.toString();
       }
       console.log('[findAll] AGENCY user:', user.role, 'agencyId:', user.agencyId, 'finalAgencyId:', finalAgencyId);
     } else if (user?.role === UserRole.BROKER) {
-      // Brokers see users they created
       createdById = user.sub;
     } else if (user?.role === UserRole.PROPRIETARIO || user?.role === UserRole.INDEPENDENT_OWNER) {
-      // Owners see users they created (their tenants)
       createdById = user.sub;
     }
 
-    // Exclude current user from results if requested
     const excludeUserId = excludeCurrentUser === 'true' ? user.sub : undefined;
 
-    // Exclude frozen users from results if requested (for dropdowns)
     const shouldExcludeFrozen = excludeFrozen === 'true';
 
     return this.usersService.findAll({ skip, take, search, role, agencyId: finalAgencyId, status, plan, createdById, excludeUserId, excludeFrozen: shouldExcludeFrozen });
@@ -139,12 +125,10 @@ export class UsersController {
 
       const scope: any = {};
 
-      // CEO sees all tenants (platform-wide view)
       if (user?.role === UserRole.CEO) {
         return await this.usersService.getTenantsByScope({}, search);
       }
 
-      // ADMIN sees only tenants they created (each admin is independent)
       if (user?.role === UserRole.ADMIN) {
         scope.createdById = user.sub;
       }
@@ -231,7 +215,6 @@ export class UsersController {
   @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.AGENCY_MANAGER, UserRole.INDEPENDENT_OWNER)
   @ApiOperation({ summary: 'Create a new user' })
   async create(@Body() dto: CreateUserDto, @CurrentUser() user: any) {
-    // Pass creator's role to validate role creation hierarchy
     return this.usersService.create(dto, user?.sub, user?.role as UserRole);
   }
 

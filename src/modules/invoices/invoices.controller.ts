@@ -53,33 +53,24 @@ export class InvoicesController {
     @Query('endDate') endDate?: string,
     @CurrentUser() user?: any,
   ) {
-    // Data isolation based on role
     let createdById: string | undefined;
     let effectiveAgencyId: string | undefined = agencyId;
     let userId: string | undefined;
 
     if (user?.role === 'CEO') {
-      // CEO sees all - no filtering
     } else if (user?.role === 'ADMIN') {
-      // ADMIN sees only invoices they created
       createdById = user.sub;
     } else if (user?.role === 'INDEPENDENT_OWNER') {
-      // INDEPENDENT_OWNER sees only their own invoices
       createdById = user.sub;
     } else if (user?.role === 'AGENCY_ADMIN' && user?.agencyId) {
-      // AGENCY_ADMIN sees all invoices in their agency
       effectiveAgencyId = user.agencyId;
     } else if (user?.role === 'AGENCY_MANAGER' && user?.agencyId) {
-      // AGENCY_MANAGER sees all invoices in their agency
       effectiveAgencyId = user.agencyId;
     } else if (user?.role === 'BROKER' && user?.agencyId) {
-      // BROKER sees all invoices in their agency
       effectiveAgencyId = user.agencyId;
     } else if (user?.agencyId) {
-      // Other agency users see only their agency's invoices
       effectiveAgencyId = user.agencyId;
     } else {
-      // For any other role, use userId fallback
       userId = user?.sub;
     }
 
@@ -109,17 +100,13 @@ export class InvoicesController {
     let userId: string | undefined;
 
     if (user?.role === 'CEO') {
-      // CEO sees all
     } else if (user?.role === 'ADMIN' || user?.role === 'INDEPENDENT_OWNER') {
       createdById = user.sub;
     } else if (user?.role === 'AGENCY_ADMIN' && user?.agencyId) {
-      // AGENCY_ADMIN sees all statistics in their agency
       agencyId = user.agencyId;
     } else if (user?.role === 'AGENCY_MANAGER' && user?.agencyId) {
-      // AGENCY_MANAGER sees all statistics in their agency
       agencyId = user.agencyId;
     } else if (user?.role === 'BROKER' && user?.agencyId) {
-      // BROKER sees all statistics in their agency
       agencyId = user.agencyId;
     } else if (user?.agencyId) {
       agencyId = user.agencyId;
@@ -198,7 +185,6 @@ export class InvoicesController {
   @Post('update-overdue')
   @ApiOperation({ summary: 'Update overdue invoices (admin only)' })
   async updateOverdue(@CurrentUser() user: any) {
-    // Only allow CEO or ADMIN to run this
     if (user?.role !== 'CEO' && user?.role !== 'ADMIN') {
       return { error: 'Unauthorized' };
     }

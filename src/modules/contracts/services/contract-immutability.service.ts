@@ -2,18 +2,6 @@ import { Injectable, ForbiddenException, BadRequestException } from '@nestjs/com
 import { PrismaService } from '@config/prisma.service';
 import { ContractHashService } from './contract-hash.service';
 
-/**
- * Contract status lifecycle:
- * PENDENTE -> AGUARDANDO_ASSINATURAS -> ASSINADO -> ATIVO -> ENCERRADO
- *                                    -> REVOGADO
- *
- * Immutability Rules:
- * - PENDENTE: Full editing allowed (draft mode)
- * - AGUARDANDO_ASSINATURAS: Clauses frozen, only signature collection allowed
- * - ASSINADO/ATIVO: Completely immutable, only deletion allowed
- * - REVOGADO/ENCERRADO: Completely immutable, read-only
- */
-
 export type ContractStatus =
   | 'PENDENTE'
   | 'AGUARDANDO_ASSINATURAS'
@@ -45,21 +33,15 @@ export class ContractImmutabilityService {
     private readonly hashService: ContractHashService,
   ) {}
 
-  /**
-   * Status transitions that are allowed
-   */
   private readonly allowedTransitions: Record<ContractStatus, ContractStatus[]> = {
     'PENDENTE': ['AGUARDANDO_ASSINATURAS', 'REVOGADO'],
-    'AGUARDANDO_ASSINATURAS': ['ASSINADO', 'REVOGADO', 'PENDENTE'], // Can go back to PENDENTE if revoked
+    'AGUARDANDO_ASSINATURAS': ['ASSINADO', 'REVOGADO', 'PENDENTE'],
     'ASSINADO': ['ATIVO', 'REVOGADO'],
     'ATIVO': ['ENCERRADO', 'REVOGADO'],
-    'REVOGADO': [], // Terminal state
-    'ENCERRADO': [], // Terminal state
+    'REVOGADO': [],
+    'ENCERRADO': [],
   };
 
-  /**
-   * Editable fields by status
-   */
   private readonly editableFieldsByStatus: Record<ContractStatus, string[]> = {
     'PENDENTE': [
       'propertyId', 'tenantId', 'ownerId', 'agencyId',
@@ -72,7 +54,6 @@ export class ContractImmutabilityService {
       'clausesSnapshot', 'guaranteeType', 'jurisdiction',
     ],
     'AGUARDANDO_ASSINATURAS': [
-      // Only signature-related fields can be modified
       'tenantSignature', 'tenantSignedAt', 'tenantSignedIP', 'tenantSignedAgent',
       'tenantGeoLat', 'tenantGeoLng', 'tenantGeoConsent',
       'ownerSignature', 'ownerSignedAt', 'ownerSignedIP', 'ownerSignedAgent',
@@ -82,15 +63,12 @@ export class ContractImmutabilityService {
       'witnessSignature', 'witnessSignedAt', 'witnessName', 'witnessDocument',
       'witnessGeoLat', 'witnessGeoLng', 'witnessGeoConsent',
     ],
-    'ASSINADO': [], // No edits allowed
-    'ATIVO': [], // No edits allowed
-    'REVOGADO': [], // No edits allowed
-    'ENCERRADO': [], // No edits allowed
+    'ASSINADO': [],
+    'ATIVO': [],
+    'REVOGADO': [],
+    'ENCERRADO': [],
   };
 
-  /**
-   * Check what operations are allowed for a contract
-   */
   async checkImmutability(contractId: bigint): Promise<ImmutabilityCheck> {
     const contract = await this.prisma.contract.findUnique({
       where: { id: contractId },
@@ -125,8 +103,8 @@ export class ContractImmutabilityService {
 
       case 'AGUARDANDO_ASSINATURAS':
         return {
-          canEdit: false, // Clauses frozen
-          canDelete: !hasAnySignature, // Can delete only if no signatures yet
+          canEdit: false,
+          canDelete: !hasAnySignature,
           canAddSignature: true,
           canRevoke: true,
           canFinalize: this.hasAllRequiredSignatures(contract),
@@ -139,7 +117,7 @@ export class ContractImmutabilityService {
       case 'ASSINADO':
         return {
           canEdit: false,
-          canDelete: true, // Can delete but not edit
+          canDelete: true,
           canAddSignature: false,
           canRevoke: true,
           canFinalize: false,
@@ -150,7 +128,7 @@ export class ContractImmutabilityService {
       case 'ATIVO':
         return {
           canEdit: false,
-          canDelete: true, // Can delete but not edit
+          canDelete: true,
           canAddSignature: false,
           canRevoke: true,
           canFinalize: false,
@@ -193,9 +171,6 @@ export class ContractImmutabilityService {
     }
   }
 
-  /**
-   * Validate if a field can be modified given the contract status
-   */
   async validateFieldModification(
     contractId: bigint,
     fieldName: string,
@@ -213,7 +188,6 @@ export class ContractImmutabilityService {
     const status = contract.status as ContractStatus;
     const editableFields = this.editableFieldsByStatus[status];
 
-    // If contract is signed (has hash), no modifications allowed
     if (contract.hashFinal && status !== 'PENDENTE') {
       return {
         allowed: false,
@@ -237,17 +211,11 @@ export class ContractImmutabilityService {
     };
   }
 
-  /**
-   * Validate status transition
-   */
   validateStatusTransition(currentStatus: ContractStatus, newStatus: ContractStatus): boolean {
     const allowed = this.allowedTransitions[currentStatus];
     return allowed.includes(newStatus);
   }
 
-  /**
-   * Enforce immutability before any update operation
-   */
   async enforceImmutability(
     contractId: bigint,
     updateData: Record<string, any>,
@@ -268,7 +236,6 @@ export class ContractImmutabilityService {
       key => !['id', 'updatedAt', 'createdAt'].includes(key),
     );
 
-    // Special handling for status field
     if (updateData.status && updateData.status !== status) {
       const canTransition = this.validateStatusTransition(status, updateData.status);
       if (!canTransition) {
@@ -280,9 +247,7 @@ export class ContractImmutabilityService {
       }
     }
 
-    // Check if contract has final hash (completely immutable except for specific operations)
     if (contract.hashFinal && status !== 'PENDENTE') {
-      // Only allow status changes and deletion flags
       const allowedWithHash = ['status', 'deleted', 'deletedAt', 'deletedBy'];
       const blockedFields = requestedFields.filter(f => !allowedWithHash.includes(f));
 
@@ -295,13 +260,11 @@ export class ContractImmutabilityService {
       }
     }
 
-    // Check each field against editable list
     const blockedFields = requestedFields.filter(
       field => !editableFields.includes(field) && !['status', 'deleted', 'deletedAt', 'deletedBy', 'updatedAt'].includes(field),
     );
 
     if (blockedFields.length > 0) {
-      // Log attempted modification
       await this.logBlockedModification(contractId, userId, blockedFields, status);
 
       return {
@@ -318,9 +281,6 @@ export class ContractImmutabilityService {
     };
   }
 
-  /**
-   * Create a new contract based on existing one (for modifications after signing)
-   */
   async createAmendedContract(
     originalContractId: bigint,
     amendments: Record<string, any>,
@@ -335,13 +295,11 @@ export class ContractImmutabilityService {
       throw new BadRequestException('Contrato original não encontrado');
     }
 
-    // Generate new token for amended contract
     const year = new Date().getFullYear();
     const random = Math.random().toString(36).substring(2, 7).toUpperCase();
     const amendmentNumber = await this.getAmendmentCount(originalContractId);
     const newToken = `MR3X-CTR-${year}-${random}-AMD${amendmentNumber + 1}`;
 
-    // Create new contract with amendments
     const newContract = await this.prisma.contract.create({
       data: {
         propertyId: original.propertyId,
@@ -365,7 +323,6 @@ export class ContractImmutabilityService {
         lateFeePercent: amendments.lateFeePercent || original.lateFeePercent,
         dailyPenaltyPercent: original.dailyPenaltyPercent,
         interestRatePercent: amendments.interestRatePercent || original.interestRatePercent,
-        // New contract starts with no signatures
         tenantSignature: null,
         tenantSignedAt: null,
         ownerSignature: null,
@@ -374,13 +331,11 @@ export class ContractImmutabilityService {
         agencySignedAt: null,
         witnessSignature: null,
         witnessSignedAt: null,
-        // No hash until signed
         hashFinal: null,
         provisionalHash: null,
       },
     });
 
-    // Log the amendment creation
     await this.prisma.contractAudit.create({
       data: {
         contractId: newContract.id,
@@ -396,7 +351,6 @@ export class ContractImmutabilityService {
       },
     });
 
-    // Also log on original contract
     await this.prisma.contractAudit.create({
       data: {
         contractId: originalContractId,
@@ -417,9 +371,6 @@ export class ContractImmutabilityService {
     };
   }
 
-  /**
-   * Get count of amendments for a contract
-   */
   private async getAmendmentCount(contractId: bigint): Promise<number> {
     const audits = await this.prisma.contractAudit.count({
       where: {
@@ -430,9 +381,6 @@ export class ContractImmutabilityService {
     return audits;
   }
 
-  /**
-   * Log blocked modification attempt
-   */
   private async logBlockedModification(
     contractId: bigint,
     userId: string,
@@ -454,9 +402,6 @@ export class ContractImmutabilityService {
     });
   }
 
-  /**
-   * Check if contract has all required signatures
-   */
   private hasAllRequiredSignatures(contract: {
     tenantSignature: string | null;
     ownerSignature: string | null;
@@ -470,9 +415,6 @@ export class ContractImmutabilityService {
     return hasTenant && hasOwner && hasAgency;
   }
 
-  /**
-   * Get status-specific message
-   */
   private getStatusMessage(status: ContractStatus): string {
     const messages: Record<ContractStatus, string> = {
       'PENDENTE': 'Todas as edições são permitidas no modo rascunho.',
@@ -485,15 +427,10 @@ export class ContractImmutabilityService {
     return messages[status];
   }
 
-  /**
-   * Validate that a new contract requires new token and hash
-   */
   async validateNewContractRequirements(
     data: any,
   ): Promise<{ valid: boolean; message: string }> {
-    // New contracts should not have pre-existing tokens or hashes
     if (data.contractToken) {
-      // Check if token already exists
       const existing = await this.prisma.contract.findUnique({
         where: { contractToken: data.contractToken },
       });

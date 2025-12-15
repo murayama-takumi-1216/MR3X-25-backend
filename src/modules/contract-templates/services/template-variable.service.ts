@@ -1,10 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '@config/prisma.service';
 
-/**
- * Variable field definitions for contract templates
- * Maps template placeholders to their data sources
- */
 export interface TemplateVariable {
   key: string;
   label: string;
@@ -35,15 +31,10 @@ export interface VariableValidationResult {
 export class TemplateVariableService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * All available template variables with their sources
-   */
   private readonly templateVariables: TemplateVariable[] = [
-    // Broker/Agent Variables
     { key: 'NOME_CORRETOR', label: 'Nome do Corretor', source: 'broker', required: false, description: 'Nome do corretor responsável' },
     { key: 'CRECI_CORRETOR', label: 'CRECI do Corretor', source: 'broker', required: false, description: 'Número do CRECI do corretor' },
 
-    // Owner (Locador) Variables - PF
     { key: 'NOME_LOCADOR', label: 'Nome do Locador', source: 'owner', required: true, description: 'Nome completo do proprietário' },
     { key: 'LOCADOR_NOME', label: 'Nome do Locador', source: 'owner', required: false, description: 'Nome completo do proprietário (alias)' },
     { key: 'CPF_LOCADOR', label: 'CPF do Locador', source: 'owner', required: true, description: 'CPF do proprietário' },
@@ -60,14 +51,12 @@ export class TemplateVariableService {
     { key: 'LOCADOR_RG', label: 'RG do Locador', source: 'owner', required: false, description: 'RG do proprietário' },
     { key: 'LOCADOR_DATA_NASC', label: 'Data de Nascimento do Locador', source: 'owner', required: false, description: 'Data de nascimento do proprietário' },
 
-    // Owner (Locador) Variables - PJ
     { key: 'RAZAO_SOCIAL_LOCADOR', label: 'Razão Social do Locador', source: 'owner', required: false, description: 'Razão social do proprietário PJ' },
     { key: 'CNPJ_LOCADOR', label: 'CNPJ do Locador', source: 'owner', required: false, description: 'CNPJ do proprietário' },
     { key: 'REPRESENTANTE_LOCADOR', label: 'Representante do Locador', source: 'owner', required: false, description: 'Nome do representante legal do proprietário' },
     { key: 'CPF_REPRESENTANTE_LOCADOR', label: 'CPF do Representante do Locador', source: 'owner', required: false, description: 'CPF do representante legal' },
     { key: 'CARGO_LOCADOR', label: 'Cargo do Representante do Locador', source: 'owner', required: false, description: 'Cargo do representante legal' },
 
-    // Tenant (Locatário) Variables - PF
     { key: 'NOME_LOCATARIO', label: 'Nome do Locatário', source: 'tenant', required: true, description: 'Nome completo do inquilino' },
     { key: 'LOCATARIO_NOME', label: 'Nome do Locatário', source: 'tenant', required: false, description: 'Nome completo do inquilino (alias)' },
     { key: 'CPF_LOCATARIO', label: 'CPF do Locatário', source: 'tenant', required: true, description: 'CPF do inquilino' },
@@ -84,20 +73,17 @@ export class TemplateVariableService {
     { key: 'LOCATARIO_RG', label: 'RG do Locatário', source: 'tenant', required: false, description: 'RG do inquilino' },
     { key: 'LOCATARIO_DATA_NASC', label: 'Data de Nascimento do Locatário', source: 'tenant', required: false, description: 'Data de nascimento do inquilino' },
 
-    // Tenant (Locatário) Variables - PJ
     { key: 'RAZAO_SOCIAL_LOCATARIO', label: 'Razão Social do Locatário', source: 'tenant', required: false, description: 'Razão social do inquilino PJ' },
     { key: 'CNPJ_LOCATARIO', label: 'CNPJ do Locatário', source: 'tenant', required: false, description: 'CNPJ do inquilino' },
     { key: 'REPRESENTANTE_LOCATARIO', label: 'Representante do Locatário', source: 'tenant', required: false, description: 'Nome do representante legal do inquilino' },
     { key: 'CPF_REPRESENTANTE_LOCATARIO', label: 'CPF do Representante do Locatário', source: 'tenant', required: false, description: 'CPF do representante legal' },
     { key: 'CARGO_LOCATARIO', label: 'Cargo do Representante do Locatário', source: 'tenant', required: false, description: 'Cargo do representante legal' },
 
-    // Property (Imóvel) Variables
     { key: 'ENDERECO_IMOVEL', label: 'Endereço do Imóvel', source: 'property', required: true, description: 'Endereço completo do imóvel' },
     { key: 'DESCRICAO_IMOVEL', label: 'Descrição do Imóvel', source: 'property', required: false, description: 'Descrição detalhada do imóvel' },
     { key: 'MATRICULA', label: 'Matrícula do Imóvel', source: 'property', required: false, description: 'Número de matrícula no cartório' },
     { key: 'ATIVIDADE_COMERCIAL', label: 'Atividade Comercial', source: 'custom', required: false, description: 'Atividade comercial prevista (para contratos comerciais)' },
 
-    // Contract (Contrato) Variables - REQUIRED FOR LEGAL VALIDITY
     { key: 'VALOR_ALUGUEL', label: 'Valor do Aluguel', source: 'contract', required: true, description: 'Valor mensal do aluguel em R$' },
     { key: 'DIA_VENCIMENTO', label: 'Dia de Vencimento', source: 'contract', required: true, description: 'Dia do mês para vencimento do aluguel' },
     { key: 'PRAZO_MESES', label: 'Prazo em Meses', source: 'contract', required: true, description: 'Duração do contrato em meses' },
@@ -107,13 +93,11 @@ export class TemplateVariableService {
     { key: 'TIPO_GARANTIA', label: 'Tipo de Garantia', source: 'contract', required: true, description: 'Garantia locatícia (caução, fiador, seguro fiança)' },
     { key: 'COMARCA', label: 'Comarca/Foro', source: 'contract', required: true, description: 'Comarca de eleição para litígios' },
 
-    // Contract - Optional Fields
     { key: 'DEPOSITO_CAUCAO', label: 'Valor do Depósito/Caução', source: 'contract', required: false, description: 'Valor do depósito de caução' },
     { key: 'MULTA_ATRASO', label: 'Multa por Atraso', source: 'contract', required: false, description: 'Percentual de multa por atraso (padrão 10%)' },
     { key: 'JUROS_MORA', label: 'Juros de Mora', source: 'contract', required: false, description: 'Percentual de juros de mora ao mês (padrão 1%)' },
     { key: 'MULTA_RESCISAO', label: 'Multa por Rescisão', source: 'contract', required: false, description: 'Valor da multa por rescisão antecipada' },
 
-    // Agency (Imobiliária) Variables
     { key: 'RAZAO_SOCIAL_IMOBILIARIA', label: 'Razão Social da Imobiliária', source: 'agency', required: false, description: 'Razão social da imobiliária' },
     { key: 'IMOBILIARIA_RAZAO_SOCIAL', label: 'Razão Social da Imobiliária', source: 'agency', required: false, description: 'Razão social da imobiliária (alias)' },
     { key: 'IMOBILIARIA_NOME_FANTASIA', label: 'Nome Fantasia da Imobiliária', source: 'agency', required: false, description: 'Nome fantasia da imobiliária' },
@@ -132,12 +116,10 @@ export class TemplateVariableService {
     { key: 'CPF_REPRESENTANTE_IMOBILIARIA', label: 'CPF do Representante da Imobiliária', source: 'agency', required: false, description: 'CPF do representante legal' },
     { key: 'IMOBILIARIA_REP_DOC', label: 'Documento do Representante da Imobiliária', source: 'agency', required: false, description: 'CPF do representante legal da imobiliária (alias)' },
 
-    // System-generated Variables
     { key: 'CIDADE', label: 'Cidade', source: 'system', required: false, description: 'Cidade onde o contrato é firmado' },
     { key: 'DATA_ASSINATURA', label: 'Data de Assinatura', source: 'system', required: false, description: 'Data da assinatura do contrato' },
     { key: 'DATA_ACEITE', label: 'Data de Aceite', source: 'system', required: false, description: 'Data do aceite eletrônico' },
 
-    // Platform Service Contract Variables
     { key: 'NOME_CONTRATANTE', label: 'Nome do Contratante', source: 'custom', required: false, description: 'Nome do contratante (para contratos de serviço)' },
     { key: 'DOCUMENTO_CONTRATANTE', label: 'CPF/CNPJ do Contratante', source: 'custom', required: false, description: 'Documento do contratante' },
     { key: 'ENDERECO_CONTRATANTE', label: 'Endereço do Contratante', source: 'custom', required: false, description: 'Endereço do contratante' },
@@ -148,7 +130,6 @@ export class TemplateVariableService {
     { key: 'FORMA_PAGAMENTO', label: 'Forma de Pagamento', source: 'custom', required: false, description: 'Forma de pagamento do plano' },
     { key: 'PERIODO_VIGENCIA', label: 'Período de Vigência', source: 'custom', required: false, description: 'Período de vigência do contrato' },
 
-    // Partnership/Affiliate Contract Variables
     { key: 'NOME_AFILIADO', label: 'Nome do Afiliado', source: 'custom', required: false, description: 'Nome do parceiro afiliado' },
     { key: 'CPF_AFILIADO', label: 'CPF do Afiliado', source: 'custom', required: false, description: 'CPF do afiliado' },
     { key: 'ENDERECO_AFILIADO', label: 'Endereço do Afiliado', source: 'custom', required: false, description: 'Endereço do afiliado' },
@@ -156,7 +137,6 @@ export class TemplateVariableService {
     { key: 'TELEFONE_AFILIADO', label: 'Telefone do Afiliado', source: 'custom', required: false, description: 'Telefone do afiliado' },
     { key: 'PERCENTUAL_COMISSAO', label: 'Percentual de Comissão', source: 'custom', required: false, description: 'Percentual de comissão do afiliado' },
 
-    // Condominium Contract Variables
     { key: 'NOME_CONDOMINIO', label: 'Nome do Condomínio', source: 'custom', required: false, description: 'Nome do condomínio' },
     { key: 'CNPJ_CONDOMINIO', label: 'CNPJ do Condomínio', source: 'custom', required: false, description: 'CNPJ do condomínio' },
     { key: 'ENDERECO_CONDOMINIO', label: 'Endereço do Condomínio', source: 'custom', required: false, description: 'Endereço do condomínio' },
@@ -167,10 +147,8 @@ export class TemplateVariableService {
     { key: 'VALOR_MENSAL', label: 'Valor Mensal', source: 'custom', required: false, description: 'Valor mensal do serviço' },
     { key: 'DIA_PAGAMENTO', label: 'Dia de Pagamento', source: 'custom', required: false, description: 'Dia de pagamento mensal' },
 
-    // MR3X Platform Info
     { key: 'ENDERECO_MR3X', label: 'Endereço MR3X', source: 'system', required: false, description: 'Endereço da sede da MR3X' },
 
-    // Signature Variables
     { key: 'ASSINATURA_LOCADOR', label: 'Assinatura do Locador', source: 'contract', required: false, description: 'Assinatura digital do locador com hash e IP' },
     { key: 'ASSINATURA_LOCATARIO', label: 'Assinatura do Locatário', source: 'contract', required: false, description: 'Assinatura digital do locatário com hash e IP' },
     { key: 'ASSINATURA_IMOBILIARIA', label: 'Assinatura da Imobiliária', source: 'contract', required: false, description: 'Assinatura digital da imobiliária com hash e IP' },
@@ -178,7 +156,6 @@ export class TemplateVariableService {
     { key: 'HASH_CONTRATO', label: 'Hash do Contrato', source: 'contract', required: false, description: 'Hash SHA-256 do contrato' },
     { key: 'VERIFICACAO_URL', label: 'URL de Verificação', source: 'contract', required: false, description: 'URL para validação do contrato' },
 
-    // Property Variables - Extended for Contract 3
     { key: 'IMOVEL_ENDERECO', label: 'Endereço do Imóvel', source: 'property', required: false, description: 'Endereço completo do imóvel' },
     { key: 'IMOVEL_BAIRRO', label: 'Bairro do Imóvel', source: 'property', required: false, description: 'Bairro/Localidade do imóvel' },
     { key: 'IMOVEL_TIPO', label: 'Tipo do Imóvel', source: 'property', required: false, description: 'Tipo do imóvel (residencial, comercial, etc.)' },
@@ -187,7 +164,6 @@ export class TemplateVariableService {
     { key: 'IMOVEL_DESCRICAO', label: 'Descrição do Imóvel', source: 'property', required: false, description: 'Descrição complementar do imóvel' },
     { key: 'IMOVEL_MOVEIS', label: 'Mobílias/Itens do Imóvel', source: 'property', required: false, description: 'Lista de mobílias e itens inclusos' },
 
-    // Contract Variables - Administration Contract 3
     { key: 'VALOR_LIMITE_MANUTENCAO', label: 'Limite Manutenção', source: 'contract', required: false, description: 'Valor limite para manutenção sem consulta prévia' },
     { key: 'TAXA_ADMINISTRACAO', label: 'Taxa de Administração', source: 'contract', required: false, description: 'Percentual da taxa de administração' },
     { key: 'VALOR_TAXA_INTERMEDIACAO', label: 'Valor Taxa Intermediação', source: 'contract', required: false, description: 'Valor fixo da taxa de intermediação' },
@@ -201,21 +177,17 @@ export class TemplateVariableService {
     { key: 'JUROS_ATRASO', label: 'Juros por Atraso', source: 'contract', required: false, description: 'Percentual de juros por atraso' },
     { key: 'FORO_CIDADE_ESTADO', label: 'Foro/Comarca', source: 'contract', required: false, description: 'Cidade e estado do foro eleito' },
 
-    // Inspection/Vistoria Variables
     { key: 'DATA_VISTORIA_INICIAL', label: 'Data Vistoria Inicial', source: 'contract', required: false, description: 'Data da vistoria inicial' },
     { key: 'RESP_VISTORIA_INICIAL', label: 'Responsável Vistoria Inicial', source: 'contract', required: false, description: 'Responsável pela vistoria inicial' },
     { key: 'ANEXO_VISTORIA_INICIAL', label: 'Anexo Vistoria Inicial', source: 'contract', required: false, description: 'Referência ao laudo de vistoria inicial' },
     { key: 'ANEXO_VISTORIA_FINAL', label: 'Anexo Vistoria Final', source: 'contract', required: false, description: 'Referência ao laudo de vistoria final' },
 
-    // Digital Signature Variables
     { key: 'HASH_DOCUMENTO', label: 'Hash do Documento', source: 'system', required: false, description: 'Hash SHA-256 do documento' },
     { key: 'IP_IMOBILIARIA', label: 'IP da Imobiliária', source: 'system', required: false, description: 'Endereço IP da assinatura da imobiliária' },
     { key: 'IP_LOCADOR', label: 'IP do Locador', source: 'system', required: false, description: 'Endereço IP da assinatura do locador' },
     { key: 'DATA_ASS_IMOBILIARIA', label: 'Data Assinatura Imobiliária', source: 'system', required: false, description: 'Data da assinatura da imobiliária' },
     { key: 'DATA_ASS_LOCADOR', label: 'Data Assinatura Locador', source: 'system', required: false, description: 'Data da assinatura do locador' },
 
-    // Contract 4 - Rural Property Rental Variables
-    // Multiple Landlords (Locador 1)
     { key: 'LOCADOR1_NOME', label: 'Nome Locador 1', source: 'owner', required: false, description: 'Nome do primeiro locador' },
     { key: 'LOCADOR1_NACIONALIDADE', label: 'Nacionalidade Locador 1', source: 'owner', required: false, description: 'Nacionalidade do primeiro locador' },
     { key: 'LOCADOR1_ESTADO_CIVIL', label: 'Estado Civil Locador 1', source: 'owner', required: false, description: 'Estado civil do primeiro locador' },
@@ -224,7 +196,6 @@ export class TemplateVariableService {
     { key: 'LOCADOR1_CPF', label: 'CPF Locador 1', source: 'owner', required: false, description: 'CPF do primeiro locador' },
     { key: 'LOCADOR1_ENDERECO', label: 'Endereço Locador 1', source: 'owner', required: false, description: 'Endereço do primeiro locador' },
 
-    // Multiple Landlords (Locador 2)
     { key: 'LOCADOR2_NOME', label: 'Nome Locador 2', source: 'custom', required: false, description: 'Nome do segundo locador' },
     { key: 'LOCADOR2_NACIONALIDADE', label: 'Nacionalidade Locador 2', source: 'custom', required: false, description: 'Nacionalidade do segundo locador' },
     { key: 'LOCADOR2_ESTADO_CIVIL', label: 'Estado Civil Locador 2', source: 'custom', required: false, description: 'Estado civil do segundo locador' },
@@ -233,7 +204,6 @@ export class TemplateVariableService {
     { key: 'LOCADOR2_CPF', label: 'CPF Locador 2', source: 'custom', required: false, description: 'CPF do segundo locador' },
     { key: 'LOCADOR2_ENDERECO', label: 'Endereço Locador 2', source: 'custom', required: false, description: 'Endereço do segundo locador' },
 
-    // Tenant Representative (PJ)
     { key: 'LOCATARIO_REP_NOME', label: 'Nome Representante Locatário', source: 'tenant', required: false, description: 'Nome do representante legal do locatário PJ' },
     { key: 'LOCATARIO_REP_NACIONALIDADE', label: 'Nacionalidade Representante', source: 'tenant', required: false, description: 'Nacionalidade do representante legal' },
     { key: 'LOCATARIO_REP_ESTADO_CIVIL', label: 'Estado Civil Representante', source: 'tenant', required: false, description: 'Estado civil do representante legal' },
@@ -241,32 +211,26 @@ export class TemplateVariableService {
     { key: 'LOCATARIO_REP_RG', label: 'RG Representante', source: 'tenant', required: false, description: 'RG do representante legal' },
     { key: 'LOCATARIO_REP_ENDERECO', label: 'Endereço Representante', source: 'tenant', required: false, description: 'Endereço do representante legal' },
 
-    // Rural Property Specific
     { key: 'IMOVEL_LOCALIDADE', label: 'Localidade do Imóvel', source: 'property', required: false, description: 'Localização do imóvel rural' },
     { key: 'IMOVEL_AREA_LOCADA', label: 'Área Locada', source: 'property', required: false, description: 'Área total locada em m²' },
     { key: 'IMOVEL_COMARCA', label: 'Comarca do Imóvel', source: 'property', required: false, description: 'Comarca onde o imóvel está registrado' },
     { key: 'FINALIDADE_USO', label: 'Finalidade de Uso', source: 'contract', required: false, description: 'Finalidade de uso do imóvel rural' },
 
-    // Payment Information
     { key: 'BANCO', label: 'Banco', source: 'contract', required: false, description: 'Nome do banco para pagamento' },
     { key: 'AGENCIA', label: 'Agência', source: 'contract', required: false, description: 'Número da agência bancária' },
     { key: 'CONTA', label: 'Conta', source: 'contract', required: false, description: 'Número da conta bancária' },
     { key: 'CHAVE_PIX', label: 'Chave PIX', source: 'contract', required: false, description: 'Chave PIX para pagamento' },
 
-    // Rural Contract Penalties
     { key: 'MULTA_RESTITUICAO_MESES', label: 'Multa Restituição (Meses)', source: 'contract', required: false, description: 'Meses de multa por descumprimento de aviso prévio' },
     { key: 'MULTA_INFRACAO_MESES', label: 'Multa Infração (Meses)', source: 'contract', required: false, description: 'Meses de aluguel como multa por infração' },
     { key: 'DATA_VISTORIA_FINAL', label: 'Data Vistoria Final', source: 'contract', required: false, description: 'Data da vistoria final do imóvel' },
 
-    // Multiple Signatures
     { key: 'DATA_ASS_LOCADOR1', label: 'Data Assinatura Locador 1', source: 'system', required: false, description: 'Data da assinatura do primeiro locador' },
     { key: 'DATA_ASS_LOCADOR2', label: 'Data Assinatura Locador 2', source: 'system', required: false, description: 'Data da assinatura do segundo locador' },
     { key: 'IP_LOCADORES', label: 'IP dos Locadores', source: 'system', required: false, description: 'Endereço IP da assinatura dos locadores' },
     { key: 'IP_LOCATARIO', label: 'IP do Locatário', source: 'system', required: false, description: 'Endereço IP da assinatura do locatário' },
     { key: 'DATA_ASS_LOCATARIO', label: 'Data Assinatura Locatário', source: 'system', required: false, description: 'Data da assinatura do locatário' },
 
-    // Contract 6 - Commercial Lease PJ Variables
-    // Tenant (Locatário) PJ Extended Variables
     { key: 'LOCATARIO_RAZAO_SOCIAL', label: 'Razão Social do Locatário', source: 'tenant', required: false, description: 'Razão social da empresa locatária' },
     { key: 'LOCATARIO_NOME_FANTASIA', label: 'Nome Fantasia do Locatário', source: 'tenant', required: false, description: 'Nome fantasia da empresa locatária' },
     { key: 'LOCATARIO_CNPJ', label: 'CNPJ do Locatário', source: 'tenant', required: false, description: 'CNPJ da empresa locatária' },
@@ -278,7 +242,6 @@ export class TemplateVariableService {
     { key: 'LOCATARIO_REP_EMAIL', label: 'E-mail do Representante', source: 'tenant', required: false, description: 'E-mail do representante legal' },
     { key: 'LOCATARIO_REP_TELEFONE', label: 'Telefone do Representante', source: 'tenant', required: false, description: 'Telefone do representante legal' },
 
-    // Property Extended Variables
     { key: 'IMOVEL_CIDADE_UF', label: 'Cidade/UF do Imóvel', source: 'property', required: false, description: 'Cidade e UF do imóvel' },
     { key: 'IMOVEL_CEP', label: 'CEP do Imóvel', source: 'property', required: false, description: 'CEP do imóvel' },
     { key: 'IMOVEL_CARTORIO', label: 'Cartório de Registro', source: 'property', required: false, description: 'Cartório onde o imóvel está registrado' },
@@ -289,12 +252,10 @@ export class TemplateVariableService {
     { key: 'IMOVEL_ENERGIA', label: 'Padrão de Energia', source: 'property', required: false, description: 'Padrão de energia elétrica do imóvel' },
     { key: 'IMOVEL_CONDOMINIO', label: 'Nome do Condomínio', source: 'property', required: false, description: 'Nome do condomínio (se aplicável)' },
 
-    // Contract Values Extended
     { key: 'VALOR_ALUGUEL_EXTENSO', label: 'Valor Aluguel por Extenso', source: 'contract', required: false, description: 'Valor do aluguel por extenso' },
     { key: 'PERIODICIDADE_REAJUSTE', label: 'Periodicidade do Reajuste', source: 'contract', required: false, description: 'Periodicidade do reajuste (anual, semestral)' },
     { key: 'DATA_BASE_REAJUSTE', label: 'Data Base do Reajuste', source: 'contract', required: false, description: 'Data base para cálculo do reajuste' },
 
-    // Responsibility Variables (who pays what)
     { key: 'RESP_IPTU', label: 'Responsável IPTU', source: 'contract', required: false, description: 'Responsável pelo pagamento do IPTU' },
     { key: 'RESP_CONDOMINIO', label: 'Responsável Condomínio', source: 'contract', required: false, description: 'Responsável pelo pagamento do condomínio' },
     { key: 'RESP_COND_EXTRAORDINARIA', label: 'Responsável Taxa Extraordinária', source: 'contract', required: false, description: 'Responsável por taxas extraordinárias de condomínio' },
@@ -307,11 +268,9 @@ export class TemplateVariableService {
     { key: 'RESP_TAXAS_MUNICIPAIS', label: 'Responsável Taxas Municipais', source: 'contract', required: false, description: 'Responsável por taxas municipais' },
     { key: 'RESP_MULTAS_COND', label: 'Responsável Multas Condominiais', source: 'contract', required: false, description: 'Responsável por multas condominiais' },
 
-    // Administration Fees Extended
     { key: 'TAXA_INTERMEDIACAO', label: 'Taxa de Intermediação %', source: 'contract', required: false, description: 'Percentual da taxa de intermediação' },
     { key: 'VALOR_INTERMEDIACAO', label: 'Valor de Intermediação', source: 'contract', required: false, description: 'Valor fixo de intermediação' },
 
-    // Guarantee Extended Variables
     { key: 'VALOR_GARANTIA', label: 'Valor da Garantia', source: 'contract', required: false, description: 'Valor total da garantia locatícia' },
     { key: 'CAUCAO_VALOR', label: 'Valor da Caução', source: 'contract', required: false, description: 'Valor da caução em dinheiro' },
     { key: 'FIADOR_DADOS', label: 'Dados do Fiador', source: 'contract', required: false, description: 'Dados completos do fiador' },
@@ -319,10 +278,8 @@ export class TemplateVariableService {
     { key: 'TITULO_CAPITALIZACAO', label: 'Título de Capitalização', source: 'contract', required: false, description: 'Dados do título de capitalização' },
     { key: 'CARTA_FIANCA_BANCARIA', label: 'Carta de Fiança Bancária', source: 'contract', required: false, description: 'Dados da carta de fiança bancária' },
 
-    // Inspection Extended Variables
     { key: 'PRAZO_CONTESTACAO_VISTORIA', label: 'Prazo Contestação Vistoria', source: 'contract', required: false, description: 'Prazo em horas para contestação da vistoria' },
 
-    // Contract Terms Extended
     { key: 'TIPO_RENOVACAO', label: 'Tipo de Renovação', source: 'contract', required: false, description: 'Tipo de renovação contratual' },
     { key: 'AUTORIZACAO_BENFEITORIAS', label: 'Autorização Benfeitorias', source: 'contract', required: false, description: 'Status de autorização para benfeitorias' },
     { key: 'LIMITE_BENFEITORIAS', label: 'Limite para Benfeitorias', source: 'contract', required: false, description: 'Valor limite para benfeitorias sem autorização' },
@@ -331,25 +288,20 @@ export class TemplateVariableService {
     { key: 'DIAS_INADIMPLENCIA', label: 'Dias para Inadimplência', source: 'contract', required: false, description: 'Dias de atraso para considerar inadimplência' },
     { key: 'DIAS_PREFERENCIA', label: 'Dias para Preferência', source: 'contract', required: false, description: 'Dias de antecedência para direito de preferência' },
 
-    // Document Attachments
     { key: 'ANEXO_GARANTIA', label: 'Anexo Garantia', source: 'contract', required: false, description: 'Referência ao anexo de garantia' },
     { key: 'ANEXO_CONTRATO_SOCIAL', label: 'Anexo Contrato Social', source: 'contract', required: false, description: 'Referência ao contrato social' },
     { key: 'ANEXOS_DOCUMENTOS_REP', label: 'Anexos Documentos Representantes', source: 'contract', required: false, description: 'Referência aos documentos dos representantes' },
     { key: 'ANEXO_CERTIDOES', label: 'Anexo Certidões', source: 'contract', required: false, description: 'Referência às certidões do imóvel' },
     { key: 'ANEXO_ALVARA', label: 'Anexo Alvará', source: 'contract', required: false, description: 'Referência ao alvará de funcionamento' },
 
-    // Contract 7 - Rural Property Lease Variables
-    // Agency Representative Extended
     { key: 'IMOBILIARIA_REP_CARGO', label: 'Cargo Representante Imobiliária', source: 'agency', required: false, description: 'Cargo do representante da imobiliária' },
 
-    // Guarantor (Fiador) Extended Variables
     { key: 'FIADOR_DOCUMENTO', label: 'Documento do Fiador', source: 'custom', required: false, description: 'CPF ou CNPJ do fiador' },
     { key: 'FIADOR_TELEFONE', label: 'Telefone do Fiador', source: 'custom', required: false, description: 'Telefone do fiador' },
     { key: 'FIADOR_EMAIL', label: 'E-mail do Fiador', source: 'custom', required: false, description: 'E-mail do fiador' },
     { key: 'DATA_ASS_FIADOR', label: 'Data Assinatura Fiador', source: 'system', required: false, description: 'Data da assinatura do fiador' },
     { key: 'IP_FIADOR', label: 'IP do Fiador', source: 'system', required: false, description: 'IP da assinatura do fiador' },
 
-    // Rural Property Variables
     { key: 'IMOVEL_MUNICIPIO', label: 'Município do Imóvel', source: 'property', required: false, description: 'Município onde o imóvel está localizado' },
     { key: 'IMOVEL_ESTADO', label: 'Estado do Imóvel', source: 'property', required: false, description: 'Estado (UF) do imóvel' },
     { key: 'IMOVEL_AREA_HECTARES', label: 'Área em Hectares', source: 'property', required: false, description: 'Área total do imóvel rural em hectares' },
@@ -362,12 +314,10 @@ export class TemplateVariableService {
     { key: 'IMOVEL_POCOS_AGUA', label: 'Poços/Água', source: 'property', required: false, description: 'Informações sobre poços e fontes de água' },
     { key: 'IMOVEL_DESTINACAO_RURAL', label: 'Destinação Rural', source: 'property', required: false, description: 'Destinação da propriedade (agricultura, pastagem, etc.)' },
 
-    // Rural Contract Variables
     { key: 'RENOVACAO_AUTOMATICA', label: 'Renovação Automática', source: 'contract', required: false, description: 'Se o contrato tem renovação automática (Sim/Não)' },
     { key: 'PERIODICIDADE_PAGAMENTO', label: 'Periodicidade de Pagamento', source: 'contract', required: false, description: 'Periodicidade do pagamento (mensal, anual, por safra)' },
     { key: 'PLATAFORMA_PAGAMENTO', label: 'Plataforma de Pagamento', source: 'contract', required: false, description: 'Nome da plataforma digital de pagamento' },
 
-    // Rural Responsibility Variables
     { key: 'RESP_ITR', label: 'Responsável ITR', source: 'contract', required: false, description: 'Responsável pelo ITR' },
     { key: 'RESP_LICENCAS_AMBIENTAIS', label: 'Responsável Licenças Ambientais', source: 'contract', required: false, description: 'Responsável pelas licenças ambientais' },
     { key: 'RESP_CAR', label: 'Responsável CAR', source: 'contract', required: false, description: 'Responsável pelo Cadastro Ambiental Rural' },
@@ -378,48 +328,36 @@ export class TemplateVariableService {
     { key: 'RESP_ESTRADAS', label: 'Responsável Estradas', source: 'contract', required: false, description: 'Responsável pela manutenção de estradas internas' },
     { key: 'RESP_INSUMOS', label: 'Responsável Insumos', source: 'contract', required: false, description: 'Responsável por custos com insumos e produção' },
 
-    // Rural Contract Penalties
     { key: 'DIAS_ABANDONO', label: 'Dias para Abandono', source: 'contract', required: false, description: 'Dias de abandono para configurar rescisão' },
     { key: 'VALOR_MULTA_RESCISAO_EXTENSO', label: 'Multa Rescisão por Extenso', source: 'contract', required: false, description: 'Valor da multa rescisória por extenso' },
 
-    // Contract 15 - Rural Lease Specific Variables
     { key: 'TIPO_IMOVEL_RURAL', label: 'Tipo de Imóvel Rural', source: 'property', required: false, description: 'Tipo do imóvel rural (Fazenda/Sítio/Chácara/Pastagem/Agropecuária/Residência Rural)' },
     { key: 'FINALIDADE_RURAL', label: 'Finalidade Rural', source: 'contract', required: false, description: 'Finalidade principal do uso do imóvel rural' },
     { key: 'ATIVIDADES_PERMITIDAS', label: 'Atividades Permitidas', source: 'contract', required: false, description: 'Lista de atividades rurais permitidas no imóvel' },
     { key: 'PASTOS_RESPONSAVEL', label: 'Responsável Manutenção Pastos', source: 'contract', required: false, description: 'Responsável pela manutenção de pastos' },
     { key: 'CONSERVACAO_RESPONSAVEL', label: 'Responsável Conservação', source: 'contract', required: false, description: 'Responsável pela limpeza e conservação do imóvel' },
 
-    // Contract 16 - Rural Residence Specific Variables
     { key: 'MANUTENCAO_JARDIM_RESPONSAVEL', label: 'Responsável Manutenção Jardim', source: 'contract', required: false, description: 'Responsável pela manutenção de jardim/pomar simples' },
 
-    // System Variables Extended
     { key: 'DATA_HORA_REGISTRO', label: 'Data e Hora de Registro', source: 'system', required: false, description: 'Data e hora completa do registro do contrato' },
 
-    // Contract 8 - Residential Lease PJ Variables
-    // Property Values Extended
     { key: 'IMOVEL_CONDOMINIO_VALOR', label: 'Valor do Condomínio', source: 'property', required: false, description: 'Valor mensal do condomínio' },
     { key: 'IMOVEL_IPTU_VALOR', label: 'Valor do IPTU', source: 'property', required: false, description: 'Valor anual do IPTU' },
 
-    // Insurance and Charges
     { key: 'SEGURO_INCENDIO_VALOR', label: 'Valor Seguro Incêndio', source: 'contract', required: false, description: 'Valor do seguro incêndio obrigatório' },
     { key: 'SEGURO_INCENDIO_RESPONSAVEL', label: 'Responsável Seguro Incêndio', source: 'contract', required: false, description: 'Responsável pela contratação do seguro incêndio' },
 
-    // Contract 12 - Commercial Lease PF/PJ Specific Variables
     { key: 'DIREITO_RENOVATORIA', label: 'Direito à Renovatória', source: 'contract', required: false, description: 'Se o locatário terá direito à ação renovatória (Sim/Não)' },
     { key: 'TAXAS_FUNCIONAMENTO_RESPONSAVEL', label: 'Responsável Taxas Funcionamento', source: 'contract', required: false, description: 'Responsável pelas taxas de alvará e funcionamento' },
     { key: 'TAXA_LIXO_RESPONSAVEL', label: 'Responsável Taxa de Lixo', source: 'contract', required: false, description: 'Responsável pela taxa de lixo comercial' },
     { key: 'MULTA_RESCISORIA', label: 'Multa Rescisória (Meses)', source: 'contract', required: false, description: 'Quantidade de meses para cálculo da multa rescisória' },
     { key: 'ATIVIDADE_COMERCIAL', label: 'Atividade Comercial', source: 'contract', required: false, description: 'Descrição da atividade comercial permitida no imóvel' },
 
-    // Residential PJ Specific
     { key: 'OCUPANTES_AUTORIZADOS', label: 'Ocupantes Autorizados', source: 'contract', required: false, description: 'Lista de ocupantes autorizados (colaboradores da empresa)' },
     { key: 'MULTA_RESCISAO_MESES', label: 'Multa Rescisão (Meses)', source: 'contract', required: false, description: 'Quantidade de meses de aluguel como multa rescisória' },
 
-    // Gas Responsibility
     { key: 'RESP_GAS', label: 'Responsável Gás', source: 'contract', required: false, description: 'Responsável pelo pagamento do gás' },
 
-    // Contract 9 - Residential Lease PF/PF Variables
-    // Owner (Locador) Extended Variables
     { key: 'LOCADOR_RG_ORGAO', label: 'Órgão Emissor RG Locador', source: 'owner', required: false, description: 'Órgão emissor do RG do locador' },
     { key: 'LOCADOR_DATA_NASCIMENTO', label: 'Data Nascimento Locador', source: 'owner', required: false, description: 'Data de nascimento do locador' },
     { key: 'LOCADOR_NUMERO', label: 'Número Endereço Locador', source: 'owner', required: false, description: 'Número do endereço do locador' },
@@ -429,7 +367,6 @@ export class TemplateVariableService {
     { key: 'LOCADOR_CIDADE', label: 'Cidade do Locador', source: 'owner', required: false, description: 'Cidade do locador' },
     { key: 'LOCADOR_ESTADO', label: 'Estado do Locador', source: 'owner', required: false, description: 'Estado (UF) do locador' },
 
-    // Tenant (Locatário) PF Extended Variables
     { key: 'LOCATARIO_RG_ORGAO', label: 'Órgão Emissor RG Locatário', source: 'tenant', required: false, description: 'Órgão emissor do RG do locatário' },
     { key: 'LOCATARIO_DATA_NASCIMENTO', label: 'Data Nascimento Locatário', source: 'tenant', required: false, description: 'Data de nascimento do locatário' },
     { key: 'LOCATARIO_NUMERO', label: 'Número Endereço Locatário', source: 'tenant', required: false, description: 'Número do endereço do locatário' },
@@ -439,14 +376,12 @@ export class TemplateVariableService {
     { key: 'LOCATARIO_CIDADE', label: 'Cidade do Locatário', source: 'tenant', required: false, description: 'Cidade do locatário' },
     { key: 'LOCATARIO_ESTADO', label: 'Estado do Locatário', source: 'tenant', required: false, description: 'Estado (UF) do locatário' },
 
-    // Spouse (Cônjuge do Locatário) Variables
     { key: 'CONJUGE_LOCATARIO_NOME', label: 'Nome Cônjuge Locatário', source: 'tenant', required: false, description: 'Nome do cônjuge do locatário' },
     { key: 'CONJUGE_LOCATARIO_CPF', label: 'CPF Cônjuge Locatário', source: 'tenant', required: false, description: 'CPF do cônjuge do locatário' },
     { key: 'CONJUGE_LOCATARIO_RG', label: 'RG Cônjuge Locatário', source: 'tenant', required: false, description: 'RG do cônjuge do locatário' },
     { key: 'DATA_ASS_CONJUGE_LOCATARIO', label: 'Data Assinatura Cônjuge', source: 'system', required: false, description: 'Data da assinatura do cônjuge do locatário' },
     { key: 'HORA_ASS_CONJUGE_LOCATARIO', label: 'Hora Assinatura Cônjuge', source: 'system', required: false, description: 'Hora da assinatura do cônjuge do locatário' },
 
-    // Property Extended Variables
     { key: 'IMOVEL_NUMERO', label: 'Número do Imóvel', source: 'property', required: false, description: 'Número do endereço do imóvel' },
     { key: 'IMOVEL_COMPLEMENTO', label: 'Complemento do Imóvel', source: 'property', required: false, description: 'Complemento do endereço do imóvel' },
     { key: 'IMOVEL_CIDADE', label: 'Cidade do Imóvel', source: 'property', required: false, description: 'Cidade onde o imóvel está localizado' },
@@ -457,7 +392,6 @@ export class TemplateVariableService {
     { key: 'IMOVEL_SALAS', label: 'Salas do Imóvel', source: 'property', required: false, description: 'Número de salas do imóvel' },
     { key: 'IMOVEL_OBSERVACOES', label: 'Observações do Imóvel', source: 'property', required: false, description: 'Observações adicionais do imóvel' },
 
-    // Agency Extended Variables
     { key: 'IMOBILIARIA_REP_CPF', label: 'CPF Representante Imobiliária', source: 'agency', required: false, description: 'CPF do representante legal da imobiliária' },
     { key: 'IMOBILIARIA_NUMERO', label: 'Número Endereço Imobiliária', source: 'agency', required: false, description: 'Número do endereço da imobiliária' },
     { key: 'IMOBILIARIA_COMPLEMENTO', label: 'Complemento Endereço Imobiliária', source: 'agency', required: false, description: 'Complemento do endereço da imobiliária' },
@@ -466,7 +400,6 @@ export class TemplateVariableService {
     { key: 'IMOBILIARIA_CIDADE', label: 'Cidade da Imobiliária', source: 'agency', required: false, description: 'Cidade da imobiliária' },
     { key: 'IMOBILIARIA_ESTADO', label: 'Estado da Imobiliária', source: 'agency', required: false, description: 'Estado (UF) da imobiliária' },
 
-    // Guarantee Extended Variables
     { key: 'GARANTIA_TIPO', label: 'Tipo de Garantia', source: 'contract', required: false, description: 'Modalidade de garantia locatícia' },
     { key: 'CAUCAO_VALOR_EXTENSO', label: 'Valor Caução por Extenso', source: 'contract', required: false, description: 'Valor da caução por extenso' },
     { key: 'CAUCAO_MESES', label: 'Caução em Meses', source: 'contract', required: false, description: 'Quantidade de meses equivalentes à caução' },
@@ -474,7 +407,6 @@ export class TemplateVariableService {
     { key: 'CAUCAO_CONTA', label: 'Conta da Caução', source: 'contract', required: false, description: 'Conta bancária da caução' },
     { key: 'CAUCAO_DATA_DEPOSITO', label: 'Data Depósito Caução', source: 'contract', required: false, description: 'Data do depósito da caução' },
 
-    // Fiador (Guarantor) Extended Variables
     { key: 'FIADOR_NOME', label: 'Nome do Fiador', source: 'custom', required: false, description: 'Nome completo do fiador' },
     { key: 'FIADOR_CPF', label: 'CPF do Fiador', source: 'custom', required: false, description: 'CPF do fiador' },
     { key: 'FIADOR_RG', label: 'RG do Fiador', source: 'custom', required: false, description: 'RG do fiador' },
@@ -489,18 +421,15 @@ export class TemplateVariableService {
     { key: 'FIADOR_IMOVEL_GARANTIA', label: 'Imóvel Garantia Fiador', source: 'custom', required: false, description: 'Descrição do imóvel oferecido em garantia pelo fiador' },
     { key: 'FIADOR_IMOVEL_MATRICULA', label: 'Matrícula Imóvel Fiador', source: 'custom', required: false, description: 'Matrícula do imóvel do fiador' },
 
-    // Seguro-Fiança Variables
     { key: 'SEGURO_FIANCA_EMPRESA', label: 'Seguradora Fiança', source: 'contract', required: false, description: 'Nome da seguradora do seguro-fiança' },
     { key: 'SEGURO_FIANCA_APOLICE', label: 'Apólice Seguro-Fiança', source: 'contract', required: false, description: 'Número da apólice do seguro-fiança' },
     { key: 'SEGURO_FIANCA_VIGENCIA', label: 'Vigência Seguro-Fiança', source: 'contract', required: false, description: 'Vigência do seguro-fiança' },
     { key: 'SEGURO_FIANCA_COBERTURA', label: 'Cobertura Seguro-Fiança', source: 'contract', required: false, description: 'Valor de cobertura do seguro-fiança' },
 
-    // Título de Capitalização Variables
     { key: 'TITULO_CAP_INSTITUICAO', label: 'Instituição Título Cap.', source: 'contract', required: false, description: 'Instituição financeira do título de capitalização' },
     { key: 'TITULO_CAP_NUMERO', label: 'Número Título Cap.', source: 'contract', required: false, description: 'Número do título de capitalização' },
     { key: 'TITULO_CAP_VALOR', label: 'Valor Título Cap.', source: 'contract', required: false, description: 'Valor do título de capitalização' },
 
-    // Contract Terms Extended
     { key: 'PRAZO_AGENDAMENTO_VISTORIA', label: 'Prazo Agendamento Vistoria', source: 'contract', required: false, description: 'Prazo em horas para agendamento de vistoria' },
     { key: 'PRAZO_REPASSE_LOCADOR', label: 'Prazo Repasse Locador', source: 'contract', required: false, description: 'Prazo em dias úteis para repasse ao locador' },
     { key: 'MULTA_ATRASO_PERCENTUAL', label: 'Multa Atraso %', source: 'contract', required: false, description: 'Percentual de multa por atraso' },
@@ -512,25 +441,20 @@ export class TemplateVariableService {
     { key: 'DATA_INICIO_CONTRATO', label: 'Data Início Contrato', source: 'contract', required: false, description: 'Data de início do contrato' },
     { key: 'DATA_FIM_CONTRATO', label: 'Data Fim Contrato', source: 'contract', required: false, description: 'Data de término do contrato' },
 
-    // Responsibility Extended
     { key: 'RESP_LUZ', label: 'Responsável Luz', source: 'contract', required: false, description: 'Responsável pelo pagamento da energia elétrica' },
     { key: 'RESP_TAXA_INCENDIO', label: 'Responsável Taxa Incêndio', source: 'contract', required: false, description: 'Responsável pela taxa de incêndio' },
 
-    // Forum/Jurisdiction
     { key: 'FORO_CIDADE', label: 'Cidade do Foro', source: 'contract', required: false, description: 'Cidade do foro eleito' },
     { key: 'FORO_ESTADO', label: 'Estado do Foro', source: 'contract', required: false, description: 'Estado do foro eleito' },
 
-    // Geolocation Variables
     { key: 'GEO_IMOBILIARIA', label: 'Geolocalização Imobiliária', source: 'system', required: false, description: 'Geolocalização da assinatura da imobiliária' },
     { key: 'GEO_LOCADOR', label: 'Geolocalização Locador', source: 'system', required: false, description: 'Geolocalização da assinatura do locador' },
     { key: 'GEO_LOCATARIO', label: 'Geolocalização Locatário', source: 'system', required: false, description: 'Geolocalização da assinatura do locatário' },
 
-    // Signature Time Variables
     { key: 'HORA_ASS_LOCADOR', label: 'Hora Assinatura Locador', source: 'system', required: false, description: 'Hora da assinatura do locador' },
     { key: 'HORA_ASS_LOCATARIO', label: 'Hora Assinatura Locatário', source: 'system', required: false, description: 'Hora da assinatura do locatário' },
     { key: 'HORA_ASS_IMOBILIARIA', label: 'Hora Assinatura Imobiliária', source: 'system', required: false, description: 'Hora da assinatura da imobiliária' },
 
-    // Witness Variables
     { key: 'TESTEMUNHA1_NOME', label: 'Nome 1ª Testemunha', source: 'custom', required: false, description: 'Nome da primeira testemunha' },
     { key: 'TESTEMUNHA1_CPF', label: 'CPF 1ª Testemunha', source: 'custom', required: false, description: 'CPF da primeira testemunha' },
     { key: 'DATA_ASS_TESTEMUNHA1', label: 'Data Assinatura 1ª Testemunha', source: 'system', required: false, description: 'Data da assinatura da primeira testemunha' },
@@ -538,63 +462,44 @@ export class TemplateVariableService {
     { key: 'TESTEMUNHA2_CPF', label: 'CPF 2ª Testemunha', source: 'custom', required: false, description: 'CPF da segunda testemunha' },
     { key: 'DATA_ASS_TESTEMUNHA2', label: 'Data Assinatura 2ª Testemunha', source: 'system', required: false, description: 'Data da assinatura da segunda testemunha' },
 
-    // Document Attachments Extended
     { key: 'ANEXO_DOCS_LOCADOR', label: 'Anexo Documentos Locador', source: 'contract', required: false, description: 'Referência aos documentos do locador' },
     { key: 'ANEXO_DOCS_LOCATARIO', label: 'Anexo Documentos Locatário', source: 'contract', required: false, description: 'Referência aos documentos do locatário' },
     { key: 'ANEXO_DOCS_IMOVEL', label: 'Anexo Documentos Imóvel', source: 'contract', required: false, description: 'Referência aos documentos do imóvel' },
     { key: 'ANEXO_CONVENCAO_CONDOMINIO', label: 'Anexo Convenção Condomínio', source: 'contract', required: false, description: 'Referência à convenção do condomínio' },
 
-    // Contract 11 - Standard Residential Lease 2019 Variables
-    // Fiador Extended Variables
     { key: 'FIADOR_PROFISSAO', label: 'Profissão do Fiador', source: 'custom', required: false, description: 'Profissão do fiador' },
     { key: 'FIADOR_RESP_SOLIDARIA', label: 'Responsabilidade Solidária', source: 'custom', required: false, description: 'Se o fiador tem responsabilidade solidária (Sim/Não)' },
 
-    // Special Purpose Variable
     { key: 'FINALIDADE_ESPECIAL', label: 'Finalidade Especial', source: 'contract', required: false, description: 'Finalidade especial do imóvel, se aplicável' },
 
-    // Responsibility Variables (Simple format)
     { key: 'AGUA_RESPONSAVEL', label: 'Responsável Água', source: 'contract', required: false, description: 'Responsável pelo pagamento da água' },
     { key: 'ENERGIA_RESPONSAVEL', label: 'Responsável Energia', source: 'contract', required: false, description: 'Responsável pelo pagamento da energia elétrica' },
     { key: 'GAS_RESPONSAVEL', label: 'Responsável Gás', source: 'contract', required: false, description: 'Responsável pelo pagamento do gás' },
     { key: 'CONDOMINIO_RESPONSAVEL', label: 'Responsável Condomínio', source: 'contract', required: false, description: 'Responsável pelo pagamento do condomínio' },
     { key: 'IPTU_RESPONSAVEL', label: 'Responsável IPTU', source: 'contract', required: false, description: 'Responsável pelo pagamento do IPTU' },
 
-    // Payment Variables
     { key: 'FORMA_PAGAMENTO', label: 'Forma de Pagamento', source: 'contract', required: false, description: 'Forma de pagamento do aluguel' },
     { key: 'USO_IMOBILIARIA', label: 'Uso de Imobiliária', source: 'contract', required: false, description: 'Se utiliza imobiliária para administração (Sim/Não)' },
     { key: 'DADOS_BANCARIOS', label: 'Dados Bancários', source: 'contract', required: false, description: 'Dados bancários ou PIX para pagamento' },
 
-    // Guarantee Extended Variables
     { key: 'VALOR_GARANTIA_EXTENSO', label: 'Valor Garantia por Extenso', source: 'contract', required: false, description: 'Valor da garantia por extenso' },
     { key: 'GARANTIA_DADOS', label: 'Dados da Garantia', source: 'contract', required: false, description: 'Dados complementares da garantia locatícia' },
   ];
 
-  /**
-   * Get all available template variables
-   */
   getAllVariables(): TemplateVariable[] {
     return this.templateVariables;
   }
 
-  /**
-   * Get required variables for a template
-   */
   getRequiredVariables(): TemplateVariable[] {
     return this.templateVariables.filter(v => v.required);
   }
 
-  /**
-   * Extract all variable placeholders from template content
-   */
   extractVariables(templateContent: string): string[] {
     const regex = /\[([A-Z_]+)\]/g;
     const matches = templateContent.match(regex) || [];
     return [...new Set(matches.map(m => m.replace(/[\[\]]/g, '')))];
   }
 
-  /**
-   * Build context from contract data for variable replacement
-   */
   async buildContextFromContract(contractId: bigint): Promise<TemplateContext> {
     const contract = await this.prisma.contract.findUnique({
       where: { id: contractId },
@@ -619,9 +524,6 @@ export class TemplateVariableService {
     };
   }
 
-  /**
-   * Get variable value from context based on variable definition
-   */
   private getVariableValue(variable: TemplateVariable, context: TemplateContext): string | null {
     const { key, source } = variable;
 
@@ -664,7 +566,6 @@ export class TemplateVariableService {
       case 'IMOVEL_BAIRRO':
         return property.neighborhood || null;
       case 'IMOVEL_TIPO':
-        // Map property type to human-readable format
         const typeMap: Record<string, string> = {
           'RESIDENTIAL': 'Residencial',
           'COMMERCIAL': 'Comercial',
@@ -674,7 +575,6 @@ export class TemplateVariableService {
         };
         return typeMap[property.propertyType] || property.propertyType || 'Residencial';
       case 'IMOVEL_AREA':
-        // Return built area with unit, or total area as fallback
         if (property.builtArea) {
           return `${property.builtArea} m²`;
         }
@@ -685,7 +585,6 @@ export class TemplateVariableService {
       case 'IMOVEL_MOVEIS':
       case 'IMOVEL_MOVEIS_LISTA':
         return property.furnitureList || null;
-      // Extended Property Variables for Commercial Contracts
       case 'IMOVEL_CIDADE_UF':
         if (property.city && (property.stateNumber || property.state)) {
           return `${property.city}/${property.stateNumber || property.state}`;
@@ -711,13 +610,11 @@ export class TemplateVariableService {
         return property.rentedArea ? `${property.rentedArea}` : null;
       case 'IMOVEL_COMARCA':
         return property.jurisdiction || property.city || null;
-      // Rural Property Variables
       case 'IMOVEL_MUNICIPIO':
         return property.city || property.municipality || null;
       case 'IMOVEL_ESTADO':
         return property.stateNumber || property.state || null;
       case 'IMOVEL_AREA_HECTARES':
-        // Convert from m² to hectares if needed, or return direct value
         if (property.areaHectares) return `${property.areaHectares}`;
         if (property.totalArea) return `${(property.totalArea / 10000).toFixed(2)}`;
         return null;
@@ -737,12 +634,10 @@ export class TemplateVariableService {
         return property.waterWells || property.waterSources || null;
       case 'IMOVEL_DESTINACAO_RURAL':
         return property.ruralDestination || property.intendedUse || null;
-      // Contract 8 - Residential Property Values
       case 'IMOVEL_CONDOMINIO_VALOR':
         return property.condominiumValue ? this.formatCurrency(property.condominiumValue) : null;
       case 'IMOVEL_IPTU_VALOR':
         return property.iptuValue ? this.formatCurrency(property.iptuValue) : null;
-      // Contract 9 - Residential PF/PF Property Variables
       case 'IMOVEL_NUMERO':
         return property.number || null;
       case 'IMOVEL_COMPLEMENTO':
@@ -826,14 +721,12 @@ export class TemplateVariableService {
         return tenant.rg || null;
       case 'LOCATARIO_DATA_NASC':
         return tenant.birthDate ? this.formatDate(tenant.birthDate) : null;
-      // PJ Specific Variables
       case 'LOCATARIO_IE':
         return tenant.stateRegistration || null;
       case 'LOCATARIO_IM':
         return tenant.municipalRegistration || null;
       case 'LOCATARIO_CNAE':
         return tenant.cnae || tenant.economicActivity || null;
-      // Contract 9 - Residential PF Tenant Extended Variables
       case 'LOCATARIO_RG_ORGAO':
         return tenant.rgIssuer || tenant.rgOrgao || null;
       case 'LOCATARIO_DATA_NASCIMENTO':
@@ -850,7 +743,6 @@ export class TemplateVariableService {
         return tenant.city || tenant.cidade || null;
       case 'LOCATARIO_ESTADO':
         return tenant.state || tenant.estado || null;
-      // Spouse (Cônjuge) Variables
       case 'CONJUGE_LOCATARIO_NOME':
         return tenant.spouseName || tenant.conjuge?.name || null;
       case 'CONJUGE_LOCATARIO_CPF':
@@ -902,7 +794,6 @@ export class TemplateVariableService {
         return owner.rg || null;
       case 'LOCADOR_DATA_NASC':
         return owner.birthDate ? this.formatDate(owner.birthDate) : null;
-      // Contract 9 - Residential PF Owner Extended Variables
       case 'LOCADOR_RG_ORGAO':
         return owner.rgIssuer || owner.rgOrgao || null;
       case 'LOCADOR_DATA_NASCIMENTO':
@@ -957,7 +848,6 @@ export class TemplateVariableService {
         return this.formatCpfCnpj(agency.representativeDocument) || null;
       case 'IMOBILIARIA_REP_CARGO':
         return agency.representativePosition || agency.representativeRole || null;
-      // Contract 9 - Residential PF/PF Agency Extended Variables
       case 'IMOBILIARIA_REP_CPF':
         return agency.representativeDocument ? this.formatCpfCnpj(agency.representativeDocument) : null;
       case 'IMOBILIARIA_NUMERO':
@@ -1030,7 +920,6 @@ export class TemplateVariableService {
           return this.formatSignature(contract.witnessName, contract.witnessSignedAt, null, contract.witnessSignature);
         }
         return '[Aguardando assinatura da testemunha]';
-      // Contract 3 - Administration Contract Variables
       case 'VALOR_LIMITE_MANUTENCAO':
         return contract.maintenanceLimit ? this.formatCurrency(contract.maintenanceLimit) : 'R$ 500,00';
       case 'TAXA_ADMINISTRACAO':
@@ -1038,7 +927,6 @@ export class TemplateVariableService {
       case 'VALOR_TAXA_INTERMEDIACAO':
         return contract.intermediationFee ? this.formatCurrency(contract.intermediationFee) : null;
       case 'PERCENTUAL_INTERMEDIACAO':
-        // Note: Template already has % after placeholder, so don't add % here
         return contract.intermediationFeePercent ? `${contract.intermediationFeePercent}` : '100';
       case 'DIA_REPASSE':
         return contract.transferDay?.toString() || '10';
@@ -1056,7 +944,6 @@ export class TemplateVariableService {
         return contract.lateInterestPercent ? `${contract.lateInterestPercent}%` : '1%';
       case 'FORO_CIDADE_ESTADO':
         return contract.jurisdiction || `${contract.property?.city || 'São Paulo'}/${contract.property?.stateNumber || contract.property?.state || 'SP'}`;
-      // Inspection/Vistoria Variables
       case 'DATA_VISTORIA_INICIAL':
         return contract.initialInspectionDate ? this.formatDate(contract.initialInspectionDate) : '[A ser agendada]';
       case 'RESP_VISTORIA_INICIAL':
@@ -1070,7 +957,6 @@ export class TemplateVariableService {
       case 'PRAZO_CONTESTACAO_VISTORIA':
         return contract.inspectionContestationPeriod?.toString() || '72';
 
-      // Contract 6 - Commercial Lease Extended Variables
       case 'VALOR_ALUGUEL_EXTENSO':
         return contract.rentInWords || this.numberToWords(contract.monthlyRent);
       case 'PERIODICIDADE_REAJUSTE':
@@ -1078,7 +964,6 @@ export class TemplateVariableService {
       case 'DATA_BASE_REAJUSTE':
         return contract.readjustmentBaseDate ? this.formatDate(contract.readjustmentBaseDate) : 'Data de aniversário do contrato';
 
-      // Responsibility Variables
       case 'RESP_IPTU':
         return contract.iptuResponsibility || 'LOCATÁRIA';
       case 'RESP_CONDOMINIO':
@@ -1102,13 +987,11 @@ export class TemplateVariableService {
       case 'RESP_MULTAS_COND':
         return contract.condoFinesResponsibility || 'LOCATÁRIA';
 
-      // Administration Fees
       case 'TAXA_INTERMEDIACAO':
         return contract.intermediationFeePercent?.toString() || '100';
       case 'VALOR_INTERMEDIACAO':
         return contract.intermediationFee ? this.formatCurrency(contract.intermediationFee) : null;
 
-      // Guarantee Variables
       case 'VALOR_GARANTIA':
         return contract.guaranteeValue ? this.formatCurrency(contract.guaranteeValue) : null;
       case 'CAUCAO_VALOR':
@@ -1122,7 +1005,6 @@ export class TemplateVariableService {
       case 'CARTA_FIANCA_BANCARIA':
         return contract.bankGuaranteeLetterData || null;
 
-      // Contract Terms
       case 'TIPO_RENOVACAO':
         return contract.renewalType || 'Automática por igual período';
       case 'AUTORIZACAO_BENFEITORIAS':
@@ -1138,7 +1020,6 @@ export class TemplateVariableService {
       case 'DIAS_PREFERENCIA':
         return contract.preferenceDays?.toString() || '30';
 
-      // Document Attachments
       case 'ANEXO_GARANTIA':
         return contract.guaranteeAttachment || 'Anexo III - Comprovante de Garantia';
       case 'ANEXO_CONTRATO_SOCIAL':
@@ -1150,7 +1031,6 @@ export class TemplateVariableService {
       case 'ANEXO_ALVARA':
         return contract.permitAttachment || 'Anexo VII - Alvará de Funcionamento';
 
-      // Contract 7 - Rural Property Lease Variables
       case 'RENOVACAO_AUTOMATICA':
         return contract.automaticRenewal ? 'Sim' : 'Não';
       case 'PERIODICIDADE_PAGAMENTO':
@@ -1158,7 +1038,6 @@ export class TemplateVariableService {
       case 'PLATAFORMA_PAGAMENTO':
         return contract.paymentPlatform || 'Sistema MR3X';
 
-      // Rural Responsibility Variables
       case 'RESP_ITR':
         return contract.itrResponsibility || 'LOCATÁRIA';
       case 'RESP_LICENCAS_AMBIENTAIS':
@@ -1178,19 +1057,16 @@ export class TemplateVariableService {
       case 'RESP_INSUMOS':
         return contract.inputsResponsibility || 'LOCATÁRIA';
 
-      // Rural Penalties
       case 'DIAS_ABANDONO':
         return contract.abandonmentDays?.toString() || '60';
       case 'VALOR_MULTA_RESCISAO_EXTENSO':
         return contract.terminationPenaltyWords || this.numberToWords(contract.terminationPenalty);
 
-      // Contract 8 - Residential PJ Variables
       case 'SEGURO_INCENDIO_VALOR':
         return contract.fireInsuranceValue ? this.formatCurrency(contract.fireInsuranceValue) : null;
       case 'SEGURO_INCENDIO_RESPONSAVEL':
         return contract.fireInsuranceResponsibility || 'LOCATÁRIO';
 
-      // Contract 12 - Commercial Lease PF/PJ Variables
       case 'DIREITO_RENOVATORIA':
         return contract.hasRenewalRight !== undefined ? (contract.hasRenewalRight ? 'Sim' : 'Não') : 'Sim';
       case 'TAXAS_FUNCIONAMENTO_RESPONSAVEL':
@@ -1202,7 +1078,6 @@ export class TemplateVariableService {
       case 'ATIVIDADE_COMERCIAL':
         return contract.commercialActivity || '[atividade comercial a ser definida]';
 
-      // Contract 15 - Rural Lease Variables
       case 'TIPO_IMOVEL_RURAL':
         return contract.ruralPropertyType || contract.property?.ruralType || 'Imóvel Rural';
       case 'FINALIDADE_RURAL':
@@ -1214,7 +1089,6 @@ export class TemplateVariableService {
       case 'CONSERVACAO_RESPONSAVEL':
         return contract.conservationResponsibility || 'LOCATÁRIO';
 
-      // Contract 16 - Rural Residence Variables
       case 'MANUTENCAO_JARDIM_RESPONSAVEL':
         return contract.gardenMaintenanceResponsibility || 'LOCATÁRIO';
 
@@ -1225,7 +1099,6 @@ export class TemplateVariableService {
       case 'RESP_GAS':
         return contract.gasResponsibility || 'LOCATÁRIA';
 
-      // Contract 9 - Residential PF/PF Variables
       case 'GARANTIA_TIPO':
         return contract.guaranteeType || 'Caução em dinheiro';
       case 'CAUCAO_VALOR_EXTENSO':
@@ -1295,7 +1168,6 @@ export class TemplateVariableService {
       case 'ANEXO_CONVENCAO_CONDOMINIO':
         return contract.condoConventionAttachment || 'Anexo - Convenção do Condomínio';
 
-      // Contract 11 - Standard Residential Lease 2019 Variables
       case 'FINALIDADE_ESPECIAL':
         return contract.specialPurpose || null;
       case 'AGUA_RESPONSAVEL':
@@ -1331,14 +1203,10 @@ export class TemplateVariableService {
     }
   }
 
-  /**
-   * Convert number to words in Portuguese
-   */
   private numberToWords(value: number | string | null): string | null {
     if (value === null || value === undefined) return null;
     const num = typeof value === 'string' ? parseFloat(value) : value;
 
-    // Basic implementation for common rental values
     const units = ['', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove'];
     const teens = ['dez', 'onze', 'doze', 'treze', 'quatorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove'];
     const tens = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
@@ -1352,7 +1220,6 @@ export class TemplateVariableService {
 
     let result = '';
 
-    // Thousands
     if (intPart >= 1000) {
       const thousands = Math.floor(intPart / 1000);
       if (thousands === 1) {
@@ -1364,7 +1231,6 @@ export class TemplateVariableService {
       }
     }
 
-    // Hundreds
     const remainder = intPart % 1000;
     if (remainder >= 100) {
       if (result) result += ' ';
@@ -1375,7 +1241,6 @@ export class TemplateVariableService {
       }
     }
 
-    // Tens and units
     const tensAndUnits = remainder % 100;
     if (tensAndUnits > 0) {
       if (result) result += ' e ';
@@ -1393,7 +1258,6 @@ export class TemplateVariableService {
 
     result += intPart === 1 ? ' real' : ' reais';
 
-    // Cents
     if (decPart > 0) {
       result += ' e ';
       if (decPart < 10) {
@@ -1463,7 +1327,6 @@ export class TemplateVariableService {
         return this.formatDate(new Date());
       case 'ENDERECO_MR3X':
         return 'São Paulo/SP - Brasil';
-      // Digital Signature System Variables for Contract 3
       case 'HASH_DOCUMENTO':
         return context.contract?.contractHash || context.contract?.hashFinal || '[Hash será gerado após assinatura]';
       case 'IP_IMOBILIARIA':
@@ -1476,38 +1339,30 @@ export class TemplateVariableService {
         return context.contract?.ownerSignedAt ? this.formatDateTime(context.contract.ownerSignedAt) : '[Data de assinatura]';
       case 'DATA_ASS_LOCATARIO':
         return context.contract?.tenantSignedAt ? this.formatDateTime(context.contract.tenantSignedAt) : '[Data de assinatura]';
-      // Fiador Signature Variables
       case 'DATA_ASS_FIADOR':
         return context.contract?.guarantorSignedAt ? this.formatDateTime(context.contract.guarantorSignedAt) : '[Data de assinatura]';
       case 'IP_FIADOR':
         return context.contract?.guarantorSignedIP || '[IP registrado na assinatura]';
-      // Timestamp
       case 'DATA_HORA_REGISTRO':
         return context.contract?.createdAt ? this.formatDateTime(context.contract.createdAt) : this.formatDateTime(new Date());
-      // Contract 9 - Residential PF/PF System Variables
-      // Geolocation Variables
       case 'GEO_IMOBILIARIA':
         return context.contract?.agencySignedGeo || '[Geolocalização registrada na assinatura]';
       case 'GEO_LOCADOR':
         return context.contract?.ownerSignedGeo || '[Geolocalização registrada na assinatura]';
       case 'GEO_LOCATARIO':
         return context.contract?.tenantSignedGeo || '[Geolocalização registrada na assinatura]';
-      // Tenant IP
       case 'IP_LOCATARIO':
         return context.contract?.tenantSignedIP || '[IP registrado na assinatura]';
-      // Signature Time Variables
       case 'HORA_ASS_LOCADOR':
         return context.contract?.ownerSignedAt ? this.formatTime(context.contract.ownerSignedAt) : '[Hora de assinatura]';
       case 'HORA_ASS_LOCATARIO':
         return context.contract?.tenantSignedAt ? this.formatTime(context.contract.tenantSignedAt) : '[Hora de assinatura]';
       case 'HORA_ASS_IMOBILIARIA':
         return context.contract?.agencySignedAt ? this.formatTime(context.contract.agencySignedAt) : '[Hora de assinatura]';
-      // Spouse Signature Variables
       case 'DATA_ASS_CONJUGE_LOCATARIO':
         return context.contract?.spouseSignedAt ? this.formatDateTime(context.contract.spouseSignedAt) : '[Data de assinatura]';
       case 'HORA_ASS_CONJUGE_LOCATARIO':
         return context.contract?.spouseSignedAt ? this.formatTime(context.contract.spouseSignedAt) : '[Hora de assinatura]';
-      // Witness Signature Variables
       case 'DATA_ASS_TESTEMUNHA1':
         return context.contract?.witness1SignedAt ? this.formatDateTime(context.contract.witness1SignedAt) : '[Data de assinatura]';
       case 'DATA_ASS_TESTEMUNHA2':
@@ -1517,9 +1372,6 @@ export class TemplateVariableService {
     }
   }
 
-  /**
-   * Process template content and replace variables with values
-   */
   processTemplate(templateContent: string, context: TemplateContext): string {
     let processedContent = templateContent;
 
@@ -1529,12 +1381,11 @@ export class TemplateVariableService {
         const value = this.getVariableValue(variable, context);
         processedContent = processedContent.replace(
           new RegExp(`\\[${variable.key}\\]`, 'g'),
-          value || placeholder, // Keep placeholder if no value
+          value || placeholder,
         );
       }
     }
 
-    // Process custom variables
     if (context.custom) {
       for (const [key, value] of Object.entries(context.custom)) {
         const placeholder = `[${key}]`;
@@ -1545,9 +1396,6 @@ export class TemplateVariableService {
     return processedContent;
   }
 
-  /**
-   * Validate that all required variables have values
-   */
   validateTemplate(templateContent: string, context: TemplateContext): VariableValidationResult {
     const extractedVars = this.extractVariables(templateContent);
     const missingRequired: string[] = [];
@@ -1557,7 +1405,6 @@ export class TemplateVariableService {
     for (const varKey of extractedVars) {
       const variable = this.templateVariables.find(v => v.key === varKey);
       if (!variable) {
-        // Custom variable
         const value = context.custom?.[varKey];
         if (value) {
           filledCount++;
@@ -1586,9 +1433,6 @@ export class TemplateVariableService {
     };
   }
 
-  /**
-   * Get preview of processed template with context
-   */
   async getProcessedTemplatePreview(templateId: string, contractId: bigint): Promise<{ content: string; validation: VariableValidationResult }> {
     const { getTemplateById } = await import('../contract-templates');
     const template = getTemplateById(templateId);
@@ -1607,7 +1451,6 @@ export class TemplateVariableService {
     };
   }
 
-  // Utility functions
   private formatCpfCnpj(value: string | null): string | null {
     if (!value) return null;
     const cleaned = value.replace(/\D/g, '');
@@ -1622,7 +1465,6 @@ export class TemplateVariableService {
   private formatCurrency(value: number | string | null): string | null {
     if (value === null || value === undefined) return null;
     const num = typeof value === 'string' ? parseFloat(value) : value;
-    // Format number without currency symbol (template already has "R$")
     return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 

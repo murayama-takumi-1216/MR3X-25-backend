@@ -11,7 +11,6 @@ export class SalesRepService {
     const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
 
-    // Get prospects by status
     const prospects = await this.prisma.salesProspect.findMany({
       where: { salesRepId },
     });
@@ -23,7 +22,6 @@ export class SalesRepService {
     const conversions = prospects.filter(p => p.status === 'closed_won').length;
     const totalProspects = prospects.length;
 
-    // Get proposals
     const proposals = await this.prisma.salesProposal.findMany({
       where: { salesRepId },
     });
@@ -33,12 +31,10 @@ export class SalesRepService {
     const proposalsPending = proposals.filter(p => ['sent', 'viewed'].includes(p.status)).length;
     const proposalsRejected = proposals.filter(p => p.status === 'rejected').length;
 
-    // Calculate expected revenue from active prospects
     const expectedRevenue = prospects
       .filter(p => !['closed_won', 'closed_lost'].includes(p.status))
       .reduce((sum, p) => sum + Number(p.estimatedValue || 0) * (p.probability || 20) / 100, 0);
 
-    // Get commissions
     const commissions = await this.prisma.salesCommission.findMany({
       where: { salesRepId },
     });
@@ -51,7 +47,6 @@ export class SalesRepService {
       .filter(c => c.status === 'pending')
       .reduce((sum, c) => sum + Number(c.commissionValue), 0);
 
-    // Get monthly goal
     const goal = await this.prisma.salesGoal.findUnique({
       where: {
         salesRepId_month: {
@@ -64,27 +59,21 @@ export class SalesRepService {
     const monthlyTarget = goal?.targetConversions || 15;
     const monthlyAchieved = goal?.achievedConversions || conversions;
 
-    // Calculate conversion rate
     const conversionRate = totalProspects > 0
       ? ((conversions / totalProspects) * 100).toFixed(1)
       : 0;
 
-    // Calculate average ticket
     const closedDeals = commissions.filter(c => c.status === 'paid');
     const avgTicket = closedDeals.length > 0
       ? closedDeals.reduce((sum, c) => sum + Number(c.dealValue), 0) / closedDeals.length
       : 0;
 
-    // Weekly performance (last 4 weeks)
     const weeklyPerformance = await this.getWeeklyPerformance(salesRepId);
 
-    // Pipeline data
     const pipelineData = this.getPipelineData(prospects);
 
-    // Recent leads
     const recentLeads = await this.getRecentLeads(salesRepId);
 
-    // Top prospects
     const topProspects = await this.getTopProspects(salesRepId);
 
     return {
@@ -396,7 +385,6 @@ export class SalesRepService {
       },
     });
 
-    // Update prospect status to proposal_sent
     await this.prisma.salesProspect.update({
       where: { id: proposal.prospectId },
       data: {
@@ -428,7 +416,6 @@ export class SalesRepService {
       orderBy: { updatedAt: 'desc' },
     });
 
-    // Get last activity for each prospect
     const activities = await this.prisma.salesActivity.findMany({
       where: {
         salesRepId,
@@ -491,7 +478,6 @@ export class SalesRepService {
     const startOfLastMonth = new Date(lastMonthYear, lastMonth, 1);
     const endOfLastMonth = new Date(lastMonthYear, lastMonth + 1, 0);
 
-    // Total leads
     const totalLeads = await this.prisma.salesProspect.count({
       where: { salesRepId },
     });
@@ -514,7 +500,6 @@ export class SalesRepService {
       ? ((leadsThisMonth - leadsLastMonth) / leadsLastMonth * 100).toFixed(1)
       : 0;
 
-    // Conversions
     const totalConversions = await this.prisma.salesProspect.count({
       where: { salesRepId, status: 'closed_won' },
     });
@@ -539,12 +524,10 @@ export class SalesRepService {
       ? ((conversionsThisMonth - conversionsLastMonth) / conversionsLastMonth * 100).toFixed(1)
       : 0;
 
-    // Conversion rate
     const conversionRate = totalLeads > 0
       ? ((totalConversions / totalLeads) * 100).toFixed(1)
       : 0;
 
-    // Revenue from commissions
     const commissions = await this.prisma.salesCommission.findMany({
       where: { salesRepId },
     });
@@ -568,7 +551,6 @@ export class SalesRepService {
       ? ((revenueThisMonth - revenueLastMonth) / revenueLastMonth * 100).toFixed(1)
       : 0;
 
-    // Expected revenue
     const activeProspects = await this.prisma.salesProspect.findMany({
       where: {
         salesRepId,
@@ -581,21 +563,16 @@ export class SalesRepService {
       0
     );
 
-    // Average ticket
     const avgTicket = commissions.length > 0
       ? totalRevenue / commissions.length
       : 0;
 
-    // Monthly performance (last 6 months)
     const monthlyPerformance = await this.getMonthlyPerformance(salesRepId);
 
-    // Funnel metrics
     const funnelMetrics = await this.getFunnelMetrics(salesRepId);
 
-    // Revenue by source
     const revenueBySource = await this.getRevenueBySource(salesRepId);
 
-    // Get goals
     const goal = await this.prisma.salesGoal.findUnique({
       where: {
         salesRepId_month: {
@@ -791,10 +768,8 @@ export class SalesRepService {
       ? commissions.reduce((sum, c) => sum + Number(c.commissionRate), 0) / commissions.length
       : 10;
 
-    // Monthly commissions chart data
     const monthlyCommissions = await this.getMonthlyCommissions(salesRepId);
 
-    // By plan
     const byPlan = await this.getCommissionsByPlan(salesRepId);
 
     return {

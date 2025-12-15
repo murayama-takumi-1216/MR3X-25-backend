@@ -60,7 +60,6 @@ export class CalculateMultipleDebtsDto {
   calculationDate?: string;
 }
 
-// Response DTOs for Swagger documentation
 export class DebtCalculationResponseDto {
   @ApiProperty() invoiceId: string;
   @ApiProperty() contractId: string;

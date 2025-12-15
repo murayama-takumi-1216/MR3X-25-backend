@@ -72,32 +72,20 @@ export class ContractsController {
     @Query('search') search?: string,
     @CurrentUser() user?: any,
   ) {
-    // Data isolation based on role:
-    // - CEO: sees ALL contracts
-    // - ADMIN: sees only contracts for properties they created
-    // - INDEPENDENT_OWNER: sees only contracts for properties they created
-    // - Agency roles: sees only contracts for their agency's properties
-
     let createdById: string | undefined;
     let effectiveAgencyId: string | undefined = agencyId;
     let userId: string | undefined;
 
     if (user?.role === 'CEO') {
-      // CEO sees all - no filtering
     } else if (user?.role === 'ADMIN') {
-      // ADMIN sees only contracts for properties they created
       createdById = user.sub;
     } else if (user?.role === 'INDEPENDENT_OWNER') {
-      // INDEPENDENT_OWNER sees only their own contracts
       createdById = user.sub;
     } else if (user?.agencyId) {
-      // Agency users see only their agency's contracts
       effectiveAgencyId = user.agencyId;
     } else if (user?.role === 'AGENCY_ADMIN' || user?.role === 'AGENCY_MANAGER') {
-      // Agency admins/managers without agencyId - show contracts related to them via properties
       userId = user?.sub;
     } else {
-      // For any other role without agency, use userId fallback to find related contracts
       userId = user?.sub;
     }
 
@@ -134,9 +122,6 @@ export class ContractsController {
     return this.contractsService.update(id, data, userId);
   }
 
-  /**
-   * Validate contract for required fields before signing
-   */
   @Get(':id/validate')
   @ApiOperation({ summary: 'Validate contract for required fields' })
   @ApiParam({ name: 'id', description: 'Contract ID' })
@@ -144,9 +129,6 @@ export class ContractsController {
     return this.contractsService.validateForSigning(id);
   }
 
-  /**
-   * Get contract immutability status
-   */
   @Get(':id/immutability')
   @ApiOperation({ summary: 'Get contract immutability status (what operations are allowed)' })
   @ApiParam({ name: 'id', description: 'Contract ID' })
@@ -154,9 +136,6 @@ export class ContractsController {
     return this.contractsService.getImmutabilityStatus(id);
   }
 
-  /**
-   * Create amended contract when original is immutable
-   */
   @Post(':id/amend')
   @ApiOperation({ summary: 'Create amended contract (when original is signed/immutable)' })
   @ApiParam({ name: 'id', description: 'Original Contract ID' })
@@ -207,9 +186,6 @@ export class ContractsController {
     return this.contractsService.findByTenant(userId);
   }
 
-  /**
-   * Prepare contract for signing - generates provisional PDF
-   */
   @Post(':id/prepare-signing')
   @ApiOperation({ summary: 'Prepare contract for signing (generates provisional PDF)' })
   @ApiParam({ name: 'id', description: 'Contract ID' })
@@ -226,9 +202,6 @@ export class ContractsController {
     };
   }
 
-  /**
-   * Sign contract with geolocation (REQUIRED)
-   */
   @Post(':id/sign-with-geo')
   @ApiOperation({ summary: 'Sign contract with geolocation (required)' })
   @ApiParam({ name: 'id', description: 'Contract ID' })
@@ -254,7 +227,6 @@ export class ContractsController {
     @CurrentUser('sub') userId: string,
     @Req() req: Request,
   ) {
-    // Validate required geolocation
     if (!body.geoLat || !body.geoLng) {
       throw new BadRequestException('Geolocalização é obrigatória para assinar o contrato');
     }
@@ -289,9 +261,6 @@ export class ContractsController {
     };
   }
 
-  /**
-   * Finalize contract after all signatures
-   */
   @Post(':id/finalize')
   @ApiOperation({ summary: 'Finalize contract after all parties have signed' })
   @ApiParam({ name: 'id', description: 'Contract ID' })
@@ -308,9 +277,6 @@ export class ContractsController {
     };
   }
 
-  /**
-   * Download provisional PDF
-   */
   @Get(':id/provisional-pdf')
   @ApiOperation({ summary: 'Download provisional PDF for review' })
   @ApiParam({ name: 'id', description: 'Contract ID' })
@@ -325,9 +291,6 @@ export class ContractsController {
     res.send(pdfBuffer);
   }
 
-  /**
-   * Download final signed PDF
-   */
   @Get(':id/final-pdf')
   @ApiOperation({ summary: 'Download final signed PDF' })
   @ApiParam({ name: 'id', description: 'Contract ID' })
@@ -342,9 +305,6 @@ export class ContractsController {
     res.send(pdfBuffer);
   }
 
-  /**
-   * Update contract clauses (before signing)
-   */
   @Put(':id/clauses')
   @ApiOperation({ summary: 'Update contract clauses (before signing)' })
   @ApiParam({ name: 'id', description: 'Contract ID' })
@@ -377,9 +337,6 @@ export class ContractsController {
     };
   }
 
-  /**
-   * Get clause change history
-   */
   @Get(':id/clause-history')
   @ApiOperation({ summary: 'Get clause change history' })
   @ApiParam({ name: 'id', description: 'Contract ID' })
@@ -391,9 +348,6 @@ export class ContractsController {
     };
   }
 
-  /**
-   * Send signature invitation link
-   */
   @Post(':id/send-invitation')
   @ApiOperation({ summary: 'Send signature invitation link to a party' })
   @ApiParam({ name: 'id', description: 'Contract ID' })
@@ -434,9 +388,6 @@ export class ContractsController {
     };
   }
 
-  /**
-   * Get all signature links for a contract
-   */
   @Get(':id/signature-links')
   @ApiOperation({ summary: 'Get all signature links for a contract' })
   @ApiParam({ name: 'id', description: 'Contract ID' })
@@ -448,9 +399,6 @@ export class ContractsController {
     };
   }
 
-  /**
-   * Revoke a specific signature link
-   */
   @Post(':id/revoke-link/:linkToken')
   @ApiOperation({ summary: 'Revoke a specific signature link' })
   @ApiParam({ name: 'id', description: 'Contract ID' })
@@ -466,9 +414,6 @@ export class ContractsController {
     };
   }
 
-  /**
-   * Revoke contract (cancel all signatures)
-   */
   @Post(':id/revoke')
   @ApiOperation({ summary: 'Revoke contract and cancel all pending signatures' })
   @ApiParam({ name: 'id', description: 'Contract ID' })
@@ -499,9 +444,6 @@ export class ContractsController {
     };
   }
 
-  /**
-   * Get contract by token (for verification page)
-   */
   @Get('token/:token')
   @ApiOperation({ summary: 'Get contract by verification token' })
   @ApiParam({ name: 'token', description: 'Contract verification token (MR3X-CTR-YEAR-XXXX-XXXX)' })

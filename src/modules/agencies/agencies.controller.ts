@@ -40,8 +40,6 @@ export class AgenciesController {
     return this.agenciesService.deleteAgency(id);
   }
 
-  // Plan Enforcement Endpoints
-
   @Get(':id/plan-usage')
   @ApiOperation({ summary: 'Get plan usage summary (active vs frozen properties/users)' })
   async getPlanUsage(@Param('id') id: string) {

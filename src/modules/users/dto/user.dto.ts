@@ -385,7 +385,6 @@ export class UpdateProfileDto {
   @IsString()
   state?: string;
 
-  // Agency fields (only for AGENCY_ADMIN)
   @ApiPropertyOptional({ example: 'My Agency Name' })
   @IsOptional()
   @IsString()

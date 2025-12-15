@@ -26,9 +26,6 @@ export class AsaasWebhookController {
     this.webhookToken = this.configService.get<string>('ASAAS_WEBHOOK_TOKEN') || '';
   }
 
-  /**
-   * Verify webhook authenticity
-   */
   private verifyWebhook(token: string): boolean {
     if (!this.webhookToken) {
       this.logger.warn('Webhook token not configured, accepting all webhooks');
@@ -37,16 +34,12 @@ export class AsaasWebhookController {
     return token === this.webhookToken;
   }
 
-  /**
-   * Main webhook endpoint for Asaas events
-   */
   @Post()
   @HttpCode(200)
   async handleWebhook(
     @Body() payload: AsaasWebhookPayload,
     @Headers('asaas-access-token') accessToken: string,
   ) {
-    // Verify webhook authenticity
     if (!this.verifyWebhook(accessToken)) {
       this.logger.warn('Invalid webhook token received');
       throw new BadRequestException('Invalid webhook token');
@@ -55,10 +48,8 @@ export class AsaasWebhookController {
     this.logger.log(`Received Asaas webhook: ${payload.event}`);
 
     try {
-      // Log webhook for audit
       await this.logWebhook(payload);
 
-      // Process based on event type
       switch (payload.event) {
         case 'PAYMENT_RECEIVED':
         case 'PAYMENT_CONFIRMED':
@@ -90,15 +81,10 @@ export class AsaasWebhookController {
       return { received: true };
     } catch (error) {
       this.logger.error(`Error processing webhook: ${error.message}`);
-      // Return 200 to prevent Asaas from retrying
-      // But log the error for investigation
       return { received: true, error: error.message };
     }
   }
 
-  /**
-   * Log webhook for audit purposes
-   */
   private async logWebhook(payload: AsaasWebhookPayload) {
     try {
       await this.prisma.webhookLog.create({
@@ -111,14 +97,10 @@ export class AsaasWebhookController {
         },
       });
     } catch (error) {
-      // If webhook log table doesn't exist, just log to console
       this.logger.debug('Could not log webhook to database', error.message);
     }
   }
 
-  /**
-   * Handle payment received/confirmed event
-   */
   private async handlePaymentReceived(payload: AsaasWebhookPayload) {
     const payment = payload.payment;
     const externalRef = payment.externalReference;
@@ -128,8 +110,6 @@ export class AsaasWebhookController {
       return;
     }
 
-    // Parse external reference to determine the entity type
-    // Format: entity_type:entity_id (e.g., invoice:123, agreement:456, microtransaction:789)
     const [entityType, entityId] = externalRef.split(':');
 
     const paymentDate = payment.paymentDate || payment.confirmedDate || new Date().toISOString();
@@ -153,9 +133,6 @@ export class AsaasWebhookController {
     }
   }
 
-  /**
-   * Update invoice payment status
-   */
   private async updateInvoicePayment(
     invoiceId: string,
     payment: any,
@@ -178,7 +155,6 @@ export class AsaasWebhookController {
 
       this.logger.log(`Invoice ${invoiceId} marked as ${status}`);
 
-      // Create payment record
       const invoice = await this.prisma.invoice.findUnique({
         where: { id: BigInt(invoiceId) },
         include: { contract: true },
@@ -205,9 +181,6 @@ export class AsaasWebhookController {
     }
   }
 
-  /**
-   * Update agreement payment status
-   */
   private async updateAgreementPayment(
     agreementId: string,
     payment: any,
@@ -219,7 +192,6 @@ export class AsaasWebhookController {
         paymentStatus: status === 'PAID' ? 'PAID' : payment.status,
       };
 
-      // If fully paid, update agreement status
       if (status === 'PAID') {
         updateData.status = 'CONCLUIDO';
       }
@@ -235,9 +207,6 @@ export class AsaasWebhookController {
     }
   }
 
-  /**
-   * Update microtransaction payment status
-   */
   private async updateMicrotransactionPayment(
     microtransactionId: string,
     payment: any,
@@ -260,9 +229,6 @@ export class AsaasWebhookController {
     }
   }
 
-  /**
-   * Handle payment overdue event
-   */
   private async handlePaymentOverdue(payload: AsaasWebhookPayload) {
     const payment = payload.payment;
     const externalRef = payment.externalReference;
@@ -288,9 +254,6 @@ export class AsaasWebhookController {
     }
   }
 
-  /**
-   * Handle payment deleted/cancelled event
-   */
   private async handlePaymentDeleted(payload: AsaasWebhookPayload) {
     const payment = payload.payment;
     const externalRef = payment.externalReference;
@@ -316,9 +279,6 @@ export class AsaasWebhookController {
     }
   }
 
-  /**
-   * Handle payment refunded event
-   */
   private async handlePaymentRefunded(payload: AsaasWebhookPayload) {
     const payment = payload.payment;
     const externalRef = payment.externalReference;
@@ -343,9 +303,6 @@ export class AsaasWebhookController {
     }
   }
 
-  /**
-   * Handle payment created/updated event (sync payment data)
-   */
   private async handlePaymentUpdated(payload: AsaasWebhookPayload) {
     const payment = payload.payment;
     const externalRef = payment.externalReference;

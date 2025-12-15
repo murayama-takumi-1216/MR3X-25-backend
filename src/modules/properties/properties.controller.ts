@@ -11,7 +11,6 @@ import { PropertyImagesService } from './property-images.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
-// Configure multer storage
 const storage = diskStorage({
   destination: (_req, _file, cb) => {
     const uploadDir = path.join(process.cwd(), 'uploads', 'properties');
@@ -26,7 +25,6 @@ const storage = diskStorage({
   },
 });
 
-// File filter for images only
 const imageFileFilter = (_req: any, file: any, cb: any) => {
   if (file.mimetype.startsWith('image/')) {
     cb(null, true);
@@ -62,41 +60,26 @@ export class PropertiesController {
     @Query('search') search?: string,
     @CurrentUser() user?: any,
   ) {
-    // Data isolation based on role:
-    // - CEO: sees ALL properties
-    // - ADMIN: sees only properties they created
-    // - INDEPENDENT_OWNER: sees only properties they created (no agencyId)
-    // - PROPRIETARIO: sees only properties where they are the owner (ownerId)
-    // - Agency roles (AGENCY_OWNER, AGENCY_ADMIN, AGENCY_MANAGER, etc.): sees only properties of their agency
 
     let createdById: string | undefined;
     let effectiveAgencyId: string | undefined = agencyId;
     let effectiveOwnerId: string | undefined = ownerId;
 
     if (user?.role === 'CEO') {
-      // CEO sees all - no filtering
     } else if (user?.role === 'ADMIN') {
-      // ADMIN sees only properties they created
       createdById = user.sub;
     } else if (user?.role === 'INDEPENDENT_OWNER') {
-      // INDEPENDENT_OWNER sees only their own properties (created by them)
       createdById = user.sub;
     } else if (user?.role === 'PROPRIETARIO') {
-      // PROPRIETARIO sees only properties where they are the owner
       effectiveOwnerId = user.sub;
     } else if (user?.agencyId) {
-      // Agency users see only their agency's properties
       effectiveAgencyId = user.agencyId;
     } else {
-      // For any other role without agency, only show their own created properties
       createdById = user?.sub;
     }
 
     return this.propertiesService.findAll({ skip, take, agencyId: effectiveAgencyId, status, ownerId: effectiveOwnerId, createdById, search });
   }
-
-  // ==================== Property Images Routes ====================
-  // These must come BEFORE the generic :id route to avoid conflicts
 
   @Post(':propertyId/images')
   @ApiOperation({ summary: 'Upload images for a property' })
@@ -185,9 +168,6 @@ export class PropertiesController {
     return { success: true, message: 'Image deleted successfully' };
   }
 
-  // ==================== End Property Images Routes ====================
-
-  // ==================== Property Assignment Routes ====================
 
   @Put(':id/assign-broker')
   @ApiOperation({ summary: 'Assign a broker to a property' })
@@ -208,8 +188,6 @@ export class PropertiesController {
   ) {
     return this.propertiesService.assignTenant(id, data, user);
   }
-
-  // ==================== End Property Assignment Routes ====================
 
   @Get(':id')
   @ApiOperation({ summary: 'Get property by ID' })

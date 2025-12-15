@@ -52,7 +52,6 @@ export class DocumentsController {
     @Param('paymentId') paymentId: string,
     @Res() res: Response,
   ) {
-    // TODO: Fetch payment data from database and generate receipt
     res.status(501).json({ message: 'Not implemented yet' });
   }
 
@@ -62,7 +61,6 @@ export class DocumentsController {
     @Param('contractId') contractId: string,
     @Res() res: Response,
   ) {
-    // TODO: Fetch contract data from database and generate invoice
     res.status(501).json({ message: 'Not implemented yet' });
   }
 }

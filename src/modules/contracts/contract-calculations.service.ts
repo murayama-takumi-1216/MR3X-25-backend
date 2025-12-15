@@ -20,9 +20,6 @@ export interface EarlyTerminationCalculationResult {
 
 @Injectable()
 export class ContractCalculationsService {
-  /**
-   * Calculate late payment penalties, interest, and discounts for an invoice
-   */
   calculateInvoicePenalties(
     originalAmount: Decimal | number,
     dueDate: Date,
@@ -39,7 +36,6 @@ export class ContractCalculationsService {
     const now = paymentDate;
     const due = new Date(dueDate);
 
-    // Calculate days difference (negative = early, positive = late)
     const daysDiff = Math.floor((now.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
     const daysOverdue = Math.max(0, daysDiff);
 
@@ -49,28 +45,22 @@ export class ContractCalculationsService {
     let discount = new Decimal(0);
 
     if (daysOverdue > 0) {
-      // Payment is late - calculate penalties
-
-      // 1. Late fee (one-time percentage of original amount)
       if (contract.lateFeePercent) {
         const lateFeePercent = this.toDecimal(contract.lateFeePercent);
         lateFee = amount.mul(lateFeePercent).div(100);
       }
 
-      // 2. Daily penalty (percentage per day overdue)
       if (contract.dailyPenaltyPercent && daysOverdue > 0) {
         const dailyPenaltyPercent = this.toDecimal(contract.dailyPenaltyPercent);
         dailyPenalty = amount.mul(dailyPenaltyPercent).mul(daysOverdue).div(100);
       }
 
-      // 3. Monthly interest (pro-rated by days)
       if (contract.interestRatePercent && daysOverdue > 0) {
         const interestRatePercent = this.toDecimal(contract.interestRatePercent);
-        const monthsOverdue = new Decimal(daysOverdue).div(30); // Approximate month as 30 days
+        const monthsOverdue = new Decimal(daysOverdue).div(30);
         interest = amount.mul(interestRatePercent).mul(monthsOverdue).div(100);
       }
     } else if (daysDiff < 0) {
-      // Payment is early - calculate discount
       const daysEarly = Math.abs(daysDiff);
       const discountDays = contract.earlyPaymentDiscountDays || 0;
 
@@ -98,9 +88,6 @@ export class ContractCalculationsService {
     };
   }
 
-  /**
-   * Calculate early termination penalty
-   */
   calculateEarlyTerminationPenalty(
     monthlyRent: Decimal | number,
     contractEndDate: Date,
@@ -111,23 +98,16 @@ export class ContractCalculationsService {
     const endDate = new Date(contractEndDate);
     const termDate = new Date(terminationDate);
 
-    // Calculate months remaining
     const monthsRemaining = this.calculateMonthsDifference(termDate, endDate);
 
-    // Calculate penalty (percentage of monthly rent)
     let penaltyAmount = new Decimal(0);
     if (earlyTerminationPenaltyPercent) {
       const penaltyPercent = this.toDecimal(earlyTerminationPenaltyPercent);
-      // Penalty is typically a percentage of monthly rent (e.g., 3 months rent)
       penaltyAmount = rent.mul(penaltyPercent).div(100).mul(rent);
     }
 
-    // Some contracts require payment of remaining rent
     const remainingRent = rent.mul(monthsRemaining);
 
-    // Total due = penalty + remaining rent (if applicable)
-    // Note: In Brazil, typically it's either penalty OR remaining rent, not both
-    // This implementation calculates both for flexibility
     const totalDue = penaltyAmount.add(remainingRent);
 
     return {
@@ -138,9 +118,6 @@ export class ContractCalculationsService {
     };
   }
 
-  /**
-   * Calculate annual rent readjustment based on index
-   */
   calculateRentReadjustment(
     currentRent: Decimal | number,
     indexVariationPercent: Decimal | number,
@@ -148,13 +125,9 @@ export class ContractCalculationsService {
     const rent = this.toDecimal(currentRent);
     const variation = this.toDecimal(indexVariationPercent);
 
-    // New rent = current rent * (1 + variation/100)
     return rent.mul(new Decimal(1).add(variation.div(100)));
   }
 
-  /**
-   * Get default penalty settings from agency or use system defaults
-   */
   getDefaultPenaltySettings(agency?: {
     defaultEarlyTerminationPenaltyPercent?: Decimal | number | null;
     defaultLateFeePercent?: Decimal | number | null;
@@ -170,26 +143,26 @@ export class ContractCalculationsService {
         agency?.defaultEarlyTerminationPenaltyPercent !== null &&
         agency?.defaultEarlyTerminationPenaltyPercent !== undefined
           ? this.toDecimal(agency.defaultEarlyTerminationPenaltyPercent)
-          : new Decimal(3.0), // 3% default
+          : new Decimal(3.0),
       lateFeePercent:
         agency?.defaultLateFeePercent !== null && agency?.defaultLateFeePercent !== undefined
           ? this.toDecimal(agency.defaultLateFeePercent)
-          : new Decimal(2.0), // 2% default
+          : new Decimal(2.0),
       dailyPenaltyPercent:
         agency?.defaultDailyPenaltyPercent !== null &&
         agency?.defaultDailyPenaltyPercent !== undefined
           ? this.toDecimal(agency.defaultDailyPenaltyPercent)
-          : new Decimal(0.33), // 0.33% per day default
+          : new Decimal(0.33),
       interestRatePercent:
         agency?.defaultInterestRatePercent !== null &&
         agency?.defaultInterestRatePercent !== undefined
           ? this.toDecimal(agency.defaultInterestRatePercent)
-          : new Decimal(1.0), // 1% per month default
+          : new Decimal(1.0),
       earlyPaymentDiscountPercent:
         agency?.defaultEarlyPaymentDiscountPercent !== null &&
         agency?.defaultEarlyPaymentDiscountPercent !== undefined
           ? this.toDecimal(agency.defaultEarlyPaymentDiscountPercent)
-          : new Decimal(0.0), // No discount by default
+          : new Decimal(0.0),
       earlyPaymentDiscountDays:
         agency?.defaultEarlyPaymentDiscountDays !== null &&
         agency?.defaultEarlyPaymentDiscountDays !== undefined
@@ -200,9 +173,6 @@ export class ContractCalculationsService {
     };
   }
 
-  /**
-   * Helper: Convert number or Decimal to Decimal
-   */
   private toDecimal(value: Decimal | number | string): Decimal {
     if (value instanceof Decimal) {
       return value;
@@ -210,9 +180,6 @@ export class ContractCalculationsService {
     return new Decimal(value);
   }
 
-  /**
-   * Helper: Calculate months difference between two dates
-   */
   private calculateMonthsDifference(startDate: Date, endDate: Date): number {
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -224,9 +191,6 @@ export class ContractCalculationsService {
     return Math.max(0, months);
   }
 
-  /**
-   * Format Decimal to currency string (BRL)
-   */
   formatCurrency(amount: Decimal | number): string {
     const value = this.toDecimal(amount).toNumber();
     return new Intl.NumberFormat('pt-BR', {
@@ -235,9 +199,6 @@ export class ContractCalculationsService {
     }).format(value);
   }
 
-  /**
-   * Round Decimal to 2 decimal places (for currency)
-   */
   roundCurrency(amount: Decimal): Decimal {
     return amount.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
   }

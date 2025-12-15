@@ -18,7 +18,6 @@ export class PlatformManagerService {
       this.prisma.contract.count(),
     ]);
 
-    // Calculate month-over-month changes
     const lastMonthDate = new Date();
     lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
 
@@ -108,22 +107,18 @@ export class PlatformManagerService {
   }
 
   async getTicketStatusDistribution() {
-    // Return empty data - ticket system not implemented
     return [];
   }
 
   async getMonthlyTickets() {
-    // Return empty data - ticket system not implemented
     return [];
   }
 
   async getPlatformHealth() {
-    // Return empty data - health monitoring not implemented
     return [];
   }
 
   async getRecentActivities() {
-    // Get recent audit logs or activities
     try {
       const logs = await this.prisma.auditLog.findMany({
         take: 10,
@@ -140,13 +135,11 @@ export class PlatformManagerService {
         status: log.event.includes('DELETE') ? 'warning' : 'success',
       }));
     } catch {
-      // Return empty array if no audit logs
       return [];
     }
   }
 
   async getSystemStatus() {
-    // Return empty data - system monitoring not implemented
     return [];
   }
 
@@ -382,7 +375,6 @@ export class PlatformManagerService {
   }
 
   async getBillingOverview() {
-    // Return empty data - billing system not implemented
     return {
       totalRevenue: 0,
       monthlyRevenue: 0,
@@ -398,12 +390,10 @@ export class PlatformManagerService {
     startDate?: string;
     endDate?: string;
   }) {
-    // Return empty data - webhook logs not implemented
     return [];
   }
 
   async getTickets(params?: { status?: string; priority?: string; category?: string }) {
-    // Return empty data - ticket system not implemented
     return [];
   }
 

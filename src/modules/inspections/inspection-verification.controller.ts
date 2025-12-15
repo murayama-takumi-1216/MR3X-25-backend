@@ -15,10 +15,6 @@ import { InspectionHashService } from './services/inspection-hash.service';
 import { InspectionSignatureService, SignatureData } from './services/inspection-signature.service';
 import { InspectionSignatureLinkService } from './services/inspection-signature-link.service';
 
-/**
- * Public controller for inspection verification and external signing
- * No authentication required for these endpoints
- */
 @ApiTags('Inspection Verification (Public)')
 @Controller('public/inspections')
 export class InspectionVerificationController {
@@ -27,8 +23,6 @@ export class InspectionVerificationController {
     private readonly signatureService: InspectionSignatureService,
     private readonly signatureLinkService: InspectionSignatureLinkService,
   ) {}
-
-  // ==================== Hash Verification ====================
 
   @Get('verify/:token')
   @ApiOperation({ summary: 'Get inspection verification data by token' })
@@ -54,8 +48,6 @@ export class InspectionVerificationController {
   ) {
     return this.hashService.validateUploadedPdf(token, file.buffer);
   }
-
-  // ==================== External Signing ====================
 
   @Get('sign/:linkToken')
   @ApiOperation({ summary: 'Get inspection data for external signing' })

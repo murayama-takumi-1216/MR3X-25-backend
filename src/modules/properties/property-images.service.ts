@@ -24,7 +24,6 @@ export class PropertyImagesService {
       throw new NotFoundException('Property not found');
     }
 
-    // Check access
     const hasAccess = this.checkPropertyAccess(property, user);
     if (!hasAccess) {
       throw new ForbiddenException('Access denied');
@@ -66,7 +65,6 @@ export class PropertyImagesService {
       throw new NotFoundException('Property not found');
     }
 
-    // Check access
     const hasAccess = this.checkPropertyAccess(property, user);
     if (!hasAccess) {
       throw new ForbiddenException('Access denied');
@@ -120,7 +118,6 @@ export class PropertyImagesService {
       throw new ForbiddenException('Access denied');
     }
 
-    // Check if image exists
     const image = await this.prisma.propertyImage.findFirst({
       where: {
         id: BigInt(imageId),
@@ -132,7 +129,6 @@ export class PropertyImagesService {
       throw new NotFoundException('Image not found');
     }
 
-    // Remove primary flag from all images
     await this.prisma.propertyImage.updateMany({
       where: {
         propertyId: BigInt(propertyId),
@@ -142,7 +138,6 @@ export class PropertyImagesService {
       },
     });
 
-    // Set selected image as primary
     const updatedImage = await this.prisma.propertyImage.update({
       where: {
         id: BigInt(imageId),
@@ -187,7 +182,6 @@ export class PropertyImagesService {
       throw new NotFoundException('Image not found');
     }
 
-    // Delete file from filesystem
     try {
       if (fs.existsSync(image.path)) {
         fs.unlinkSync(image.path);
@@ -196,14 +190,12 @@ export class PropertyImagesService {
       console.error('Error deleting file:', error);
     }
 
-    // Delete from database
     await this.prisma.propertyImage.delete({
       where: {
         id: BigInt(imageId),
       },
     });
 
-    // If deleted image was primary, set another as primary
     if (image.isPrimary) {
       const remainingImages = await this.prisma.propertyImage.findMany({
         where: {
@@ -236,20 +228,16 @@ export class PropertyImagesService {
   ): boolean {
     const hasPlatformAccess = user.role === 'CEO' || user.role === 'ADMIN';
 
-    // Check if user belongs to the same agency as the property
     const isSameAgency = Boolean(
       property.agencyId &&
       user.agencyId &&
       property.agencyId.toString() === user.agencyId
     );
 
-    // Agency admin has full access to agency properties
     const hasAgencyAdminAccess = isSameAgency && user.role === 'AGENCY_ADMIN';
 
-    // Agency manager has access to agency properties
     const hasManagerAccess = isSameAgency && user.role === 'AGENCY_MANAGER';
 
-    // Broker has access to properties assigned to them OR properties in their agency
     const hasBrokerAccess = Boolean(
       user.role === 'BROKER' && (
         (property.brokerId && property.brokerId.toString() === user.sub) ||
@@ -257,10 +245,8 @@ export class PropertyImagesService {
       )
     );
 
-    // Proprietario linked to agency has access to properties in their agency
     const hasProprietarioAccess = isSameAgency && user.role === 'PROPRIETARIO';
 
-    // Independent owner has access to their own properties
     const hasIndependentOwnerAccess = user.role === 'INDEPENDENT_OWNER' && property.ownerId?.toString() === user.sub;
 
     const isOwner = property.ownerId?.toString() === user.sub;

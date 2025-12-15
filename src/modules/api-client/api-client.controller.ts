@@ -22,13 +22,11 @@ import { ApiClientService } from './api-client.service';
 export class ApiClientController {
   constructor(private readonly apiClientService: ApiClientService) {}
 
-  // ==================== STATS ====================
   @Get('stats')
   async getStats(@Request() req: any) {
     return this.apiClientService.getStats(req.user.sub);
   }
 
-  // ==================== CREDENTIALS ====================
   @Get('credentials')
   async getCredentials(@Request() req: any) {
     return this.apiClientService.getCredentials(req.user.sub);
@@ -41,14 +39,12 @@ export class ApiClientController {
 
   @Post('rotate-webhook')
   async rotateWebhookSecret(@Request() req: any) {
-    // Webhooks not implemented yet
     return {
       success: false,
       message: 'Webhooks not configured',
     };
   }
 
-  // ==================== TOKENS ====================
   @Get('tokens')
   async getTokens(@Request() req: any) {
     return this.apiClientService.getTokens(req.user.sub);
@@ -56,7 +52,6 @@ export class ApiClientController {
 
   @Post('tokens')
   async createToken(@Request() req: any, @Body() body: any) {
-    // Token creation requires agency API to be enabled
     return {
       success: false,
       message: 'Token creation not available. Contact support to enable API access.',
@@ -68,7 +63,6 @@ export class ApiClientController {
     return { success: true, message: 'Token revoked successfully' };
   }
 
-  // ==================== LOGS ====================
   @Get('logs')
   async getLogs(
     @Request() req: any,
@@ -80,7 +74,6 @@ export class ApiClientController {
     return this.apiClientService.getLogs(req.user.sub, { method, status, dateFrom, dateTo });
   }
 
-  // ==================== WEBHOOKS ====================
   @Get('webhooks')
   async getWebhooks(@Request() req: any) {
     return this.apiClientService.getWebhooks(req.user.sub);
@@ -126,7 +119,6 @@ export class ApiClientController {
     };
   }
 
-  // ==================== SETTINGS ====================
   @Get('settings')
   async getSettings(@Request() req: any) {
     return this.apiClientService.getSettings(req.user.sub);

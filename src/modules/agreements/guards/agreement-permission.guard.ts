@@ -16,18 +16,6 @@ import {
 } from '../services/agreement-permission.service';
 import { AgreementAction, SignatureType } from '../constants/agreement-permissions.constants';
 
-/**
- * Guard that checks agreement-specific permissions
- *
- * This guard works in conjunction with the @AgreementPermission decorator
- * to enforce fine-grained access control on agreement operations.
- *
- * It:
- * 1. Reads the required action from the decorator metadata
- * 2. Extracts user context from the JWT token
- * 3. For operations on specific agreements, loads the agreement and checks permissions
- * 4. For general operations (create, list), checks role-based permissions
- */
 @Injectable()
 export class AgreementPermissionGuard implements CanActivate {
   constructor(
@@ -36,13 +24,11 @@ export class AgreementPermissionGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Get the permission metadata from the decorator
     const permissionMeta = this.reflector.getAllAndOverride<AgreementPermissionMetadata>(
       AGREEMENT_PERMISSION_KEY,
       [context.getHandler(), context.getClass()],
     );
 
-    // If no permission decorator, allow access (rely on JwtAuthGuard only)
     if (!permissionMeta) {
       return true;
     }
@@ -54,7 +40,6 @@ export class AgreementPermissionGuard implements CanActivate {
       throw new ForbiddenException('User not authenticated');
     }
 
-    // Build user context from JWT payload
     const userContext: UserContext = {
       sub: user.sub,
       email: user.email,
@@ -65,7 +50,6 @@ export class AgreementPermissionGuard implements CanActivate {
       document: user.document,
     };
 
-    // Debug logging - remove after troubleshooting
     console.log('[AgreementPermissionGuard] User context:', {
       sub: userContext.sub,
       email: userContext.email,
@@ -77,7 +61,6 @@ export class AgreementPermissionGuard implements CanActivate {
     const { action, requiresAgreementId } = permissionMeta;
     let { signatureType } = permissionMeta;
 
-    // For SIGN action, determine signature type from request body if not specified in decorator
     if (action === AgreementAction.SIGN && !signatureType && request.body) {
       if (request.body.tenantSignature) {
         signatureType = SignatureType.TENANT;
@@ -89,7 +72,6 @@ export class AgreementPermissionGuard implements CanActivate {
       console.log('[AgreementPermissionGuard] Derived signatureType from body:', signatureType);
     }
 
-    // For actions that require a specific agreement
     if (requiresAgreementId) {
       const agreementId = request.params.id;
 
@@ -98,7 +80,6 @@ export class AgreementPermissionGuard implements CanActivate {
       }
 
       try {
-        // This will throw ForbiddenException or NotFoundException if not allowed
         const agreement = await this.permissionService.validateAction(
           userContext,
           agreementId,
@@ -106,7 +87,6 @@ export class AgreementPermissionGuard implements CanActivate {
           signatureType,
         );
 
-        // Attach the loaded agreement to the request for use in the controller
         request.agreement = agreement;
         request.userContext = userContext;
 
@@ -122,24 +102,18 @@ export class AgreementPermissionGuard implements CanActivate {
       }
     }
 
-    // For general actions (like CREATE or LIST)
     const result = this.permissionService.canPerformAction(userContext, action);
 
     if (!result.allowed) {
       throw new ForbiddenException(result.reason || 'Action not allowed');
     }
 
-    // Attach user context for use in the controller
     request.userContext = userContext;
 
     return true;
   }
 }
 
-/**
- * Decorator to extract loaded agreement from request
- * Use this in controllers when @AgreementPermission was used with requiresAgreementId
- */
 import { createParamDecorator } from '@nestjs/common';
 
 export const LoadedAgreement = createParamDecorator(
@@ -151,9 +125,6 @@ export const LoadedAgreement = createParamDecorator(
   },
 );
 
-/**
- * Decorator to extract user context from request
- */
 export const AgreementUserContext = createParamDecorator(
   (data: string, ctx: ExecutionContext) => {
     const request = ctx.switchToHttp().getRequest();

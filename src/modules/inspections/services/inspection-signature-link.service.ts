@@ -27,9 +27,6 @@ export class InspectionSignatureLinkService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Create a signature invitation link for inspection
-   */
   async createSignatureLink(
     inspectionId: bigint,
     signerType: 'tenant' | 'owner' | 'agency' | 'inspector',
@@ -37,7 +34,6 @@ export class InspectionSignatureLinkService {
     signerName?: string,
     expiresInHours: number = this.defaultExpiryHours,
   ): Promise<InspectionSignatureLinkResult> {
-    // Verify inspection exists
     const inspection = await this.prisma.inspection.findUnique({
       where: { id: inspectionId },
       select: { id: true, status: true, inspectionToken: true },
@@ -47,7 +43,6 @@ export class InspectionSignatureLinkService {
       throw new NotFoundException('Vistoria nao encontrada');
     }
 
-    // Check if there's already an active link for this signer type
     const existingLink = await this.prisma.inspectionSignatureLink.findFirst({
       where: {
         inspectionId,
@@ -58,7 +53,6 @@ export class InspectionSignatureLinkService {
     });
 
     if (existingLink) {
-      // Return existing link if still valid
       const signatureUrl = this.getSignatureUrl(existingLink.token);
       return {
         token: existingLink.token,
@@ -69,12 +63,10 @@ export class InspectionSignatureLinkService {
       };
     }
 
-    // Generate new token
     const token = randomUUID();
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + expiresInHours);
 
-    // Create signature link
     const link = await this.prisma.inspectionSignatureLink.create({
       data: {
         inspectionId,
@@ -97,9 +89,6 @@ export class InspectionSignatureLinkService {
     };
   }
 
-  /**
-   * Validate a signature link
-   */
   async validateSignatureLink(token: string): Promise<ValidateInspectionSignatureLinkResult> {
     const link = await this.prisma.inspectionSignatureLink.findUnique({
       where: { token },
@@ -121,7 +110,6 @@ export class InspectionSignatureLinkService {
       };
     }
 
-    // Check if already used
     if (link.usedAt) {
       return {
         valid: false,
@@ -130,7 +118,6 @@ export class InspectionSignatureLinkService {
       };
     }
 
-    // Check if expired
     if (new Date() > link.expiresAt) {
       return {
         valid: false,
@@ -149,9 +136,6 @@ export class InspectionSignatureLinkService {
     };
   }
 
-  /**
-   * Mark a signature link as used
-   */
   async markLinkUsed(token: string): Promise<void> {
     const link = await this.prisma.inspectionSignatureLink.findUnique({
       where: { token },
@@ -171,9 +155,6 @@ export class InspectionSignatureLinkService {
     });
   }
 
-  /**
-   * Mark a signature link as sent
-   */
   async markLinkSent(token: string): Promise<void> {
     await this.prisma.inspectionSignatureLink.update({
       where: { token },
@@ -181,9 +162,6 @@ export class InspectionSignatureLinkService {
     });
   }
 
-  /**
-   * Get all signature links for an inspection
-   */
   async getInspectionSignatureLinks(inspectionId: bigint): Promise<any[]> {
     const links = await this.prisma.inspectionSignatureLink.findMany({
       where: { inspectionId },
@@ -204,9 +182,6 @@ export class InspectionSignatureLinkService {
     }));
   }
 
-  /**
-   * Revoke a signature link
-   */
   async revokeSignatureLink(token: string): Promise<void> {
     await this.prisma.inspectionSignatureLink.update({
       where: { token },
@@ -214,9 +189,6 @@ export class InspectionSignatureLinkService {
     });
   }
 
-  /**
-   * Revoke all signature links for an inspection
-   */
   async revokeAllInspectionLinks(inspectionId: bigint): Promise<void> {
     await this.prisma.inspectionSignatureLink.updateMany({
       where: {
@@ -227,17 +199,11 @@ export class InspectionSignatureLinkService {
     });
   }
 
-  /**
-   * Get the signature URL for a token
-   */
   private getSignatureUrl(token: string): string {
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     return `${baseUrl}/sign/inspection/${token}`;
   }
 
-  /**
-   * Create signature links for all required parties
-   */
   async createSignatureLinksForInspection(
     inspectionId: bigint,
     parties: Array<{
@@ -263,9 +229,6 @@ export class InspectionSignatureLinkService {
     return results;
   }
 
-  /**
-   * Get inspection data for external signing page
-   */
   async getInspectionDataForSigning(token: string): Promise<any> {
     const validation = await this.validateSignatureLink(token);
 
@@ -308,7 +271,6 @@ export class InspectionSignatureLinkService {
       throw new NotFoundException('Vistoria nao encontrada');
     }
 
-    // Get agency if exists
     const agency = inspection.agencyId
       ? await this.prisma.agency.findUnique({
           where: { id: inspection.agencyId },

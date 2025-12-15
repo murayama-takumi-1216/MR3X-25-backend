@@ -1,4 +1,3 @@
--- CreateTable: InspectionMedia
 CREATE TABLE `inspection_media` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `inspection_id` BIGINT UNSIGNED NOT NULL,

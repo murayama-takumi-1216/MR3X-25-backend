@@ -1,10 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '@config/prisma.service';
 
-/**
- * Required fields for legal validity of rental contracts
- * Based on Brazilian Lei do Inquilinato (Lei nº 8.245/91)
- */
 export interface RequiredContractField {
   field: string;
   label: string;
@@ -26,7 +22,7 @@ export interface ContractValidationResult {
   warnings: ValidationWarning[];
   checkedFields: number;
   passedFields: number;
-  score: number; // Percentage of valid fields
+  score: number;
 }
 
 export interface ValidationWarning {
@@ -40,11 +36,7 @@ export interface ValidationWarning {
 export class ContractValidationService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Required fields for rental contracts (Lei do Inquilinato)
-   */
   private readonly requiredFields: RequiredContractField[] = [
-    // Financial Fields - OBRIGATÓRIOS
     {
       field: 'monthlyRent',
       label: 'Valor do Aluguel',
@@ -81,7 +73,6 @@ export class ContractValidationService {
       legalBasis: 'Art. 406 do Código Civil - Taxa legal de juros moratórios',
     },
 
-    // Temporal Fields - OBRIGATÓRIOS
     {
       field: 'startDate',
       label: 'Data de Início',
@@ -97,7 +88,6 @@ export class ContractValidationService {
       legalBasis: 'Art. 3º - Dependendo da vontade das partes',
     },
 
-    // Parties Fields - OBRIGATÓRIOS
     {
       field: 'tenantId',
       label: 'Locatário',
@@ -113,7 +103,6 @@ export class ContractValidationService {
       legalBasis: 'Art. 1º - A locação de imóvel urbano regula-se pelo disposto nesta Lei',
     },
 
-    // Property Fields - OBRIGATÓRIOS
     {
       field: 'propertyId',
       label: 'Imóvel',
@@ -122,7 +111,6 @@ export class ContractValidationService {
       legalBasis: 'Art. 1º - Objeto da locação é o imóvel urbano',
     },
 
-    // Legal Fields - OBRIGATÓRIOS
     {
       field: 'earlyTerminationPenaltyPercent',
       label: 'Multa por Rescisão Antecipada',
@@ -139,22 +127,16 @@ export class ContractValidationService {
     },
   ];
 
-  /**
-   * Valid readjustment indexes accepted by law
-   */
   private readonly validIndexes = [
-    'IGPM', // Índice Geral de Preços do Mercado
-    'IPCA', // Índice de Preços ao Consumidor Amplo
-    'INPC', // Índice Nacional de Preços ao Consumidor
-    'SELIC', // Taxa SELIC
-    'CDI', // Certificado de Depósito Interbancário
-    'IPC', // Índice de Preços ao Consumidor
-    'IGP-DI', // Índice Geral de Preços - Disponibilidade Interna
+    'IGPM',
+    'IPCA',
+    'INPC',
+    'SELIC',
+    'CDI',
+    'IPC',
+    'IGP-DI',
   ];
 
-  /**
-   * Validate contract for required fields and legal compliance
-   */
   async validateContract(contractId: bigint): Promise<ContractValidationResult> {
     const contract = await this.prisma.contract.findUnique({
       where: { id: contractId },
@@ -174,7 +156,6 @@ export class ContractValidationService {
     const warnings: ValidationWarning[] = [];
     let passedFields = 0;
 
-    // Validate each required field
     for (const field of this.requiredFields) {
       const value = this.getFieldValue(contract, field.field);
       const validation = this.validateField(field, value, contract);
@@ -190,7 +171,6 @@ export class ContractValidationService {
       }
     }
 
-    // Additional validations
     const additionalValidations = await this.performAdditionalValidations(contract);
     errors.push(...additionalValidations.errors);
     warnings.push(...additionalValidations.warnings);
@@ -208,16 +188,10 @@ export class ContractValidationService {
     };
   }
 
-  /**
-   * Get field value from contract object
-   */
   private getFieldValue(contract: any, field: string): any {
     return contract[field];
   }
 
-  /**
-   * Validate individual field
-   */
   private validateField(
     field: RequiredContractField,
     value: any,
@@ -226,7 +200,6 @@ export class ContractValidationService {
     let error: ValidationError | null = null;
     let warning: ValidationWarning | null = null;
 
-    // Check if value exists
     if (value === null || value === undefined || value === '') {
       error = {
         field: field.field,
@@ -237,7 +210,6 @@ export class ContractValidationService {
       return { error, warning };
     }
 
-    // Field-specific validations
     switch (field.field) {
       case 'monthlyRent':
         const rent = Number(value);
@@ -359,7 +331,6 @@ export class ContractValidationService {
 
       case 'creci':
         const creciStr = String(value).trim();
-        // CRECI format: CRECI/XX 12345 or CRECI-XX 12345 or just numbers with state
         const creciRegex = /^(CRECI[\/\-]?)?([A-Z]{2})\s*[\-\/]?\s*(\d{3,6})([\-\/]?[FJ])?$/i;
         if (!creciRegex.test(creciStr) && !/^\d{3,6}[\/\-]?[A-Z]{2}$/i.test(creciStr)) {
           warning = {
@@ -375,14 +346,10 @@ export class ContractValidationService {
     return { error, warning };
   }
 
-  /**
-   * Perform additional business logic validations
-   */
   private async performAdditionalValidations(contract: any): Promise<{ errors: ValidationError[]; warnings: ValidationWarning[] }> {
     const errors: ValidationError[] = [];
     const warnings: ValidationWarning[] = [];
 
-    // Validate date range
     if (contract.startDate && contract.endDate) {
       const start = new Date(contract.startDate);
       const end = new Date(contract.endDate);
@@ -396,7 +363,6 @@ export class ContractValidationService {
         });
       }
 
-      // Check contract duration
       const durationMonths = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30));
       if (durationMonths < 12) {
         warnings.push({
@@ -408,7 +374,6 @@ export class ContractValidationService {
       }
     }
 
-    // Validate tenant information
     if (contract.tenantUser) {
       if (!contract.tenantUser.document) {
         warnings.push({
@@ -428,7 +393,6 @@ export class ContractValidationService {
       }
     }
 
-    // Validate owner information
     if (contract.ownerUser) {
       if (!contract.ownerUser.document) {
         warnings.push({
@@ -440,7 +404,6 @@ export class ContractValidationService {
       }
     }
 
-    // Validate property information
     if (contract.property) {
       if (!contract.property.address || !contract.property.city) {
         errors.push({
@@ -452,7 +415,6 @@ export class ContractValidationService {
       }
     }
 
-    // Validate deposit amount
     if (contract.deposit) {
       const deposit = Number(contract.deposit);
       const rent = Number(contract.monthlyRent);
@@ -466,11 +428,8 @@ export class ContractValidationService {
       }
     }
 
-    // Validate CRECI - must have either broker CRECI or agency CRECI
     if (!contract.creci) {
-      // Check if agency has CRECI
       if (contract.agency && contract.agency.creci) {
-        // Agency CRECI exists, use it as fallback - add warning but not error
         warnings.push({
           field: 'creci',
           label: 'CRECI do Corretor',
@@ -487,7 +446,6 @@ export class ContractValidationService {
       }
     }
 
-    // Validate tenant document (CPF/CNPJ) - REQUIRED by law
     if (contract.tenantUser && !contract.tenantUser.document) {
       errors.push({
         field: 'tenantDocument',
@@ -497,7 +455,6 @@ export class ContractValidationService {
       });
     }
 
-    // Validate owner document (CPF/CNPJ) - REQUIRED by law
     if (contract.ownerUser && !contract.ownerUser.document) {
       errors.push({
         field: 'ownerDocument',
@@ -510,17 +467,11 @@ export class ContractValidationService {
     return { errors, warnings };
   }
 
-  /**
-   * Quick validation check (returns boolean only)
-   */
   async isContractValid(contractId: bigint): Promise<boolean> {
     const result = await this.validateContract(contractId);
     return result.valid;
   }
 
-  /**
-   * Get validation summary for display
-   */
   async getValidationSummary(contractId: bigint): Promise<{
     isValid: boolean;
     score: number;
@@ -545,7 +496,6 @@ export class ContractValidationService {
     }
 
     for (const warning of result.warnings) {
-      // Categorize warnings based on field
       const field = warning.field;
       if (field.includes('rent') || field.includes('fee') || field.includes('deposit') || field.includes('interest')) {
         categories.financial.warnings++;
@@ -569,16 +519,10 @@ export class ContractValidationService {
     };
   }
 
-  /**
-   * Get list of valid readjustment indexes
-   */
   getValidIndexes(): string[] {
     return this.validIndexes;
   }
 
-  /**
-   * Get required fields definition
-   */
   getRequiredFields(): RequiredContractField[] {
     return this.requiredFields;
   }

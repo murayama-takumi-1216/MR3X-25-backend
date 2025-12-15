@@ -40,16 +40,10 @@ export class AsaasService implements OnModuleInit {
     }
   }
 
-  /**
-   * Check if Asaas is properly configured
-   */
   isEnabled(): boolean {
     return this.isConfigured;
   }
 
-  /**
-   * Make HTTP request to Asaas API
-   */
   private async request<T>(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     endpoint: string,
@@ -95,32 +89,18 @@ export class AsaasService implements OnModuleInit {
     }
   }
 
-  // ==================== CUSTOMER MANAGEMENT ====================
-
-  /**
-   * Create a new customer in Asaas
-   */
   async createCustomer(data: CreateCustomerDto): Promise<AsaasCustomer> {
     return this.request<AsaasCustomer>('POST', '/customers', data);
   }
 
-  /**
-   * Update an existing customer
-   */
   async updateCustomer(customerId: string, data: Partial<CreateCustomerDto>): Promise<AsaasCustomer> {
     return this.request<AsaasCustomer>('PUT', `/customers/${customerId}`, data);
   }
 
-  /**
-   * Get customer by ID
-   */
   async getCustomer(customerId: string): Promise<AsaasCustomer> {
     return this.request<AsaasCustomer>('GET', `/customers/${customerId}`);
   }
 
-  /**
-   * Find customer by CPF/CNPJ
-   */
   async findCustomerByCpfCnpj(cpfCnpj: string): Promise<AsaasCustomer | null> {
     const cleanCpfCnpj = cpfCnpj.replace(/\D/g, '');
     const response = await this.request<AsaasListResponse<AsaasCustomer>>(
@@ -130,9 +110,6 @@ export class AsaasService implements OnModuleInit {
     return response.data.length > 0 ? response.data[0] : null;
   }
 
-  /**
-   * Find customer by external reference
-   */
   async findCustomerByExternalReference(externalReference: string): Promise<AsaasCustomer | null> {
     const response = await this.request<AsaasListResponse<AsaasCustomer>>(
       'GET',
@@ -141,9 +118,6 @@ export class AsaasService implements OnModuleInit {
     return response.data.length > 0 ? response.data[0] : null;
   }
 
-  /**
-   * List all customers with pagination
-   */
   async listCustomers(offset: number = 0, limit: number = 10): Promise<AsaasListResponse<AsaasCustomer>> {
     return this.request<AsaasListResponse<AsaasCustomer>>(
       'GET',
@@ -151,16 +125,10 @@ export class AsaasService implements OnModuleInit {
     );
   }
 
-  /**
-   * Delete a customer
-   */
   async deleteCustomer(customerId: string): Promise<{ deleted: boolean; id: string }> {
     return this.request<{ deleted: boolean; id: string }>('DELETE', `/customers/${customerId}`);
   }
 
-  /**
-   * Sync a user to Asaas (create or update)
-   */
   async syncCustomer(userData: {
     id: string;
     name: string;
@@ -174,7 +142,6 @@ export class AsaasService implements OnModuleInit {
     postalCode?: string;
   }): Promise<CustomerSyncResult> {
     try {
-      // Check if customer already exists by external reference (our user ID)
       let customer = await this.findCustomerByExternalReference(`user_${userData.id}`);
 
       const customerData: CreateCustomerDto = {
@@ -192,17 +159,13 @@ export class AsaasService implements OnModuleInit {
       };
 
       if (customer) {
-        // Update existing customer
         customer = await this.updateCustomer(customer.id, customerData);
       } else {
-        // Try to find by CPF/CNPJ
         customer = await this.findCustomerByCpfCnpj(userData.document);
 
         if (customer) {
-          // Update existing customer found by CPF
           customer = await this.updateCustomer(customer.id, customerData);
         } else {
-          // Create new customer
           customer = await this.createCustomer(customerData);
         }
       }
@@ -220,25 +183,14 @@ export class AsaasService implements OnModuleInit {
     }
   }
 
-  // ==================== PAYMENT MANAGEMENT ====================
-
-  /**
-   * Create a new payment (single charge)
-   */
   async createPayment(data: CreatePaymentDto): Promise<AsaasPayment> {
     return this.request<AsaasPayment>('POST', '/payments', data);
   }
 
-  /**
-   * Get payment by ID
-   */
   async getPayment(paymentId: string): Promise<AsaasPayment> {
     return this.request<AsaasPayment>('GET', `/payments/${paymentId}`);
   }
 
-  /**
-   * List payments with filters
-   */
   async listPayments(filters: {
     customer?: string;
     status?: string;
@@ -258,30 +210,18 @@ export class AsaasService implements OnModuleInit {
     return this.request<AsaasListResponse<AsaasPayment>>('GET', `/payments?${params.toString()}`);
   }
 
-  /**
-   * Update a payment
-   */
   async updatePayment(paymentId: string, data: Partial<CreatePaymentDto>): Promise<AsaasPayment> {
     return this.request<AsaasPayment>('PUT', `/payments/${paymentId}`, data);
   }
 
-  /**
-   * Delete/Cancel a payment
-   */
   async deletePayment(paymentId: string): Promise<{ deleted: boolean; id: string }> {
     return this.request<{ deleted: boolean; id: string }>('DELETE', `/payments/${paymentId}`);
   }
 
-  /**
-   * Get PIX QR Code for a payment
-   */
   async getPixQrCode(paymentId: string): Promise<AsaasPixQrCode> {
     return this.request<AsaasPixQrCode>('GET', `/payments/${paymentId}/pixQrCode`);
   }
 
-  /**
-   * Get bank slip line (linha digitável)
-   */
   async getBankSlipLine(paymentId: string): Promise<{ identificationField: string; nossoNumero: string; barCode: string }> {
     return this.request<{ identificationField: string; nossoNumero: string; barCode: string }>(
       'GET',
@@ -289,9 +229,6 @@ export class AsaasService implements OnModuleInit {
     );
   }
 
-  /**
-   * Mark payment as received in cash
-   */
   async receiveInCash(paymentId: string, paymentDate: string, value: number): Promise<AsaasPayment> {
     return this.request<AsaasPayment>('POST', `/payments/${paymentId}/receiveInCash`, {
       paymentDate,
@@ -299,17 +236,11 @@ export class AsaasService implements OnModuleInit {
     });
   }
 
-  /**
-   * Refund a payment
-   */
   async refundPayment(paymentId: string, value?: number): Promise<AsaasPayment> {
     const body = value ? { value } : {};
     return this.request<AsaasPayment>('POST', `/payments/${paymentId}/refund`, body);
   }
 
-  /**
-   * Create a complete payment with all payment method details
-   */
   async createCompletePayment(params: {
     customerId: string;
     value: number;
@@ -325,7 +256,7 @@ export class AsaasService implements OnModuleInit {
     try {
       const paymentData: CreatePaymentDto = {
         customer: params.customerId,
-        billingType: params.billingType || 'UNDEFINED', // UNDEFINED allows customer to choose
+        billingType: params.billingType || 'UNDEFINED',
         value: params.value,
         dueDate: params.dueDate,
         description: params.description,
@@ -335,7 +266,6 @@ export class AsaasService implements OnModuleInit {
         fine: params.fine,
       };
 
-      // Handle installments
       if (params.installmentCount && params.installmentCount > 1) {
         paymentData.installmentCount = params.installmentCount;
         paymentData.installmentValue = Math.ceil((params.value / params.installmentCount) * 100) / 100;
@@ -350,7 +280,6 @@ export class AsaasService implements OnModuleInit {
         bankSlipUrl: payment.bankSlipUrl,
       };
 
-      // If payment is PIX, get QR code
       if (payment.billingType === 'PIX') {
         try {
           const pixData = await this.getPixQrCode(payment.id);
@@ -361,7 +290,6 @@ export class AsaasService implements OnModuleInit {
         }
       }
 
-      // If payment is BOLETO, get line
       if (payment.billingType === 'BOLETO') {
         try {
           const boletoData = await this.getBankSlipLine(payment.id);
@@ -382,39 +310,22 @@ export class AsaasService implements OnModuleInit {
     }
   }
 
-  // ==================== SUBSCRIPTION MANAGEMENT ====================
-
-  /**
-   * Create a subscription
-   */
   async createSubscription(data: CreateSubscriptionDto): Promise<AsaasSubscription> {
     return this.request<AsaasSubscription>('POST', '/subscriptions', data);
   }
 
-  /**
-   * Get subscription by ID
-   */
   async getSubscription(subscriptionId: string): Promise<AsaasSubscription> {
     return this.request<AsaasSubscription>('GET', `/subscriptions/${subscriptionId}`);
   }
 
-  /**
-   * Update subscription
-   */
   async updateSubscription(subscriptionId: string, data: Partial<CreateSubscriptionDto>): Promise<AsaasSubscription> {
     return this.request<AsaasSubscription>('PUT', `/subscriptions/${subscriptionId}`, data);
   }
 
-  /**
-   * Delete/Cancel subscription
-   */
   async deleteSubscription(subscriptionId: string): Promise<{ deleted: boolean; id: string }> {
     return this.request<{ deleted: boolean; id: string }>('DELETE', `/subscriptions/${subscriptionId}`);
   }
 
-  /**
-   * List subscription payments
-   */
   async listSubscriptionPayments(subscriptionId: string): Promise<AsaasListResponse<AsaasPayment>> {
     return this.request<AsaasListResponse<AsaasPayment>>(
       'GET',
@@ -422,11 +333,6 @@ export class AsaasService implements OnModuleInit {
     );
   }
 
-  // ==================== INSTALLMENT MANAGEMENT ====================
-
-  /**
-   * Create installment payment
-   */
   async createInstallmentPayment(params: {
     customerId: string;
     value: number;
@@ -451,39 +357,27 @@ export class AsaasService implements OnModuleInit {
 
     const firstPayment = await this.createPayment(paymentData);
 
-    // List all installment payments
     const payments = await this.listPayments({
       externalReference: params.externalReference,
       limit: params.installmentCount,
     });
 
     return {
-      installmentId: firstPayment.id.split('_')[0], // Asaas uses format installmentId_number
+      installmentId: firstPayment.id.split('_')[0],
       payments: payments.data,
     };
   }
 
-  // ==================== UTILITY METHODS ====================
-
-  /**
-   * Format date for Asaas API (YYYY-MM-DD)
-   */
   formatDate(date: Date): string {
     return date.toISOString().split('T')[0];
   }
 
-  /**
-   * Calculate due date from today
-   */
   calculateDueDate(daysFromNow: number): string {
     const date = new Date();
     date.setDate(date.getDate() + daysFromNow);
     return this.formatDate(date);
   }
 
-  /**
-   * Map payment status to internal status
-   */
   mapPaymentStatus(asaasStatus: string): 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED' | 'REFUNDED' {
     switch (asaasStatus) {
       case 'RECEIVED':

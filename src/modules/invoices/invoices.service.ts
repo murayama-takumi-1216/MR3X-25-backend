@@ -69,16 +69,12 @@ export class InvoicesService {
     };
   }
 
-  /**
-   * Calculate penalties and discounts automatically based on contract settings
-   */
   private async calculatePenaltiesForInvoice(
     originalValue: number,
     dueDate: Date,
     contractId: string,
     paymentDate: Date = new Date(),
   ) {
-    // Get contract with penalty settings
     const contract = await this.prisma.contract.findUnique({
       where: { id: BigInt(contractId) },
       select: {
@@ -94,7 +90,6 @@ export class InvoicesService {
       throw new NotFoundException('Contract not found');
     }
 
-    // Calculate using the calculations service
     const result = this.calculationsService.calculateInvoicePenalties(
       originalValue,
       dueDate,
@@ -163,14 +158,12 @@ export class InvoicesService {
     if (referenceMonth) where.referenceMonth = referenceMonth;
     if (createdById) where.createdBy = BigInt(createdById);
 
-    // Date range filter
     if (startDate || endDate) {
       where.dueDate = {};
       if (startDate) where.dueDate.gte = new Date(startDate);
       if (endDate) where.dueDate.lte = new Date(endDate);
     }
 
-    // Fallback filter for users without explicit agency
     if (!agencyId && !createdById && userId) {
       where.OR = [
         { tenantId: BigInt(userId) },
@@ -328,10 +321,6 @@ export class InvoicesService {
     return this.serializeInvoice(invoice);
   }
 
-  /**
-   * Recalculate invoice penalties based on current date and contract settings
-   * This is useful to update overdue invoices with current penalties
-   */
   async recalculatePenalties(id: string) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: BigInt(id) },
@@ -346,7 +335,6 @@ export class InvoicesService {
       throw new BadRequestException('Cannot recalculate penalties for paid or canceled invoices');
     }
 
-    // Calculate new penalties
     const calculations = await this.calculatePenaltiesForInvoice(
       Number(invoice.originalValue),
       invoice.dueDate,
@@ -354,7 +342,6 @@ export class InvoicesService {
       new Date(),
     );
 
-    // Update invoice
     const updated = await this.prisma.invoice.update({
       where: { id: BigInt(id) },
       data: {
@@ -376,7 +363,6 @@ export class InvoicesService {
   }
 
   async create(data: CreateInvoiceDto, userId: string, userAgencyId?: string) {
-    // Get contract to auto-populate fields
     const contract = await this.prisma.contract.findUnique({
       where: { id: BigInt(data.contractId) },
       include: {
@@ -388,14 +374,12 @@ export class InvoicesService {
       throw new NotFoundException('Contrato não encontrado');
     }
 
-    // Calculate updated value
     const originalValue = data.originalValue;
     const fine = data.fine || 0;
     const interest = data.interest || 0;
     const discount = data.discount || 0;
     const updatedValue = originalValue + fine + interest - discount;
 
-    // Generate invoice number
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
     const random = Math.random().toString(36).substring(2, 7).toUpperCase();
@@ -444,12 +428,10 @@ export class InvoicesService {
       throw new NotFoundException('Fatura não encontrada');
     }
 
-    // Don't allow editing paid invoices
     if (invoice.status === 'PAID') {
       throw new BadRequestException('Não é possível editar uma fatura já paga');
     }
 
-    // Recalculate updated value if financial fields changed
     let updatedValue = Number(invoice.updatedValue);
     if (data.fine !== undefined || data.interest !== undefined || data.discount !== undefined) {
       const originalValue = Number(invoice.originalValue);
@@ -568,8 +550,6 @@ export class InvoicesService {
       throw new BadRequestException('Email do inquilino não encontrado');
     }
 
-    // Here you would integrate with your email service
-    // For now, we just update the emailSentAt timestamp
     await this.prisma.invoice.update({
       where: { id: BigInt(id) },
       data: {
@@ -605,7 +585,6 @@ export class InvoicesService {
       this.prisma.invoice.count({ where: { ...where, status: 'CANCELED' } }),
     ]);
 
-    // Calculate totals
     const pendingSum = await this.prisma.invoice.aggregate({
       where: { ...where, status: 'PENDING' },
       _sum: { updatedValue: true },
@@ -646,7 +625,6 @@ export class InvoicesService {
       throw new NotFoundException('Fatura não encontrada');
     }
 
-    // Return boleto URL or payment link
     return {
       boletoUrl: invoice.boletoUrl,
       paymentLink: invoice.paymentLink,
@@ -679,7 +657,6 @@ export class InvoicesService {
     };
   }
 
-  // Update overdue invoices (can be called by a cron job)
   async updateOverdueInvoices() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);

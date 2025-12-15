@@ -8,9 +8,6 @@ import * as crypto from 'crypto';
 export class InspectionsService {
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * Generate unique inspection token in format MR3X-VST-YEAR-XXXX-XXXX
-   */
   private generateInspectionToken(): string {
     const year = new Date().getFullYear();
     const random1 = crypto.randomBytes(2).toString('hex').toUpperCase();
@@ -18,9 +15,6 @@ export class InspectionsService {
     return `MR3X-VST-${year}-${random1}-${random2}`;
   }
 
-  /**
-   * Check if inspection has any signatures
-   */
   private hasSignatures(inspection: any): boolean {
     return !!(
       inspection.tenantSignature ||
@@ -75,7 +69,6 @@ export class InspectionsService {
       if (endDate) where.date.lte = new Date(endDate);
     }
 
-    // Add search filter
     if (search && search.trim()) {
       where.OR = [
         { property: { name: { contains: search.trim() } } },
@@ -177,7 +170,6 @@ export class InspectionsService {
   }
 
   async create(data: CreateInspectionDto, userId: string, assignedById?: string) {
-    // Validate property exists
     const property = await this.prisma.property.findUnique({
       where: { id: BigInt(data.propertyId) },
     });
@@ -186,7 +178,6 @@ export class InspectionsService {
       throw new NotFoundException('Property not found');
     }
 
-    // If contract is provided, validate it exists and belongs to the property
     if (data.contractId) {
       const contract = await this.prisma.contract.findUnique({
         where: { id: BigInt(data.contractId) },
@@ -197,7 +188,6 @@ export class InspectionsService {
       }
     }
 
-    // Generate unique token for this inspection
     const token = this.generateInspectionToken();
 
     const inspection = await this.prisma.inspection.create({
@@ -221,7 +211,6 @@ export class InspectionsService {
       },
     });
 
-    // Create inspection items if provided
     if (data.items && data.items.length > 0) {
       await this.prisma.inspectionItem.createMany({
         data: data.items.map(item => ({
@@ -250,12 +239,10 @@ export class InspectionsService {
       throw new NotFoundException('Inspection not found');
     }
 
-    // Don't allow updates to approved or rejected inspections
     if (inspection.status === 'APROVADA' || inspection.status === 'REJEITADA') {
       throw new ForbiddenException('Cannot update an approved or rejected inspection');
     }
 
-    // Block edits after any signature has been added (fraud prevention)
     if (this.hasSignatures(inspection)) {
       throw new ForbiddenException(
         'Não é possível editar o termo de vistoria após a assinatura das partes. ' +
@@ -282,9 +269,7 @@ export class InspectionsService {
       data: updateData,
     });
 
-    // Update items if provided
     if (data.items) {
-      // Delete existing items and create new ones
       await this.prisma.inspectionItem.deleteMany({
         where: { inspectionId: BigInt(id) },
       });
@@ -329,7 +314,6 @@ export class InspectionsService {
     const now = new Date();
     const updateData: any = {};
 
-    // Determine which signature to update based on user role/relation
     if (data.tenantSignature) {
       updateData.tenantSignature = data.tenantSignature;
       updateData.tenantSignedAt = now;
@@ -347,7 +331,6 @@ export class InspectionsService {
       updateData.inspectorSignedAt = now;
     }
 
-    // Update status to awaiting signature if it was in draft
     if (inspection.status === 'RASCUNHO' || inspection.status === 'EM_ANDAMENTO') {
       updateData.status = 'AGUARDANDO_ASSINATURA';
     }
@@ -424,17 +407,14 @@ export class InspectionsService {
       throw new NotFoundException('Inspection not found');
     }
 
-    // Don't allow deletion of approved inspections
     if (inspection.status === 'APROVADA') {
       throw new ForbiddenException('Cannot delete an approved inspection');
     }
 
-    // Delete items first
     await this.prisma.inspectionItem.deleteMany({
       where: { inspectionId: BigInt(id) },
     });
 
-    // Delete inspection
     await this.prisma.inspection.delete({
       where: { id: BigInt(id) },
     });
@@ -459,7 +439,6 @@ export class InspectionsService {
     return this.findOne(id);
   }
 
-  // Templates methods
   async findAllTemplates(params: { agencyId?: string; type?: string; isDefault?: boolean }) {
     const { agencyId, type, isDefault } = params;
 
@@ -537,7 +516,6 @@ export class InspectionsService {
       throw new NotFoundException('Template not found');
     }
 
-    // Soft delete by setting isActive to false
     await this.prisma.inspectionTemplate.update({
       where: { id: BigInt(id) },
       data: { isActive: false },
@@ -546,7 +524,6 @@ export class InspectionsService {
     return { message: 'Template deleted successfully' };
   }
 
-  // Statistics for dashboard
   async getStatistics(params: { agencyId?: string; createdById?: string }) {
     const { agencyId, createdById } = params;
 
@@ -594,11 +571,9 @@ export class InspectionsService {
       approvedAt: inspection.approvedAt?.toISOString() || null,
       createdAt: inspection.createdAt?.toISOString() || null,
       updatedAt: inspection.updatedAt?.toISOString() || null,
-      // Flag indicating if inspection has any signatures (used to block edits)
       hasSignatures: this.hasSignatures(inspection),
     };
 
-    // Serialize property
     if (inspection.property) {
       serialized.property = {
         ...inspection.property,
@@ -624,7 +599,6 @@ export class InspectionsService {
       }
     }
 
-    // Serialize user relations
     ['inspector', 'assignedBy', 'approvedBy', 'createdByUser'].forEach(rel => {
       if (inspection[rel]) {
         serialized[rel] = {
@@ -634,7 +608,6 @@ export class InspectionsService {
       }
     });
 
-    // Serialize template
     if (inspection.template) {
       serialized.template = {
         ...inspection.template,
@@ -644,7 +617,6 @@ export class InspectionsService {
       };
     }
 
-    // Serialize items
     if (inspection.items && Array.isArray(inspection.items)) {
       serialized.items = inspection.items.map((item: any) => ({
         ...item,

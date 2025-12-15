@@ -11,8 +11,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
   canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest();
-    
-    // Allow OPTIONS requests (CORS preflight) to pass through without authentication
+
     if (request.method === 'OPTIONS') {
       return true;
     }

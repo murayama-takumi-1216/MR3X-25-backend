@@ -29,7 +29,6 @@ export class InspectionMediaService {
     itemIndex?: number,
     room?: string,
   ): Promise<UploadedMedia[]> {
-    // Verify inspection exists and user has access
     const inspection = await this.prisma.inspection.findUnique({
       where: { id: BigInt(inspectionId) },
       include: { property: true },
@@ -39,7 +38,6 @@ export class InspectionMediaService {
       throw new NotFoundException('Inspection not found');
     }
 
-    // Check user access
     await this.checkAccess(inspection, user);
 
     const uploadedMedia: UploadedMedia[] = [];
@@ -48,7 +46,6 @@ export class InspectionMediaService {
       const isVideo = file.mimetype.startsWith('video/');
       const mediaType = isVideo ? 'VIDEO' : 'IMAGE';
 
-      // Create media record in database
       const media = await this.prisma.inspectionMedia.create({
         data: {
           inspectionId: BigInt(inspectionId),
@@ -88,7 +85,6 @@ export class InspectionMediaService {
     user: any,
     itemIndex?: number,
   ): Promise<UploadedMedia[]> {
-    // Verify inspection exists
     const inspection = await this.prisma.inspection.findUnique({
       where: { id: BigInt(inspectionId) },
     });
@@ -169,10 +165,8 @@ export class InspectionMediaService {
       throw new NotFoundException('Media not found');
     }
 
-    // Check user access
     await this.checkAccess(media.inspection, user);
 
-    // Delete file from disk
     if (media.path && fs.existsSync(media.path)) {
       try {
         fs.unlinkSync(media.path);
@@ -181,29 +175,24 @@ export class InspectionMediaService {
       }
     }
 
-    // Delete from database
     await this.prisma.inspectionMedia.delete({
       where: { id: BigInt(mediaId) },
     });
   }
 
   private async checkAccess(inspection: any, user: any): Promise<void> {
-    // CEO can access all
     if (user.role === 'CEO') {
       return;
     }
 
-    // Agency users can access their agency's inspections
     if (user.agencyId && inspection.agencyId?.toString() === user.agencyId) {
       return;
     }
 
-    // Creator can access their own inspections
     if (inspection.createdById?.toString() === user.sub) {
       return;
     }
 
-    // Inspector can access inspections assigned to them
     if (inspection.inspectorId?.toString() === user.sub) {
       return;
     }

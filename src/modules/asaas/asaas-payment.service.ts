@@ -36,20 +36,16 @@ export class AsaasPaymentService {
     private asaasService: AsaasService,
   ) {}
 
-  /**
-   * Create payment for an agreement (debt settlement)
-   */
   async createAgreementPayment(dto: CreateAgreementPaymentDto): Promise<PaymentLinkResult> {
     if (!this.asaasService.isEnabled()) {
       return { success: false, error: 'Payment gateway is not configured' };
     }
 
-    // Get agreement details with tenant relation
     const agreement = await this.prisma.agreement.findUnique({
       where: { id: BigInt(dto.agreementId) },
       include: {
         property: true,
-        tenant: true, // Agreement has direct tenant relation
+        tenant: true,
       },
     });
 
@@ -61,13 +57,11 @@ export class AsaasPaymentService {
       throw new BadRequestException('Agreement is already completed');
     }
 
-    // Get tenant/payer info from agreement's direct tenant relation
     const tenant = agreement.tenant;
     if (!tenant) {
       throw new BadRequestException('No tenant associated with this agreement');
     }
 
-    // Sync customer to Asaas
     const customerResult = await this.asaasService.syncCustomer({
       id: tenant.id.toString(),
       name: tenant.name || 'Cliente',
@@ -80,17 +74,14 @@ export class AsaasPaymentService {
       return { success: false, error: customerResult.error || 'Failed to sync customer' };
     }
 
-    // Calculate payment details
     const value = Number(agreement.negotiatedAmount) || Number(agreement.originalAmount);
     const installments = agreement.installments || 1;
     const installmentValue = installments > 1
       ? Number(agreement.installmentValue) || Math.ceil(value / installments * 100) / 100
       : value;
 
-    // Calculate due date (today + 3 days minimum for boleto)
     const dueDate = this.asaasService.calculateDueDate(3);
 
-    // Create payment in Asaas
     const propertyAddress = agreement.property?.address || agreement.propertyId.toString();
     const paymentResult = await this.asaasService.createCompletePayment({
       customerId: customerResult.customerId,
@@ -106,14 +97,13 @@ export class AsaasPaymentService {
       return paymentResult;
     }
 
-    // Update agreement with payment info
     await this.prisma.agreement.update({
       where: { id: BigInt(dto.agreementId) },
       data: {
         asaasPaymentId: paymentResult.paymentId,
         asaasPaymentLink: paymentResult.invoiceUrl,
         paymentStatus: 'PENDING',
-        status: 'AGUARDANDO_ASSINATURA', // Move to awaiting if was draft
+        status: 'AGUARDANDO_ASSINATURA',
       },
     });
 
@@ -122,25 +112,21 @@ export class AsaasPaymentService {
     return paymentResult;
   }
 
-  /**
-   * Create payment for an invoice
-   */
   async createInvoicePayment(dto: CreateInvoicePaymentDto): Promise<PaymentLinkResult> {
     if (!this.asaasService.isEnabled()) {
       return { success: false, error: 'Payment gateway is not configured' };
     }
 
-    // Get invoice details with contract and tenant relations
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: BigInt(dto.invoiceId) },
       include: {
         contract: {
           include: {
-            tenantUser: true, // Contract uses tenantUser relation
+            tenantUser: true,
           },
         },
         property: true,
-        tenant: true, // Invoice also has direct tenant relation
+        tenant: true,
       },
     });
 
@@ -152,9 +138,7 @@ export class AsaasPaymentService {
       throw new BadRequestException('Invoice is already paid');
     }
 
-    // Check if already has Asaas payment
     if (invoice.asaasId) {
-      // Return existing payment info
       try {
         const existingPayment = await this.asaasService.getPayment(invoice.asaasId);
         const result: PaymentLinkResult = {
@@ -176,13 +160,11 @@ export class AsaasPaymentService {
       }
     }
 
-    // Get tenant/payer info - try direct tenant first, then contract's tenantUser
     const tenant = invoice.tenant || invoice.contract?.tenantUser;
     if (!tenant) {
       throw new BadRequestException('No tenant associated with this invoice');
     }
 
-    // Sync customer to Asaas
     const customerResult = await this.asaasService.syncCustomer({
       id: tenant.id.toString(),
       name: tenant.name || 'Cliente',
@@ -195,21 +177,18 @@ export class AsaasPaymentService {
       return { success: false, error: customerResult.error || 'Failed to sync customer' };
     }
 
-    // Calculate payment value
     const baseValue = Number(invoice.originalValue);
     const fine = invoice.fine ? Number(invoice.fine) : 0;
     const interest = invoice.interest ? Number(invoice.interest) : 0;
     const discount = invoice.discount ? Number(invoice.discount) : 0;
     const totalValue = baseValue + fine + interest - discount;
 
-    // Use invoice due date or calculate new one
     const dueDate = invoice.dueDate
       ? (new Date(invoice.dueDate) > new Date()
           ? this.asaasService.formatDate(invoice.dueDate)
           : this.asaasService.calculateDueDate(3))
       : this.asaasService.calculateDueDate(3);
 
-    // Create payment in Asaas
     const paymentResult = await this.asaasService.createCompletePayment({
       customerId: customerResult.customerId,
       value: totalValue,
@@ -217,7 +196,6 @@ export class AsaasPaymentService {
       description: `Fatura ${invoice.invoiceNumber || invoice.id} - ${invoice.description || 'Aluguel'}`,
       externalReference: `invoice:${dto.invoiceId}`,
       billingType: dto.billingType || 'UNDEFINED',
-      // Add fine and interest for late payments
       fine: fine > 0 ? { value: 2, type: 'PERCENTAGE' } : undefined,
       interest: interest > 0 ? { value: 1 } : undefined,
     });
@@ -226,7 +204,6 @@ export class AsaasPaymentService {
       return paymentResult;
     }
 
-    // Update invoice with payment info
     await this.prisma.invoice.update({
       where: { id: BigInt(dto.invoiceId) },
       data: {
@@ -247,9 +224,6 @@ export class AsaasPaymentService {
     return paymentResult;
   }
 
-  /**
-   * Get payment status from Asaas
-   */
   async getPaymentStatus(paymentId: string): Promise<{
     status: string;
     paymentDate?: string;
@@ -270,9 +244,6 @@ export class AsaasPaymentService {
     };
   }
 
-  /**
-   * Cancel a payment in Asaas
-   */
   async cancelPayment(paymentId: string): Promise<{ success: boolean; error?: string }> {
     if (!this.asaasService.isEnabled()) {
       return { success: false, error: 'Payment gateway is not configured' };
@@ -286,9 +257,6 @@ export class AsaasPaymentService {
     }
   }
 
-  /**
-   * Refund a payment
-   */
   async refundPayment(paymentId: string, value?: number): Promise<{ success: boolean; error?: string }> {
     if (!this.asaasService.isEnabled()) {
       return { success: false, error: 'Payment gateway is not configured' };
@@ -302,9 +270,6 @@ export class AsaasPaymentService {
     }
   }
 
-  /**
-   * Mark payment as received in cash (manual payment)
-   */
   async markAsReceivedInCash(
     paymentId: string,
     paymentDate: Date,
@@ -326,9 +291,6 @@ export class AsaasPaymentService {
     }
   }
 
-  /**
-   * Generate PIX QR Code for existing payment
-   */
   async getPixQrCode(paymentId: string): Promise<{
     success: boolean;
     qrCode?: string;
@@ -351,9 +313,6 @@ export class AsaasPaymentService {
     }
   }
 
-  /**
-   * Sync all pending payments from Asaas
-   */
   async syncPendingPayments(agencyId?: string): Promise<{ synced: number; errors: number }> {
     if (!this.asaasService.isEnabled()) {
       return { synced: 0, errors: 0 };
@@ -362,7 +321,6 @@ export class AsaasPaymentService {
     let synced = 0;
     let errors = 0;
 
-    // Get invoices with Asaas ID that are pending
     const where: any = {
       asaasId: { not: null },
       status: { in: ['PENDING', 'OVERDUE'] },

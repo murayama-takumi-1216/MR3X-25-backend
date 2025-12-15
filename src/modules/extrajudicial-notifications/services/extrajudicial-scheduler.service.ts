@@ -69,10 +69,6 @@ export class ExtrajudicialSchedulerService {
     private extrajudicialService: ExtrajudicialNotificationsService,
   ) {}
 
-  /**
-   * Run daily at 6:00 AM to check for overdue contracts
-   * and generate extrajudicial notifications automatically
-   */
   @Cron(CronExpression.EVERY_DAY_AT_6AM)
   async handleOverdueContractsCheck() {
     this.logger.log('Starting daily overdue contracts check for extrajudicial notifications...');
@@ -85,10 +81,6 @@ export class ExtrajudicialSchedulerService {
     }
   }
 
-  /**
-   * Main method to check overdue contracts and generate notifications
-   * Can also be called manually via API
-   */
   async checkAndGenerateNotifications(): Promise<{
     checked: number;
     generated: number;
@@ -104,7 +96,6 @@ export class ExtrajudicialSchedulerService {
       details: [] as Array<{ contractId: string; status: string; message: string }>,
     };
 
-    // Get all active contracts with overdue payments
     const overdueContracts = await this.getOverdueContracts();
     result.checked = overdueContracts.length;
 
@@ -114,7 +105,6 @@ export class ExtrajudicialSchedulerService {
       try {
         const contractId = contract.id.toString();
 
-        // Check if agency has auto-generate enabled
         if (!contract.agency?.extrajudicialAutoGenerate) {
           result.skipped++;
           result.details.push({
@@ -125,7 +115,6 @@ export class ExtrajudicialSchedulerService {
           continue;
         }
 
-        // Calculate days overdue
         const oldestOverduePayment = this.getOldestOverduePayment(contract.payments);
         if (!oldestOverduePayment) {
           result.skipped++;
@@ -140,7 +129,6 @@ export class ExtrajudicialSchedulerService {
         const daysOverdue = this.calculateDaysOverdue(oldestOverduePayment.dueDate);
         const daysBeforeNotice = contract.agency?.extrajudicialDaysBeforeNotice || 30;
 
-        // Check if contract has reached the delinquency threshold
         if (daysOverdue < daysBeforeNotice) {
           result.skipped++;
           result.details.push({
@@ -151,7 +139,6 @@ export class ExtrajudicialSchedulerService {
           continue;
         }
 
-        // Check if notification already exists for this contract
         const existingNotification = await this.prisma.extrajudicialNotification.findFirst({
           where: {
             contractId: contract.id,
@@ -172,7 +159,6 @@ export class ExtrajudicialSchedulerService {
           continue;
         }
 
-        // Generate the notification
         await this.generateNotificationForContract(contract, daysOverdue);
 
         result.generated++;
@@ -193,15 +179,11 @@ export class ExtrajudicialSchedulerService {
       }
     }
 
-    // Log summary
     this.logger.log(`Summary: Checked=${result.checked}, Generated=${result.generated}, Skipped=${result.skipped}, Errors=${result.errors}`);
 
     return result;
   }
 
-  /**
-   * Get all active contracts with overdue payments
-   */
   private async getOverdueContracts(): Promise<OverdueContract[]> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -292,9 +274,6 @@ export class ExtrajudicialSchedulerService {
     }) as unknown as OverdueContract[];
   }
 
-  /**
-   * Get the oldest overdue payment
-   */
   private getOldestOverduePayment(payments: Array<{ id: bigint; dueDate: Date; valorPago: any; status: string }>) {
     if (!payments || payments.length === 0) return null;
     return payments.reduce((oldest, payment) =>
@@ -302,9 +281,6 @@ export class ExtrajudicialSchedulerService {
     );
   }
 
-  /**
-   * Calculate days overdue from a date
-   */
   private calculateDaysOverdue(dueDate: Date): number {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -315,29 +291,21 @@ export class ExtrajudicialSchedulerService {
     return Math.floor(diffTime / (1000 * 60 * 60 * 24));
   }
 
-  /**
-   * Calculate financial amounts for the notification
-   */
   private calculateFinancialAmounts(contract: OverdueContract, daysOverdue: number) {
-    // Calculate total overdue amount (principal)
     const principalAmount = contract.payments.reduce((sum, p) => {
       return sum + parseFloat(p.valorPago?.toString() || '0');
     }, 0);
 
-    // Calculate fine (multa)
     const lateFeePercent = parseFloat(contract.lateFeePercent?.toString() || '2');
     const fineAmount = principalAmount * (lateFeePercent / 100);
 
-    // Calculate interest (juros)
     const interestRatePercent = parseFloat(contract.interestRatePercent?.toString() || '1');
     const monthsOverdue = Math.ceil(daysOverdue / 30);
     const interestAmount = principalAmount * (interestRatePercent / 100) * monthsOverdue;
 
-    // Monetary correction (simplified - using a fixed rate)
-    const correctionRate = 0.5; // 0.5% monthly correction
+    const correctionRate = 0.5;
     const correctionAmount = principalAmount * (correctionRate / 100) * monthsOverdue;
 
-    // Total amount
     const totalAmount = principalAmount + fineAmount + interestAmount + correctionAmount;
 
     return {
@@ -349,14 +317,10 @@ export class ExtrajudicialSchedulerService {
     };
   }
 
-  /**
-   * Generate extrajudicial notification for a contract
-   */
   private async generateNotificationForContract(contract: OverdueContract, daysOverdue: number) {
     const { principalAmount, fineAmount, interestAmount, correctionAmount, totalAmount } =
       this.calculateFinancialAmounts(contract, daysOverdue);
 
-    // Determine creditor (owner or agency)
     const creditor = contract.ownerUser || {
       id: contract.agency?.id,
       name: contract.agency?.name,
@@ -370,7 +334,6 @@ export class ExtrajudicialSchedulerService {
     const property = contract.property;
     const legalDeadlineDays = contract.agency?.extrajudicialLegalDeadlineDays || 15;
 
-    // Build property address
     const propertyAddress = [
       property.address,
       property.neighborhood,
@@ -378,7 +341,6 @@ export class ExtrajudicialSchedulerService {
       property.cep,
     ].filter(Boolean).join(', ');
 
-    // Generate notification token and hash
     const notificationToken = this.generateToken();
     const authHash = this.generateHash(JSON.stringify({
       contractId: contract.id.toString(),
@@ -387,11 +349,9 @@ export class ExtrajudicialSchedulerService {
       timestamp: Date.now(),
     }));
 
-    // Format currency
     const formatCurrency = (value: number) =>
       `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    // Build notification content
     const title = `NOTIFICAÇÃO EXTRAJUDICIAL DE COBRANÇA DE ALUGUÉIS`;
 
     const subject = `Cobrança de aluguéis em atraso referente ao imóvel localizado em ${propertyAddress}`;
@@ -470,7 +430,6 @@ Em caso de não pagamento no prazo estipulado:
 5. Continuidade da incidência de juros, multa e correção monetária até a efetiva quitação
     `.trim();
 
-    // Create the notification in database
     const notification = await this.prisma.extrajudicialNotification.create({
       data: {
         contractId: contract.id,
@@ -520,7 +479,6 @@ Em caso de não pagamento no prazo estipulado:
       },
     });
 
-    // Create audit entry
     await this.prisma.extrajudicialNotificationAudit.create({
       data: {
         notificationId: notification.id,
@@ -541,27 +499,18 @@ Em caso de não pagamento no prazo estipulado:
     return notification;
   }
 
-  /**
-   * Generate unique token
-   */
   private generateToken(): string {
     const year = new Date().getFullYear();
     const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
     return `MR3X-NEX-${year}-${random}`;
   }
 
-  /**
-   * Generate notification number
-   */
   private generateNotificationNumber(): string {
     const year = new Date().getFullYear();
     const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
     return `MR3X-NEX-${year}-${random}`;
   }
 
-  /**
-   * Generate protocol number
-   */
   private generateProtocolNumber(): string {
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
@@ -569,25 +518,16 @@ Em caso de não pagamento no prazo estipulado:
     return `PROT-${dateStr}-${random}`;
   }
 
-  /**
-   * Generate hash
-   */
   private generateHash(content: string): string {
     return crypto.createHash('sha256').update(content).digest('hex').substring(0, 32);
   }
 
-  /**
-   * Calculate deadline date
-   */
   private calculateDeadlineDate(days: number): Date {
     const date = new Date();
     date.setDate(date.getDate() + days);
     return date;
   }
 
-  /**
-   * Convert number to words (Portuguese)
-   */
   private numberToWords(num: number): string {
     const words: Record<number, string> = {
       1: 'um', 2: 'dois', 3: 'três', 4: 'quatro', 5: 'cinco',
@@ -599,10 +539,6 @@ Em caso de não pagamento no prazo estipulado:
     return words[num] || num.toString();
   }
 
-  /**
-   * Check and update expired deadlines
-   * Runs daily to mark notifications with expired deadlines
-   */
   @Cron(CronExpression.EVERY_DAY_AT_7AM)
   async handleExpiredDeadlines() {
     this.logger.log('Checking for expired extrajudicial notification deadlines...');
@@ -611,7 +547,6 @@ Em caso de não pagamento no prazo estipulado:
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Find notifications with expired deadlines that are still pending
       const expiredNotifications = await this.prisma.extrajudicialNotification.findMany({
         where: {
           status: {
@@ -626,13 +561,11 @@ Em caso de não pagamento no prazo estipulado:
       this.logger.log(`Found ${expiredNotifications.length} notifications with expired deadlines`);
 
       for (const notification of expiredNotifications) {
-        // Update status to PRAZO_EXPIRADO
         await this.prisma.extrajudicialNotification.update({
           where: { id: notification.id },
           data: { status: 'PRAZO_EXPIRADO' },
         });
 
-        // Create audit entry
         await this.prisma.extrajudicialNotificationAudit.create({
           data: {
             notificationId: notification.id,

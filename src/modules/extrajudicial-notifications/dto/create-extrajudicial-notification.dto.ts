@@ -56,7 +56,6 @@ export class CreateExtrajudicialNotificationDto {
   @IsEnum(NotificationPriority)
   priority?: NotificationPriority;
 
-  // Creditor info
   @ApiProperty({ description: 'Creditor user ID' })
   @IsNotEmpty()
   @IsString()
@@ -87,7 +86,6 @@ export class CreateExtrajudicialNotificationDto {
   @IsString()
   creditorPhone?: string;
 
-  // Debtor info
   @ApiProperty({ description: 'Debtor user ID' })
   @IsNotEmpty()
   @IsString()
@@ -118,7 +116,6 @@ export class CreateExtrajudicialNotificationDto {
   @IsString()
   debtorPhone?: string;
 
-  // Content
   @ApiProperty({ description: 'Notification title' })
   @IsNotEmpty()
   @IsString()
@@ -144,7 +141,6 @@ export class CreateExtrajudicialNotificationDto {
   @IsString()
   demandedAction: string;
 
-  // Financial
   @ApiPropertyOptional({ description: 'Original principal amount' })
   @IsOptional()
   @IsNumber()
@@ -181,7 +177,6 @@ export class CreateExtrajudicialNotificationDto {
   @Min(0)
   totalAmount: number;
 
-  // Deadline
   @ApiProperty({ description: 'Days to comply with the notification' })
   @IsNotEmpty()
   @IsNumber()

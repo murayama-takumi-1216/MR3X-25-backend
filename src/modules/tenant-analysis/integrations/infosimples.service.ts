@@ -2,9 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 
-/**
- * InfoSimples CENPROT-SP Protestos API Response Interfaces
- */
 export interface InfoSimplesProtestData {
   cartorio: string;
   cidade: string;
@@ -75,7 +72,6 @@ export class InfoSimplesService {
   private readonly isEnabled: boolean;
   private readonly apiToken: string;
 
-  // InfoSimples API endpoints
   private readonly BASE_URL = 'https://api.infosimples.com/api/v2/consultas';
   private readonly CENPROT_SP_ENDPOINT = '/cenprot-sp/protestos';
   private readonly IEPTB_ENDPOINT = '/ieptb/protestos';
@@ -87,14 +83,13 @@ export class InfoSimplesService {
 
     this.client = axios.create({
       baseURL: this.BASE_URL,
-      timeout: 60000, // 60 seconds - external API can be slow
+      timeout: 60000,
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
     });
 
-    // Request interceptor for logging
     this.client.interceptors.request.use(
       (config) => {
         this.logger.log(`InfoSimples API Request: ${config.method?.toUpperCase()} ${config.url}`);
@@ -106,7 +101,6 @@ export class InfoSimplesService {
       }
     );
 
-    // Response interceptor for logging
     this.client.interceptors.response.use(
       (response) => {
         this.logger.log(`InfoSimples API Response: ${response.status} - Code: ${response.data?.code}`);
@@ -128,17 +122,10 @@ export class InfoSimplesService {
     }
   }
 
-  /**
-   * Check if the service is enabled
-   */
   isServiceEnabled(): boolean {
     return this.isEnabled && !!this.apiToken;
   }
 
-  /**
-   * Get protest data from CENPROT-SP (São Paulo Central de Protestos)
-   * This endpoint provides detailed protest information for São Paulo state
-   */
   async getProtestsCenprotSP(document: string): Promise<ProtestAnalysisResult> {
     if (!this.isServiceEnabled()) {
       this.logger.warn('InfoSimples service is not enabled, returning empty result');
@@ -155,7 +142,7 @@ export class InfoSimplesService {
         params: {
           token: this.apiToken,
           [isCPF ? 'cpf' : 'cnpj']: cleanDocument,
-          timeout: 300, // 5 minutes timeout for the query
+          timeout: 300,
         },
       });
 
@@ -164,7 +151,6 @@ export class InfoSimplesService {
       this.logger.error(`CENPROT-SP query failed: ${error.message}`);
 
       if (error.response?.data?.code === 600) {
-        // Token error
         throw new Error('InfoSimples API token inválido ou expirado');
       }
 
@@ -176,10 +162,6 @@ export class InfoSimplesService {
     }
   }
 
-  /**
-   * Get protest data from IEPTB Nacional
-   * This provides nationwide protest information but with less detail for SP
-   */
   async getProtestsIEPTB(
     document: string,
     credentials?: { loginCpf: string; loginSenha: string }
@@ -201,7 +183,6 @@ export class InfoSimplesService {
         timeout: 300,
       };
 
-      // Add credentials if provided (required for GOV.BR login)
       if (credentials) {
         params.login_cpf = credentials.loginCpf;
         params.login_senha = credentials.loginSenha;
@@ -218,10 +199,6 @@ export class InfoSimplesService {
     }
   }
 
-  /**
-   * Get combined protest data from IEPTB + CENPROT-SP
-   * This provides the most comprehensive protest information
-   */
   async getProtestsCombined(document: string): Promise<ProtestAnalysisResult> {
     if (!this.isServiceEnabled()) {
       this.logger.warn('InfoSimples service is not enabled, returning empty result');
@@ -249,9 +226,6 @@ export class InfoSimplesService {
     }
   }
 
-  /**
-   * Main method to get protest analysis from CENPROT-SP
-   */
   async analyzeProtests(document: string): Promise<ProtestAnalysisResult> {
     if (!this.isServiceEnabled()) {
       this.logger.warn('InfoSimples service is not enabled');
@@ -259,12 +233,10 @@ export class InfoSimplesService {
     }
 
     try {
-      // Use CENPROT-SP for São Paulo detailed data
       return await this.getProtestsCenprotSP(document);
     } catch (error: any) {
       this.logger.error(`Protest analysis failed: ${error.message}`);
 
-      // Return empty result on error instead of throwing
       return {
         ...this.getEmptyResult(),
         rawResponse: { error: error.message },
@@ -272,15 +244,10 @@ export class InfoSimplesService {
     }
   }
 
-  /**
-   * Map InfoSimples API response to our internal format
-   */
   private mapResponse(response: InfoSimplesResponse, source: string): ProtestAnalysisResult {
-    // Check for successful response (200 = success with data, 201 = success with multiple results)
     if (response.code !== 200 && response.code !== 201) {
       this.logger.warn(`InfoSimples returned code ${response.code}: ${response.code_message}`);
 
-      // Code 404 typically means no data found
       if (response.code === 404) {
         return this.getEmptyResult();
       }
@@ -296,7 +263,6 @@ export class InfoSimplesService {
     const protests: ProtestAnalysisResult['protests'] = [];
     let totalValue = 0;
 
-    // Process each cartório
     for (const cartorio of data.cartorios || []) {
       for (const protesto of cartorio.protestos || []) {
         const amount = this.parseValue(protesto.valor);
@@ -329,14 +295,10 @@ export class InfoSimplesService {
     };
   }
 
-  /**
-   * Parse monetary value from various formats
-   */
   private parseValue(value: any): number {
     if (!value) return 0;
     if (typeof value === 'number') return value;
 
-    // Handle Brazilian currency format (1.234,56)
     const cleanValue = String(value)
       .replace(/[R$\s]/g, '')
       .replace(/\./g, '')
@@ -345,9 +307,6 @@ export class InfoSimplesService {
     return parseFloat(cleanValue) || 0;
   }
 
-  /**
-   * Get empty result structure
-   */
   private getEmptyResult(): ProtestAnalysisResult {
     return {
       hasProtests: false,
@@ -359,9 +318,6 @@ export class InfoSimplesService {
     };
   }
 
-  /**
-   * Mask document for logging
-   */
   private maskDocument(document: string): string {
     if (!document) return '';
     if (document.length === 11) {
@@ -370,9 +326,6 @@ export class InfoSimplesService {
     return `${document.slice(0, 2)}.***.***/${document.slice(-6, -2)}-${document.slice(-2)}`;
   }
 
-  /**
-   * Health check for the service
-   */
   async healthCheck(): Promise<{ enabled: boolean; hasToken: boolean; status: string }> {
     return {
       enabled: this.isEnabled,

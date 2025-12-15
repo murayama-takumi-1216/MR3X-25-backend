@@ -1,22 +1,15 @@
 import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../config/prisma.service';
 
-/**
- * Plan limits configuration based on MR3X pricing model
- * FREE: R$ 0/month - 1 contract, 2 users, microtransactions enabled
- * BASIC: R$ 89.90/month - 20 contracts, 5 users, unlimited inspections
- * PROFESSIONAL: R$ 189.90/month - 60 contracts, 10 users, all features
- * ENTERPRISE: R$ 449.90/month - 200 contracts, unlimited users, full API
- */
 export const PLAN_LIMITS = {
   FREE: {
     maxContracts: 1,
     maxUsers: 2,
     maxProperties: 1,
     features: {
-      inspections: false, // Pay-per-use (R$ 3.90)
-      settlements: false, // Pay-per-use (R$ 6.90)
-      screening: false, // Pay-per-use (R$ 8.90)
+      inspections: false,
+      settlements: false,
+      screening: false,
       api: false,
       whatsapp: false,
       analytics: false,
@@ -33,9 +26,9 @@ export const PLAN_LIMITS = {
     maxUsers: 5,
     maxProperties: 20,
     features: {
-      inspections: true, // Unlimited
-      settlements: true, // Unlimited
-      screening: false, // Pay-per-use (R$ 8.90)
+      inspections: true,
+      settlements: true,
+      screening: false,
       api: false,
       whatsapp: false,
       analytics: true,
@@ -51,7 +44,7 @@ export const PLAN_LIMITS = {
     features: {
       inspections: true,
       settlements: true,
-      screening: true, // Unlimited
+      screening: true,
       api: false,
       whatsapp: true,
       analytics: true,
@@ -60,7 +53,7 @@ export const PLAN_LIMITS = {
   },
   ENTERPRISE: {
     maxContracts: 200,
-    maxUsers: 999999, // Unlimited (very large number)
+    maxUsers: 999999,
     maxProperties: 200,
     features: {
       inspections: true,
@@ -87,10 +80,6 @@ export interface PlanCheckResult {
 export class PlanEnforcementService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Check if agency can create a new contract
-   * Returns whether creation is allowed or requires microtransaction payment
-   */
   async checkContractCreation(agencyId: bigint): Promise<PlanCheckResult> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: agencyId },
@@ -118,7 +107,6 @@ export class PlanEnforcementService {
     const currentCount = agency.activeContractsCount || 0;
     const maxAllowed = agency.maxContracts || planLimits.maxContracts;
 
-    // Check if under limit
     if (currentCount < maxAllowed) {
       return {
         allowed: true,
@@ -128,7 +116,6 @@ export class PlanEnforcementService {
       };
     }
 
-    // On FREE plan, allow overflow with microtransaction
     if (agency.plan === 'FREE') {
       return {
         allowed: true,
@@ -140,7 +127,6 @@ export class PlanEnforcementService {
       };
     }
 
-    // On paid plans, hard limit
     return {
       allowed: false,
       requiresPayment: false,
@@ -150,11 +136,7 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Check if inspection can be created
-   */
   async checkInspectionCreation(agencyId: bigint | null, userId: bigint): Promise<PlanCheckResult> {
-    // Independent owners have unlimited inspections
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true, agencyId: true },
@@ -187,12 +169,10 @@ export class PlanEnforcementService {
 
     const planLimits = PLAN_LIMITS[agency.plan] || PLAN_LIMITS.FREE;
 
-    // Check if inspections are included in plan
     if (planLimits.features.inspections) {
       return { allowed: true, requiresPayment: false };
     }
 
-    // On FREE plan, require microtransaction payment
     if (agency.plan === 'FREE') {
       return {
         allowed: true,
@@ -209,12 +189,8 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Check if settlement/agreement can be created
-   */
   async checkSettlementCreation(agencyId: bigint | null): Promise<PlanCheckResult> {
     if (!agencyId) {
-      // Independent owners have unlimited settlements
       return { allowed: true, requiresPayment: false };
     }
 
@@ -241,7 +217,6 @@ export class PlanEnforcementService {
       return { allowed: true, requiresPayment: false };
     }
 
-    // On FREE plan, require microtransaction
     if (agency.plan === 'FREE') {
       return {
         allowed: true,
@@ -258,12 +233,8 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Check if tenant screening/analysis can be performed
-   */
   async checkScreeningCreation(agencyId: bigint | null): Promise<PlanCheckResult> {
     if (!agencyId) {
-      // Independent owners pay per screening
       return {
         allowed: true,
         requiresPayment: true,
@@ -295,7 +266,6 @@ export class PlanEnforcementService {
       return { allowed: true, requiresPayment: false };
     }
 
-    // Require microtransaction on FREE and BASIC plans
     const price = planLimits.microtransactionPrices.screening;
     if (price) {
       return {
@@ -313,9 +283,6 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Check if user can be created
-   */
   async checkUserCreation(agencyId: bigint): Promise<PlanCheckResult> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: agencyId },
@@ -361,9 +328,6 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Check if API access is allowed
-   */
   async checkApiAccess(agencyId: bigint): Promise<PlanCheckResult> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: agencyId },
@@ -395,9 +359,6 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Increment active contract count for an agency
-   */
   async incrementContractCount(agencyId: bigint): Promise<void> {
     await this.prisma.agency.update({
       where: { id: agencyId },
@@ -407,9 +368,6 @@ export class PlanEnforcementService {
     });
   }
 
-  /**
-   * Decrement active contract count for an agency
-   */
   async decrementContractCount(agencyId: bigint): Promise<void> {
     await this.prisma.agency.update({
       where: { id: agencyId },
@@ -419,9 +377,6 @@ export class PlanEnforcementService {
     });
   }
 
-  /**
-   * Increment active user count for an agency
-   */
   async incrementUserCount(agencyId: bigint): Promise<void> {
     await this.prisma.agency.update({
       where: { id: agencyId },
@@ -431,9 +386,6 @@ export class PlanEnforcementService {
     });
   }
 
-  /**
-   * Decrement active user count for an agency
-   */
   async decrementUserCount(agencyId: bigint): Promise<void> {
     await this.prisma.agency.update({
       where: { id: agencyId },
@@ -443,9 +395,6 @@ export class PlanEnforcementService {
     });
   }
 
-  /**
-   * Get plan information for an agency
-   */
   async getPlanInfo(agencyId: bigint) {
     const agency = await this.prisma.agency.findUnique({
       where: { id: agencyId },

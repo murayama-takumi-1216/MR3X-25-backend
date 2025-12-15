@@ -13,7 +13,7 @@ import { CommonModule } from '../common/common.module';
     MulterModule.register({
       storage: memoryStorage(),
       limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB max
+        fileSize: 5 * 1024 * 1024,
       },
       fileFilter: (req, file, cb) => {
         const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];

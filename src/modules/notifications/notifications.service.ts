@@ -105,7 +105,6 @@ export class NotificationsService {
       return { items, total };
     } catch (error) {
       this.logger.error('Error fetching notifications:', error);
-      // Return empty array if there's an error (e.g., table doesn't exist yet)
       return { items: [], total: 0 };
     }
   }

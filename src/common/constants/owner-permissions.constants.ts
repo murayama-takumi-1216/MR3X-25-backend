@@ -1,23 +1,9 @@
 import { UserRole } from '@prisma/client';
 
-/**
- * Owner Permission Constants
- *
- * PROPRIETARIO (Owner linked to agency):
- * - Has READ-ONLY access to most modules
- * - Cannot sign rental contracts (agency represents them)
- * - Cannot edit/create/delete tenant analysis, payments, inspections, agreements
- * - Can ONLY sign service contracts with the agency
- *
- * INDEPENDENT_OWNER (Owner without agency):
- * - Has FULL control over their properties
- * - Can perform all operations
- */
-
 export enum OwnerAccessLevel {
-  NONE = 'none',           // No access at all
-  VIEW_ONLY = 'view_only', // Can only view, no modifications
-  FULL = 'full',           // Full CRUD access
+  NONE = 'none',
+  VIEW_ONLY = 'view_only',
+  FULL = 'full',
 }
 
 export enum OwnerAction {
@@ -36,103 +22,85 @@ export interface ModulePermission {
   message?: string;
 }
 
-/**
- * Permission matrix for PROPRIETARIO (agency-managed owner)
- * Key principle: Owner views, Agency acts on their behalf
- */
 export const PROPRIETARIO_PERMISSIONS: Record<string, ModulePermission> = {
-  // Dashboard - can view their property metrics
   dashboard: {
     accessLevel: OwnerAccessLevel.VIEW_ONLY,
     allowedActions: [OwnerAction.VIEW],
     message: 'Proprietário pode visualizar o dashboard de seus imóveis',
   },
 
-  // Properties - can view their properties
   properties: {
     accessLevel: OwnerAccessLevel.VIEW_ONLY,
     allowedActions: [OwnerAction.VIEW],
     message: 'Proprietário pode visualizar seus imóveis, mas alterações são feitas pela imobiliária',
   },
 
-  // Tenant Analysis - READ ONLY
   tenant_analysis: {
     accessLevel: OwnerAccessLevel.VIEW_ONLY,
     allowedActions: [OwnerAction.VIEW],
     message: 'Análise de inquilinos é realizada pela imobiliária',
   },
 
-  // Payments - READ ONLY (can view, but agency collects)
   payments: {
     accessLevel: OwnerAccessLevel.VIEW_ONLY,
     allowedActions: [OwnerAction.VIEW, OwnerAction.EXPORT],
     message: 'Pagamentos são gerenciados pela imobiliária',
   },
 
-  // Invoices - READ ONLY
   invoices: {
     accessLevel: OwnerAccessLevel.VIEW_ONLY,
     allowedActions: [OwnerAction.VIEW, OwnerAction.EXPORT],
     message: 'Faturas são gerenciadas pela imobiliária',
   },
 
-  // Contracts (Rental) - READ ONLY, CANNOT SIGN
   contracts: {
     accessLevel: OwnerAccessLevel.VIEW_ONLY,
     allowedActions: [OwnerAction.VIEW],
     message: 'Contratos de aluguel são assinados pela imobiliária em nome do proprietário',
   },
 
-  // Service Contracts (Agency-Owner) - CAN VIEW AND SIGN
   service_contracts: {
     accessLevel: OwnerAccessLevel.FULL,
     allowedActions: [OwnerAction.VIEW, OwnerAction.SIGN],
     message: 'Proprietário assina apenas o contrato de prestação de serviços com a imobiliária',
   },
 
-  // Inspections - READ ONLY
   inspections: {
     accessLevel: OwnerAccessLevel.VIEW_ONLY,
     allowedActions: [OwnerAction.VIEW],
     message: 'Vistorias são realizadas pela imobiliária',
   },
 
-  // Agreements - CAN VIEW AND SIGN (when they are a party)
   agreements: {
     accessLevel: OwnerAccessLevel.VIEW_ONLY,
     allowedActions: [OwnerAction.VIEW, OwnerAction.SIGN],
     message: 'Proprietário pode visualizar e assinar acordos onde é parte',
   },
 
-  // Reports - can view reports about their properties
   reports: {
     accessLevel: OwnerAccessLevel.VIEW_ONLY,
     allowedActions: [OwnerAction.VIEW, OwnerAction.EXPORT],
     message: 'Proprietário pode visualizar e exportar relatórios de seus imóveis',
   },
 
-  // Notifications - can view
   notifications: {
     accessLevel: OwnerAccessLevel.VIEW_ONLY,
     allowedActions: [OwnerAction.VIEW],
     message: 'Proprietário recebe notificações sobre seus imóveis',
   },
 
-  // Chat - can communicate with agency
   chat: {
     accessLevel: OwnerAccessLevel.FULL,
     allowedActions: [OwnerAction.VIEW, OwnerAction.CREATE],
     message: 'Proprietário pode se comunicar com a imobiliária',
   },
 
-  // Profile - can manage their own profile
   profile: {
     accessLevel: OwnerAccessLevel.FULL,
     allowedActions: [OwnerAction.VIEW, OwnerAction.EDIT],
     message: 'Proprietário pode gerenciar seu perfil',
   },
 
-  // Documents - can view documents related to their properties
   documents: {
     accessLevel: OwnerAccessLevel.VIEW_ONLY,
     allowedActions: [OwnerAction.VIEW, OwnerAction.EXPORT],
@@ -140,10 +108,6 @@ export const PROPRIETARIO_PERMISSIONS: Record<string, ModulePermission> = {
   },
 };
 
-/**
- * Permission matrix for INDEPENDENT_OWNER (self-managed owner)
- * Full control - they manage their own properties without agency
- */
 export const INDEPENDENT_OWNER_PERMISSIONS: Record<string, ModulePermission> = {
   dashboard: {
     accessLevel: OwnerAccessLevel.FULL,
@@ -199,9 +163,6 @@ export const INDEPENDENT_OWNER_PERMISSIONS: Record<string, ModulePermission> = {
   },
 };
 
-/**
- * Get permissions for a user role and module
- */
 export function getOwnerPermissions(role: UserRole, module: string): ModulePermission | null {
   if (role === UserRole.PROPRIETARIO) {
     return PROPRIETARIO_PERMISSIONS[module] || null;
@@ -212,9 +173,6 @@ export function getOwnerPermissions(role: UserRole, module: string): ModulePermi
   return null;
 }
 
-/**
- * Check if an owner role can perform a specific action on a module
- */
 export function canOwnerPerformAction(
   role: UserRole,
   module: string,
@@ -223,7 +181,7 @@ export function canOwnerPerformAction(
   const permissions = getOwnerPermissions(role, module);
 
   if (!permissions) {
-    return { allowed: true }; // Not an owner role, let other guards handle
+    return { allowed: true };
   }
 
   if (permissions.accessLevel === OwnerAccessLevel.NONE) {
@@ -243,39 +201,24 @@ export function canOwnerPerformAction(
   return { allowed: true };
 }
 
-/**
- * Check if user is an agency-managed owner (PROPRIETARIO)
- */
 export function isAgencyManagedOwner(role: UserRole): boolean {
   return role === UserRole.PROPRIETARIO;
 }
 
-/**
- * Check if user is an independent owner
- */
 export function isIndependentOwner(role: UserRole): boolean {
   return role === UserRole.INDEPENDENT_OWNER;
 }
 
-/**
- * Check if user is any type of owner
- */
 export function isOwner(role: UserRole): boolean {
   return role === UserRole.PROPRIETARIO || role === UserRole.INDEPENDENT_OWNER;
 }
 
-/**
- * Roles that can act on behalf of agency-managed owners
- */
 export const AGENCY_REPRESENTATIVE_ROLES = [
   UserRole.AGENCY_ADMIN,
   UserRole.AGENCY_MANAGER,
   UserRole.BROKER,
 ];
 
-/**
- * Check if a role can act on behalf of owners in an agency
- */
 export function canActOnBehalfOfOwner(role: UserRole): boolean {
   return (AGENCY_REPRESENTATIVE_ROLES as readonly UserRole[]).includes(role);
 }

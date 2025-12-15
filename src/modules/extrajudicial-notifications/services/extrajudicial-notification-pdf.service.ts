@@ -81,9 +81,6 @@ export class ExtrajudicialNotificationPdfService {
     }
   }
 
-  /**
-   * Generate barcode as base64 PNG
-   */
   async generateBarcodeBase64(token: string): Promise<string> {
     try {
       const png = await bwipjs.toBuffer({
@@ -102,9 +99,6 @@ export class ExtrajudicialNotificationPdfService {
     }
   }
 
-  /**
-   * Generate QR code as base64 PNG
-   */
   async generateQRCodeBase64(url: string): Promise<string> {
     try {
       const qrDataUrl = await QRCode.toDataURL(url, {
@@ -119,9 +113,6 @@ export class ExtrajudicialNotificationPdfService {
     }
   }
 
-  /**
-   * Get notification data for PDF generation
-   */
   private async getNotificationData(notificationId: bigint): Promise<NotificationData> {
     const notification = await this.prisma.extrajudicialNotification.findUnique({
       where: { id: notificationId },
@@ -289,9 +280,6 @@ export class ExtrajudicialNotificationPdfService {
     return new Date(date).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   }
 
-  /**
-   * Render HTML template with data
-   */
   private async renderHtmlTemplate(data: NotificationData, isProvisional: boolean): Promise<string> {
     const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify/notification/${data.token}`;
     const barcodeBase64 = await this.generateBarcodeBase64(data.token);
@@ -315,9 +303,6 @@ export class ExtrajudicialNotificationPdfService {
     return this.getNotificationHtmlTemplate(templateData);
   }
 
-  /**
-   * Generate provisional PDF (with watermark)
-   */
   async generateProvisionalPdf(notificationId: bigint): Promise<Buffer> {
     console.log(`[PDF] Starting provisional PDF generation for notification ${notificationId}`);
 
@@ -375,7 +360,6 @@ export class ExtrajudicialNotificationPdfService {
 
       const pdfBuffer = Buffer.from(pdfUint8Array);
 
-      // Save provisional PDF
       const timestamp = Date.now();
       const filename = `notification-provisional-${timestamp}.pdf`;
       const filePath = path.join(this.uploadsDir, 'provisional', data.id, filename);
@@ -383,7 +367,6 @@ export class ExtrajudicialNotificationPdfService {
       this.ensureDirectoryExists(path.dirname(filePath));
       fs.writeFileSync(filePath, pdfBuffer);
 
-      // Generate and store provisional hash
       const hash = this.hashService.generateHash(pdfBuffer);
       await this.prisma.extrajudicialNotification.update({
         where: { id: notificationId },
@@ -399,9 +382,6 @@ export class ExtrajudicialNotificationPdfService {
     }
   }
 
-  /**
-   * Generate final PDF (no watermark, with all signatures)
-   */
   async generateFinalPdf(notificationId: bigint): Promise<Buffer> {
     const data = await this.getNotificationData(notificationId);
     const html = await this.renderHtmlTemplate(data, false);
@@ -435,7 +415,6 @@ export class ExtrajudicialNotificationPdfService {
 
       const pdfBuffer = Buffer.from(pdfUint8Array);
 
-      // Save final PDF
       const timestamp = Date.now();
       const filename = `notification-final-${timestamp}.pdf`;
       const filePath = path.join(this.uploadsDir, 'final', data.id, filename);
@@ -443,7 +422,6 @@ export class ExtrajudicialNotificationPdfService {
       this.ensureDirectoryExists(path.dirname(filePath));
       fs.writeFileSync(filePath, pdfBuffer);
 
-      // Generate and store final hash
       const hash = this.hashService.generateHash(pdfBuffer);
       const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify/notification/${data.token}`;
 
@@ -463,9 +441,6 @@ export class ExtrajudicialNotificationPdfService {
     }
   }
 
-  /**
-   * Get stored PDF file
-   */
   async getStoredPdf(notificationId: bigint, type: 'provisional' | 'final'): Promise<Buffer | null> {
     const notification = await this.prisma.extrajudicialNotification.findUnique({
       where: { id: notificationId },
@@ -485,9 +460,6 @@ export class ExtrajudicialNotificationPdfService {
     return fs.readFileSync(filePath);
   }
 
-  /**
-   * Get notification HTML template
-   */
   private getNotificationHtmlTemplate(data: any): string {
     return `
 <!DOCTYPE html>
@@ -535,7 +507,6 @@ export class ExtrajudicialNotificationPdfService {
         : ''
     }
 
-    /* Header info bar */
     .header-info-bar {
       display: flex;
       justify-content: space-between;
@@ -553,7 +524,6 @@ export class ExtrajudicialNotificationPdfService {
       font-weight: bold;
     }
 
-    /* QR and Barcode container - centered like contract */
     .codes-container {
       display: flex;
       align-items: center;
@@ -575,7 +545,6 @@ export class ExtrajudicialNotificationPdfService {
       height: 50px;
     }
 
-    /* Sidebar barcode (vertical on right side) */
     .sidebar-barcode {
       position: fixed;
       right: -25mm;
@@ -589,7 +558,6 @@ export class ExtrajudicialNotificationPdfService {
       height: auto;
     }
 
-    /* Header */
     .header {
       text-align: center;
       margin-bottom: 20px;
@@ -626,7 +594,6 @@ export class ExtrajudicialNotificationPdfService {
       margin-top: 10px;
     }
 
-    /* Sections */
     .section {
       margin-bottom: 20px;
     }
@@ -640,7 +607,6 @@ export class ExtrajudicialNotificationPdfService {
       margin-bottom: 10px;
     }
 
-    /* Parties info */
     .parties {
       display: flex;
       gap: 20px;
@@ -670,7 +636,6 @@ export class ExtrajudicialNotificationPdfService {
       font-weight: bold;
     }
 
-    /* Property info */
     .property-info {
       background: #f9f9f9;
       padding: 15px;
@@ -678,7 +643,6 @@ export class ExtrajudicialNotificationPdfService {
       margin-bottom: 20px;
     }
 
-    /* Content sections */
     .content-section {
       margin-bottom: 20px;
     }
@@ -705,7 +669,6 @@ export class ExtrajudicialNotificationPdfService {
       margin: 15px 0;
     }
 
-    /* Financial table */
     .financial-table {
       width: 100%;
       border-collapse: collapse;
@@ -736,7 +699,6 @@ export class ExtrajudicialNotificationPdfService {
       font-family: 'Courier New', monospace;
     }
 
-    /* Detail boxes */
     .contract-details {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -762,7 +724,6 @@ export class ExtrajudicialNotificationPdfService {
       color: #333;
     }
 
-    /* Deadline box */
     .deadline-box {
       background: #fff3cd;
       border: 2px solid #ffc107;
@@ -791,7 +752,6 @@ export class ExtrajudicialNotificationPdfService {
       margin-top: 5px;
     }
 
-    /* Demanded action */
     .demanded-action {
       background: #d1ecf1;
       border: 1px solid #bee5eb;
@@ -812,7 +772,6 @@ export class ExtrajudicialNotificationPdfService {
       color: #0c5460;
     }
 
-    /* Consequences box */
     .consequences-box {
       background: #f8d7da;
       border: 1px solid #f5c6cb;
@@ -833,7 +792,6 @@ export class ExtrajudicialNotificationPdfService {
       color: #721c24;
     }
 
-    /* Signatures */
     .signatures {
       margin-top: 30px;
       page-break-inside: avoid;
@@ -892,7 +850,6 @@ export class ExtrajudicialNotificationPdfService {
   </div>
 
   <div class="page">
-    <!-- Header info bar like contract -->
     <div class="header-info-bar">
       <div>
         <span class="token">Token: ${data.token}</span>
@@ -904,7 +861,6 @@ export class ExtrajudicialNotificationPdfService {
       </div>
     </div>
 
-    <!-- QR Code and Barcode centered like contract -->
     <div class="codes-container">
       <div class="qrcode">
         <img src="${data.qrCodeBase64}" alt="QR Code">

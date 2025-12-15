@@ -63,16 +63,10 @@ export class ContractVerificationService {
     this.frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   }
 
-  /**
-   * Generate verification URL for a contract
-   */
   generateVerificationUrl(token: string): string {
     return `${this.frontendUrl}/verify/${token}`;
   }
 
-  /**
-   * Generate QR Code with verification URL and embedded data
-   */
   async generateVerificationQRCode(contractId: bigint): Promise<QRCodeData> {
     const contract = await this.prisma.contract.findUnique({
       where: { id: contractId },
@@ -87,15 +81,13 @@ export class ContractVerificationService {
       throw new NotFoundException('Contrato não encontrado ou sem token');
     }
 
-    // Create verification data object
     const verificationData = {
-      t: contract.contractToken, // token
-      h: contract.hashFinal ? contract.hashFinal.substring(0, 16) : null, // partial hash for verification
-      s: contract.status, // status
-      v: '1', // version
+      t: contract.contractToken,
+      h: contract.hashFinal ? contract.hashFinal.substring(0, 16) : null,
+      s: contract.status,
+      v: '1',
     };
 
-    // Generate QR Code URL with embedded data
     const verificationUrl = this.generateVerificationUrl(contract.contractToken);
     const qrData = `${verificationUrl}?d=${Buffer.from(JSON.stringify(verificationData)).toString('base64')}`;
 
@@ -106,7 +98,7 @@ export class ContractVerificationService {
         dark: '#000000',
         light: '#ffffff',
       },
-      errorCorrectionLevel: 'H', // High error correction for better scanning
+      errorCorrectionLevel: 'H',
     });
 
     return {
@@ -115,9 +107,6 @@ export class ContractVerificationService {
     };
   }
 
-  /**
-   * Generate Barcode with contract token
-   */
   async generateVerificationBarcode(contractId: bigint): Promise<BarcodeData> {
     const contract = await this.prisma.contract.findUnique({
       where: { id: contractId },
@@ -144,9 +133,6 @@ export class ContractVerificationService {
     };
   }
 
-  /**
-   * Verify contract by token (public endpoint)
-   */
   async verifyByToken(token: string): Promise<VerificationResult> {
     const contract = await this.prisma.contract.findUnique({
       where: { contractToken: token },
@@ -183,7 +169,6 @@ export class ContractVerificationService {
       };
     }
 
-    // Check signatures
     const hasRequiredSignatures = !!(contract.tenantSignature && contract.ownerSignature);
     const contractActive = ['ATIVO', 'ASSINADO'].includes(contract.status);
 
@@ -244,9 +229,6 @@ export class ContractVerificationService {
     };
   }
 
-  /**
-   * Verify contract by hash (for PDF validation)
-   */
   async verifyByHash(hash: string): Promise<VerificationResult> {
     const contract = await this.prisma.contract.findFirst({
       where: { hashFinal: hash },
@@ -270,13 +252,9 @@ export class ContractVerificationService {
       };
     }
 
-    // Delegate to token verification
     return this.verifyByToken(contract.contractToken!);
   }
 
-  /**
-   * Verify uploaded PDF against stored hash
-   */
   async verifyUploadedPdf(token: string, fileBuffer: Buffer): Promise<{
     valid: boolean;
     computedHash: string;
@@ -317,7 +295,6 @@ export class ContractVerificationService {
 
     const isValid = contract.hashFinal === computedHash;
 
-    // Build verification data
     const verificationData: VerificationData = {
       token: contract.contractToken!,
       hash: contract.hashFinal,
@@ -373,9 +350,6 @@ export class ContractVerificationService {
     };
   }
 
-  /**
-   * Generate verification certificate (JSON summary)
-   */
   async generateVerificationCertificate(contractId: bigint): Promise<{
     certificate: object;
     qrCode: QRCodeData;
@@ -463,9 +437,6 @@ export class ContractVerificationService {
     return { certificate, qrCode, barcode };
   }
 
-  /**
-   * Get human-readable verification message
-   */
   private getVerificationMessage(status: string, hasSignatures: boolean): string {
     if (status === 'ASSINADO' && hasSignatures) {
       return '✓ Contrato válido e assinado por todas as partes';

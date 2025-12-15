@@ -11,7 +11,7 @@ export enum AnalysisType {
   FULL = 'FULL',
   FINANCIAL = 'FINANCIAL',
   BACKGROUND = 'BACKGROUND',
-  QUICK = 'QUICK', // Basic check only
+  QUICK = 'QUICK',
 }
 
 export class AnalyzeTenantDto {

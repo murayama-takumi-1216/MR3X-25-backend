@@ -21,7 +21,6 @@ import { InspectionMediaService } from './inspection-media.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
-// Configure multer storage for inspection media
 const storage = diskStorage({
   destination: (_req, _file, cb) => {
     const uploadDir = path.join(process.cwd(), 'uploads', 'inspections');
@@ -37,7 +36,6 @@ const storage = diskStorage({
   },
 });
 
-// File filter for images and videos
 const mediaFileFilter = (_req: any, file: any, cb: any) => {
   const allowedMimeTypes = [
     'image/jpeg',
@@ -89,7 +87,7 @@ export class InspectionMediaController {
       storage,
       fileFilter: mediaFileFilter,
       limits: {
-        fileSize: 100 * 1024 * 1024, // 100MB for videos
+        fileSize: 100 * 1024 * 1024,
       },
     }),
   )

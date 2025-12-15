@@ -15,22 +15,16 @@ import {
   AgreementStatusValue,
 } from '../constants/agreement-permissions.constants';
 
-/**
- * User context from JWT/request
- */
 export interface UserContext {
-  sub: string;           // User ID
+  sub: string;
   email: string;
   role: UserRole;
   agencyId?: string;
   brokerId?: string;
-  creci?: string;        // For brokers
-  document?: string;     // CPF/CNPJ
+  creci?: string;
+  document?: string;
 }
 
-/**
- * Agreement with relations for permission checks
- */
 export interface AgreementWithRelations {
   id: bigint;
   status: string;
@@ -58,9 +52,6 @@ export interface AgreementWithRelations {
   };
 }
 
-/**
- * Permission check result
- */
 export interface PermissionCheckResult {
   allowed: boolean;
   reason?: string;
@@ -71,13 +62,9 @@ export interface PermissionCheckResult {
 export class AgreementPermissionService {
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * Check if user can perform an action on agreements in general
-   */
   canPerformAction(user: UserContext, action: AgreementAction): PermissionCheckResult {
     const permissions = getPermissionsForRole(user.role);
 
-    // Debug logging - remove after troubleshooting
     console.log('[AgreementPermissionService] canPerformAction:', {
       role: user.role,
       action,
@@ -148,9 +135,6 @@ export class AgreementPermissionService {
     }
   }
 
-  /**
-   * Check if user can view a specific agreement
-   */
   canViewAgreement(user: UserContext, agreement: AgreementWithRelations): PermissionCheckResult {
     const permissions = getPermissionsForRole(user.role);
 
@@ -159,7 +143,6 @@ export class AgreementPermissionService {
         return { allowed: true };
 
       case AccessScope.AGENCY:
-        // User must belong to the same agency
         if (!user.agencyId) {
           return { allowed: false, reason: 'You are not associated with an agency' };
         }
@@ -169,20 +152,17 @@ export class AgreementPermissionService {
         return { allowed: true };
 
       case AccessScope.OWN_CREATED:
-        // For brokers, also check if they are linked to the property/contract
         if (user.role === UserRole.BROKER) {
           const isLinked = this.isBrokerLinkedToAgreement(user, agreement);
           if (isLinked) return { allowed: true };
         }
 
-        // Check if user created the agreement
         if (agreement.createdBy.toString() === user.sub) {
           return { allowed: true };
         }
         return { allowed: false, reason: 'You can only view agreements you created or are linked to' };
 
       case AccessScope.PARTY_TO:
-        // Check if user is a party to the agreement
         if (this.isPartyToAgreement(user, agreement)) {
           return { allowed: true };
         }
@@ -194,15 +174,10 @@ export class AgreementPermissionService {
     }
   }
 
-  /**
-   * Check if user can edit a specific agreement
-   */
   canEditAgreement(user: UserContext, agreement: AgreementWithRelations): PermissionCheckResult {
-    // First check general permission
     const generalCheck = this.canPerformAction(user, AgreementAction.EDIT);
     if (!generalCheck.allowed) return generalCheck;
 
-    // Check status-based restriction
     if (!isEditableStatus(agreement.status)) {
       return {
         allowed: false,
@@ -210,17 +185,14 @@ export class AgreementPermissionService {
       };
     }
 
-    // Check if status is immutable
     if (isImmutableStatus(agreement.status)) {
       return { allowed: false, reason: 'This agreement is in a final status and cannot be modified' };
     }
 
-    // Check scope-based access
     const permissions = getPermissionsForRole(user.role);
 
     switch (permissions.view) {
       case AccessScope.ALL:
-        // MR3X roles have read-only access even with AccessScope.ALL
         if (isMR3XRole(user.role)) {
           return { allowed: false, reason: 'Platform roles have read-only access to agreements' };
         }
@@ -230,7 +202,6 @@ export class AgreementPermissionService {
         if (!user.agencyId || (agreement.agencyId && agreement.agencyId.toString() !== user.agencyId)) {
           return { allowed: false, reason: 'You can only edit agreements from your agency' };
         }
-        // Agency admin can edit any agency agreement, manager can edit unsigned
         if (user.role === UserRole.AGENCY_MANAGER && hasBeenSigned(agreement)) {
           return {
             allowed: false,
@@ -241,7 +212,6 @@ export class AgreementPermissionService {
         return { allowed: true };
 
       case AccessScope.OWN_CREATED:
-        // Broker can only edit own drafts or drafts under review
         if (user.role === UserRole.BROKER) {
           const isOwn = agreement.createdBy.toString() === user.sub ||
                         this.isBrokerLinkedToAgreement(user, agreement);
@@ -254,7 +224,6 @@ export class AgreementPermissionService {
         return { allowed: true };
 
       case AccessScope.PARTY_TO:
-        // Parties (owner, tenant) cannot edit
         return { allowed: false, reason: 'Parties to an agreement cannot edit it' };
 
       default:
@@ -262,15 +231,10 @@ export class AgreementPermissionService {
     }
   }
 
-  /**
-   * Check if user can delete a specific agreement
-   */
   canDeleteAgreement(user: UserContext, agreement: AgreementWithRelations): PermissionCheckResult {
-    // First check general permission
     const generalCheck = this.canPerformAction(user, AgreementAction.DELETE);
     if (!generalCheck.allowed) return generalCheck;
 
-    // Check if agreement is in deletable status
     if (!isDeletableStatus(agreement.status)) {
       return {
         allowed: false,
@@ -278,7 +242,6 @@ export class AgreementPermissionService {
       };
     }
 
-    // Check if agreement has been signed (even in draft status, if somehow signed)
     if (hasBeenSigned(agreement)) {
       return {
         allowed: false,
@@ -286,7 +249,6 @@ export class AgreementPermissionService {
       };
     }
 
-    // Check scope-based access
     const permissions = getPermissionsForRole(user.role);
 
     switch (permissions.view) {
@@ -297,7 +259,6 @@ export class AgreementPermissionService {
         return { allowed: true };
 
       case AccessScope.OWN_CREATED:
-        // Broker can only delete own drafts
         if (agreement.createdBy.toString() !== user.sub) {
           return { allowed: false, reason: 'You can only delete your own draft agreements' };
         }
@@ -308,19 +269,14 @@ export class AgreementPermissionService {
     }
   }
 
-  /**
-   * Check if user can sign a specific agreement
-   */
   canSignAgreement(
     user: UserContext,
     agreement: AgreementWithRelations,
     signatureType: SignatureType
   ): PermissionCheckResult {
-    // First check general permission
     const generalCheck = this.canPerformAction(user, AgreementAction.SIGN);
     if (!generalCheck.allowed) return generalCheck;
 
-    // Check status allows signing
     if (!SIGNABLE_STATUSES.includes(agreement.status as AgreementStatusValue)) {
       return {
         allowed: false,
@@ -330,7 +286,6 @@ export class AgreementPermissionService {
 
     const permissions = getPermissionsForRole(user.role);
 
-    // Check if the user's role allows this signature type
     if (!permissions.signatureTypes.includes(signatureType)) {
       return {
         allowed: false,
@@ -338,11 +293,9 @@ export class AgreementPermissionService {
       };
     }
 
-    // Validate the user is the appropriate party for this signature type
     switch (signatureType) {
       case SignatureType.TENANT:
         if (agreement.tenantId?.toString() !== user.sub) {
-          // Also check if user is the tenant on the property/contract
           const isTenant = this.isUserTenantForAgreement(user, agreement);
           if (!isTenant) {
             return { allowed: false, reason: 'You are not the tenant for this agreement' };
@@ -352,7 +305,6 @@ export class AgreementPermissionService {
 
       case SignatureType.OWNER:
         if (agreement.ownerId?.toString() !== user.sub) {
-          // Also check if user is the owner on the property
           const isOwner = this.isUserOwnerForAgreement(user, agreement);
           if (!isOwner) {
             return { allowed: false, reason: 'You are not the owner for this agreement' };
@@ -367,7 +319,6 @@ export class AgreementPermissionService {
         break;
 
       case SignatureType.BROKER:
-        // Broker must be linked to the property/contract and have valid CRECI
         if (permissions.requiresCreci && !user.creci) {
           return { allowed: false, reason: 'Valid CRECI registration is required to sign as broker' };
         }
@@ -377,21 +328,16 @@ export class AgreementPermissionService {
         break;
 
       case SignatureType.WITNESS:
-        // Witness can be anyone with signing permission
         break;
     }
 
     return { allowed: true };
   }
 
-  /**
-   * Check if user can approve a specific agreement
-   */
   canApproveAgreement(user: UserContext, agreement: AgreementWithRelations): PermissionCheckResult {
     const generalCheck = this.canPerformAction(user, AgreementAction.APPROVE);
     if (!generalCheck.allowed) return generalCheck;
 
-    // Check agreement is in approvable status
     if (agreement.status === AgreementStatusValue.CONCLUIDO) {
       return { allowed: false, reason: 'Agreement is already completed' };
     }
@@ -400,7 +346,6 @@ export class AgreementPermissionService {
       return { allowed: false, reason: 'Cannot approve a rejected agreement' };
     }
 
-    // Check scope
     const permissions = getPermissionsForRole(user.role);
     if (permissions.view === AccessScope.AGENCY) {
       if (!user.agencyId || (agreement.agencyId && agreement.agencyId.toString() !== user.agencyId)) {
@@ -411,19 +356,14 @@ export class AgreementPermissionService {
     return { allowed: true };
   }
 
-  /**
-   * Check if user can cancel a specific agreement
-   */
   canCancelAgreement(user: UserContext, agreement: AgreementWithRelations): PermissionCheckResult {
     const generalCheck = this.canPerformAction(user, AgreementAction.CANCEL);
     if (!generalCheck.allowed) return generalCheck;
 
-    // Cannot cancel completed agreements
     if (agreement.status === AgreementStatusValue.CONCLUIDO) {
       return { allowed: false, reason: 'Completed agreements cannot be cancelled' };
     }
 
-    // Check scope
     const permissions = getPermissionsForRole(user.role);
 
     if (permissions.view === AccessScope.AGENCY) {
@@ -439,28 +379,21 @@ export class AgreementPermissionService {
     return { allowed: true };
   }
 
-  /**
-   * Get the data access filter for listing agreements
-   * Returns Prisma where conditions based on user role
-   */
   getAccessFilter(user: UserContext): any {
     const permissions = getPermissionsForRole(user.role);
     const userId = BigInt(user.sub);
 
     switch (permissions.view) {
       case AccessScope.ALL:
-        // No filter - can see everything
         return {};
 
       case AccessScope.AGENCY:
         if (!user.agencyId) {
-          // User should have agency, but fallback to own created
           return { createdBy: userId };
         }
         return { agencyId: BigInt(user.agencyId) };
 
       case AccessScope.OWN_CREATED:
-        // For brokers, also include agreements they are linked to
         if (user.role === UserRole.BROKER) {
           return {
             OR: [
@@ -472,7 +405,6 @@ export class AgreementPermissionService {
         return { createdBy: userId };
 
       case AccessScope.PARTY_TO:
-        // Show agreements where user is tenant, owner, or on the property
         return {
           OR: [
             { tenantId: userId },
@@ -484,28 +416,21 @@ export class AgreementPermissionService {
 
       case AccessScope.NONE:
       default:
-        // Return impossible condition to show nothing
         return { id: BigInt(-1) };
     }
   }
 
-  /**
-   * Check if user is a party to the agreement
-   */
   private isPartyToAgreement(user: UserContext, agreement: AgreementWithRelations): boolean {
     const userId = BigInt(user.sub);
 
-    // Direct party
     if (agreement.tenantId === userId) return true;
     if (agreement.ownerId === userId) return true;
 
-    // Property-based party
     if (agreement.property) {
       if (agreement.property.ownerId === userId) return true;
       if (agreement.property.tenantId === userId) return true;
     }
 
-    // Contract-based party
     if (agreement.contract) {
       if (agreement.contract.tenantId === userId) return true;
       if (agreement.contract.ownerId === userId) return true;
@@ -514,21 +439,14 @@ export class AgreementPermissionService {
     return false;
   }
 
-  /**
-   * Check if broker is linked to the agreement's property or contract
-   */
   private isBrokerLinkedToAgreement(user: UserContext, agreement: AgreementWithRelations): boolean {
     const userId = BigInt(user.sub);
 
-    // Check property broker
     if (agreement.property?.brokerId === userId) return true;
 
     return false;
   }
 
-  /**
-   * Check if user is the tenant for this agreement
-   */
   private isUserTenantForAgreement(user: UserContext, agreement: AgreementWithRelations): boolean {
     const userId = BigInt(user.sub);
 
@@ -539,13 +457,9 @@ export class AgreementPermissionService {
     return false;
   }
 
-  /**
-   * Check if user is the owner for this agreement
-   */
   private isUserOwnerForAgreement(user: UserContext, agreement: AgreementWithRelations): boolean {
     const userId = BigInt(user.sub);
 
-    // PROPRIETARIO can sign as owner if they created the agreement
     if (user.role === UserRole.PROPRIETARIO && agreement.createdBy === userId) {
       return true;
     }
@@ -557,9 +471,6 @@ export class AgreementPermissionService {
     return false;
   }
 
-  /**
-   * Load agreement with relations needed for permission checks
-   */
   async loadAgreementForPermissionCheck(agreementId: string): Promise<AgreementWithRelations | null> {
     const agreement = await this.prisma.agreement.findUnique({
       where: { id: BigInt(agreementId) },
@@ -587,9 +498,6 @@ export class AgreementPermissionService {
     return agreement as AgreementWithRelations | null;
   }
 
-  /**
-   * Validate action and throw if not allowed
-   */
   async validateAction(
     user: UserContext,
     agreementId: string,
@@ -637,9 +545,6 @@ export class AgreementPermissionService {
     return agreement;
   }
 
-  /**
-   * Get user's available actions for an agreement
-   */
   getAvailableActions(user: UserContext, agreement: AgreementWithRelations): AgreementAction[] {
     const actions: AgreementAction[] = [];
 
@@ -659,22 +564,20 @@ export class AgreementPermissionService {
       actions.push(AgreementAction.CANCEL);
     }
 
-    // Check each signature type
     const permissions = getPermissionsForRole(user.role);
     for (const sigType of permissions.signatureTypes) {
       if (this.canSignAgreement(user, agreement, sigType).allowed) {
         actions.push(AgreementAction.SIGN);
-        break; // Only add once
+        break;
       }
     }
 
-    // Check send for signature
     if (this.canPerformAction(user, AgreementAction.SEND_FOR_SIGNATURE).allowed) {
       if (agreement.status === AgreementStatusValue.RASCUNHO) {
         actions.push(AgreementAction.SEND_FOR_SIGNATURE);
       }
     }
 
-    return [...new Set(actions)]; // Remove duplicates
+    return [...new Set(actions)];
   }
 }

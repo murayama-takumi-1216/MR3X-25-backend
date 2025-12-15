@@ -9,43 +9,14 @@ import { UserRole } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 
-/**
- * Role Creation Hierarchy - Who can create which roles
- * Based on MR3X Complete Hierarchy Requirements:
- *
- * IMPORTANT: Two types of Managers exist:
- * 1. PLATFORM_MANAGER - MR3X Internal Manager (created by ADMIN)
- *    - Works for MR3X internally
- *    - Handles support, statistics, client assistance
- *    - Has ZERO access to agency operations
- *
- * 2. AGENCY_MANAGER - Agency Manager/Gestor (created by AGENCY_ADMIN)
- *    - Works inside a real estate agency
- *    - Controls agency team, creates brokers, owners, contracts, properties
- *    - Has legal representation permissions for the agency
- *
- * CEO -> ADMIN only
- * ADMIN -> PLATFORM_MANAGER, LEGAL_AUDITOR, REPRESENTATIVE, API_CLIENT (NO AGENCY_MANAGER!)
- * PLATFORM_MANAGER -> NONE (support role only)
- * AGENCY_ADMIN -> AGENCY_MANAGER, BROKER, PROPRIETARIO
- * AGENCY_MANAGER -> BROKER, PROPRIETARIO
- * BROKER -> NONE (cannot create users)
- * PROPRIETARIO -> NONE (cannot create users)
- * INDEPENDENT_OWNER -> INQUILINO, BUILDING_MANAGER
- * INQUILINO -> NONE
- * BUILDING_MANAGER -> NONE
- * LEGAL_AUDITOR -> NONE
- * REPRESENTATIVE -> NONE
- * API_CLIENT -> NONE
- */
 const ROLE_CREATION_ALLOWED: Record<UserRole, UserRole[]> = {
   [UserRole.CEO]: [UserRole.ADMIN],
   [UserRole.ADMIN]: [UserRole.PLATFORM_MANAGER, UserRole.LEGAL_AUDITOR, UserRole.REPRESENTATIVE, UserRole.API_CLIENT],
-  [UserRole.PLATFORM_MANAGER]: [], // MR3X Internal Manager - support only, cannot create users
+  [UserRole.PLATFORM_MANAGER]: [],
   [UserRole.AGENCY_ADMIN]: [UserRole.AGENCY_MANAGER, UserRole.BROKER, UserRole.PROPRIETARIO],
   [UserRole.AGENCY_MANAGER]: [UserRole.BROKER, UserRole.PROPRIETARIO],
-  [UserRole.BROKER]: [], // Cannot create users
-  [UserRole.PROPRIETARIO]: [], // Cannot create users
+  [UserRole.BROKER]: [],
+  [UserRole.PROPRIETARIO]: [],
   [UserRole.INDEPENDENT_OWNER]: [UserRole.INQUILINO, UserRole.BUILDING_MANAGER],
   [UserRole.INQUILINO]: [],
   [UserRole.BUILDING_MANAGER]: [],
@@ -63,9 +34,6 @@ export class UsersService {
     private tokenGenerator: TokenGeneratorService,
   ) {}
 
-  /**
-   * Validates if a creator role can create a target role
-   */
   validateRoleCreation(creatorRole: UserRole, targetRole: UserRole): void {
     const allowedRoles = ROLE_CREATION_ALLOWED[creatorRole] || [];
     if (!allowedRoles.includes(targetRole)) {
@@ -76,16 +44,10 @@ export class UsersService {
     }
   }
 
-  /**
-   * Gets the list of roles a creator can create
-   */
   getAllowedRolesToCreate(creatorRole: UserRole): UserRole[] {
     return ROLE_CREATION_ALLOWED[creatorRole] || [];
   }
 
-  /**
-   * Generates a random password with 8 characters
-   */
   private generateRandomPassword(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let password = '';
@@ -120,8 +82,6 @@ export class UsersService {
     console.log('[UsersService.findAll] Query params:', { skip, take, search, role, agencyId, status, plan, createdById, excludeUserId });
     console.log('[UsersService.findAll] Where clause:', JSON.stringify(where, (key, value) => typeof value === 'bigint' ? value.toString() : value));
 
-    // Add search filter for name, email, document, or phone
-    // MySQL's default collation is case-insensitive, so no mode needed
     if (search && search.trim()) {
       where.OR = [
         { name: { contains: search.trim() } },
@@ -219,12 +179,10 @@ export class UsersService {
   }
 
   async create(dto: CreateUserDto, creatorId?: string, creatorRole?: UserRole) {
-    // Validate role creation hierarchy if creator role is provided
     if (creatorRole && dto.role) {
       this.validateRoleCreation(creatorRole, dto.role as UserRole);
     }
 
-    // Check plan limits for INDEPENDENT_OWNER creating INQUILINO (tenant)
     if (creatorId && creatorRole === UserRole.INDEPENDENT_OWNER && dto.role === 'INQUILINO') {
       const planCheck = await this.plansService.checkPlanLimits(creatorId, 'tenant');
       if (!planCheck.allowed) {
@@ -232,16 +190,12 @@ export class UsersService {
       }
     }
 
-    // Check plan limits for agency users creating INQUILINO (tenant)
     if (creatorId && dto.agencyId && dto.role === 'INQUILINO') {
       const planCheck = await this.plansService.checkPlanLimits(creatorId, 'tenant');
       if (!planCheck.allowed) {
         throw new ForbiddenException(planCheck.message || 'Você atingiu o limite de inquilinos do plano da agência.');
       }
     }
-
-    // Note: Agency user plan limits are checked AFTER determining finalAgencyId (see below)
-    // This ensures users created by AGENCY_ADMIN/AGENCY_MANAGER inherit the correct agencyId
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email: dto.email },
@@ -251,19 +205,15 @@ export class UsersService {
       throw new ConflictException('Email already registered');
     }
 
-    // Generate a random password if not provided or if empty
     const plainPassword = dto.password && dto.password.length >= 6
       ? dto.password
       : this.generateRandomPassword();
     const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
-    // For agency users (BROKER, PROPRIETARIO, AGENCY_MANAGER), get the agencyId from the creator
     let finalAgencyId: bigint | null = dto.agencyId ? BigInt(dto.agencyId) : null;
 
-    // If no agencyId provided but the creator is an agency user, inherit their agencyId
     const agencyRolesToInherit = ['BROKER', 'PROPRIETARIO', 'AGENCY_MANAGER'];
     if (!finalAgencyId && creatorId && agencyRolesToInherit.includes(dto.role as string)) {
-      // Get creator's agencyId
       const creator = await this.prisma.user.findUnique({
         where: { id: BigInt(creatorId) },
         select: { agencyId: true },
@@ -271,7 +221,6 @@ export class UsersService {
       finalAgencyId = creator?.agencyId ?? null;
     }
 
-    // Legacy fallback: for BROKER role with managerId
     if (dto.role === 'BROKER' && dto.managerId && !finalAgencyId) {
       const manager = await this.prisma.user.findUnique({
         where: { id: BigInt(dto.managerId) },
@@ -280,8 +229,6 @@ export class UsersService {
       finalAgencyId = manager?.agencyId ?? null;
     }
 
-    // Check agency plan limits AFTER determining the final agencyId
-    // This ensures that users created by AGENCY_ADMIN/AGENCY_MANAGER are properly checked
     const agencyUserRoles = ['BROKER', 'PROPRIETARIO', 'AGENCY_MANAGER'];
     if (finalAgencyId && agencyUserRoles.includes(dto.role as string)) {
       const agencyCheck = await this.planEnforcement.checkUserOperationAllowed(
@@ -293,13 +240,11 @@ export class UsersService {
       }
     }
 
-    // Set ownerId when INDEPENDENT_OWNER creates a tenant (for plan limit tracking)
     let ownerId: bigint | null = null;
     if (creatorRole === UserRole.INDEPENDENT_OWNER && dto.role === 'INQUILINO' && creatorId) {
       ownerId = BigInt(creatorId);
     }
 
-    // Generate MR3X token based on user role
     let token: string | null = null;
     if (dto.role === 'INQUILINO') {
       token = await this.tokenGenerator.generateToken(TokenEntityType.TENANT);
@@ -373,7 +318,6 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // Check if user is frozen
     if (user.isFrozen) {
       throw new ForbiddenException(
         user.frozenReason || PLAN_MESSAGES.EDIT_FROZEN_USER
@@ -382,7 +326,6 @@ export class UsersService {
 
     const updateData: any = {};
 
-    // Only update fields that are provided
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.email !== undefined) updateData.email = dto.email;
     if (dto.phone !== undefined) updateData.phone = dto.phone;
@@ -478,28 +421,22 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // Validate deletion permissions based on role hierarchy
     if (deleterRole && deleterId) {
       const userRole = user.role as string;
 
-      // CEO can delete anyone
       if (deleterRole === UserRole.CEO) {
-        // OK - CEO has full access
       }
-      // ADMIN can delete users they created or PLATFORM_MANAGER, LEGAL_AUDITOR, REPRESENTATIVE, API_CLIENT
       else if (deleterRole === UserRole.ADMIN) {
         const allowedRoles = ['PLATFORM_MANAGER', 'LEGAL_AUDITOR', 'REPRESENTATIVE', 'API_CLIENT'];
         if (!allowedRoles.includes(userRole)) {
           throw new ForbiddenException('Você não tem permissão para excluir este usuário.');
         }
       }
-      // AGENCY_ADMIN can delete AGENCY_MANAGER, BROKER, PROPRIETARIO in their agency
       else if (deleterRole === UserRole.AGENCY_ADMIN) {
         const allowedRoles = ['AGENCY_MANAGER', 'BROKER', 'PROPRIETARIO'];
         if (!allowedRoles.includes(userRole)) {
           throw new ForbiddenException('Você não tem permissão para excluir este usuário.');
         }
-        // Check same agency or created by this admin
         const deleter = await this.prisma.user.findUnique({
           where: { id: BigInt(deleterId) },
           select: { agencyId: true },
@@ -511,13 +448,11 @@ export class UsersService {
           throw new ForbiddenException('Você só pode excluir usuários da sua própria agência ou que você criou.');
         }
       }
-      // AGENCY_MANAGER can delete BROKER, PROPRIETARIO in their agency
       else if (deleterRole === UserRole.AGENCY_MANAGER) {
         const allowedRoles = ['BROKER', 'PROPRIETARIO'];
         if (!allowedRoles.includes(userRole)) {
           throw new ForbiddenException('Você não tem permissão para excluir este usuário.');
         }
-        // Check same agency or created by this manager
         const deleter = await this.prisma.user.findUnique({
           where: { id: BigInt(deleterId) },
           select: { agencyId: true },
@@ -534,16 +469,13 @@ export class UsersService {
       }
     }
 
-    // Delete related records before deleting the user
     await this.prisma.$transaction(async (tx) => {
       const userBigInt = BigInt(id);
 
-      // Delete refresh tokens
       await tx.refreshToken.deleteMany({
         where: { userId: userBigInt },
       });
 
-      // Delete notifications where user is owner or tenant
       await tx.notification.deleteMany({
         where: {
           OR: [
@@ -553,7 +485,6 @@ export class UsersService {
         },
       });
 
-      // Find all chats where user is a participant
       const userChats = await tx.chat.findMany({
         where: {
           OR: [
@@ -566,23 +497,19 @@ export class UsersService {
       const chatIds = userChats.map(c => c.id);
 
       if (chatIds.length > 0) {
-        // Delete ALL active chats for these chats (both participants)
         await tx.activeChat.deleteMany({
           where: { chatId: { in: chatIds } },
         });
 
-        // Delete ALL messages in these chats
         await tx.message.deleteMany({
           where: { chatId: { in: chatIds } },
         });
 
-        // Now delete the chats
         await tx.chat.deleteMany({
           where: { id: { in: chatIds } },
         });
       }
 
-      // Delete any remaining messages where user is sender/receiver (not in a chat)
       await tx.message.deleteMany({
         where: {
           OR: [
@@ -592,31 +519,25 @@ export class UsersService {
         },
       });
 
-      // Delete audit logs
       await tx.auditLog.deleteMany({
         where: { userId: userBigInt },
       });
 
-      // Delete sales notifications
       await tx.salesNotification.deleteMany({
         where: { userId: userBigInt },
       });
 
-      // Delete payments made by this user
       await tx.payment.deleteMany({
         where: { userId: userBigInt },
       });
 
-      // Delete active chats for this user (not in chats we found earlier)
       await tx.activeChat.deleteMany({
         where: { userId: userBigInt },
       });
 
-      // Nullify/delete inspection references
       await tx.inspectionMedia.deleteMany({
         where: { uploadedById: userBigInt },
       });
-      // Note: inspectorId is required, so we can't nullify it - inspections will remain
       await tx.inspection.updateMany({
         where: { assignedById: userBigInt },
         data: { assignedById: null },
@@ -630,17 +551,14 @@ export class UsersService {
         data: { createdBy: null },
       });
 
-      // Delete property images uploaded by user
       await tx.propertyImage.deleteMany({
         where: { uploadedBy: userBigInt },
       });
 
-      // Delete contract clause history edited by user
       await tx.contractClauseHistory.deleteMany({
         where: { editedBy: userBigInt },
       });
 
-      // Nullify invoice references
       await tx.invoice.updateMany({
         where: { tenantId: userBigInt },
         data: { tenantId: null },
@@ -650,13 +568,10 @@ export class UsersService {
         data: { createdBy: null },
       });
 
-      // Delete transfers where user is recipient
       await tx.transfer.deleteMany({
         where: { recipientId: userBigInt },
       });
 
-      // Delete extrajudicial notifications where user is creditor, debtor or creator
-      // First find the notifications to delete their related records
       const extrajudicialNotifs = await tx.extrajudicialNotification.findMany({
         where: {
           OR: [
@@ -670,22 +585,18 @@ export class UsersService {
       const extrajudicialIds = extrajudicialNotifs.map(n => n.id);
 
       if (extrajudicialIds.length > 0) {
-        // Delete audit records (should cascade, but just in case)
         await tx.extrajudicialNotificationAudit.deleteMany({
           where: { notificationId: { in: extrajudicialIds } },
         });
-        // Delete the notifications
         await tx.extrajudicialNotification.deleteMany({
           where: { id: { in: extrajudicialIds } },
         });
       }
 
-      // Delete tenant analysis records (requestedById is required)
       await tx.tenantAnalysis.deleteMany({
         where: { requestedById: userBigInt },
       });
 
-      // Nullify owner references in properties
       await tx.property.updateMany({
         where: { ownerId: userBigInt },
         data: { ownerId: null },
@@ -703,8 +614,6 @@ export class UsersService {
         data: { tenantId: null },
       });
 
-      // Delete contracts where user is tenant (tenantId is required, can't nullify)
-      // First find contracts to delete related payments
       const tenantContracts = await tx.contract.findMany({
         where: { tenantId: userBigInt },
         select: { id: true },
@@ -712,29 +621,24 @@ export class UsersService {
       const contractIds = tenantContracts.map(c => c.id);
 
       if (contractIds.length > 0) {
-        // Delete payments linked to these contracts
         await tx.payment.deleteMany({
           where: { contratoId: { in: contractIds } },
         });
-        // Delete contracts
         await tx.contract.deleteMany({
           where: { tenantId: userBigInt },
         });
       }
 
-      // Nullify owner references in remaining contracts
       await tx.contract.updateMany({
         where: { ownerId: userBigInt },
         data: { ownerId: null },
       });
 
-      // Nullify owner references in invoices
       await tx.invoice.updateMany({
         where: { ownerId: userBigInt },
         data: { ownerId: null },
       });
 
-      // Nullify owner references in agreements
       await tx.agreement.updateMany({
         where: { ownerId: userBigInt },
         data: { ownerId: null },
@@ -744,8 +648,6 @@ export class UsersService {
         data: { tenantId: null },
       });
 
-      // Delete service contracts (ownerId is required, can't nullify)
-      // First find service contracts to delete related records
       const serviceContracts = await tx.serviceContract.findMany({
         where: { ownerId: userBigInt },
         select: { id: true },
@@ -753,20 +655,17 @@ export class UsersService {
       const serviceContractIds = serviceContracts.map(sc => sc.id);
 
       if (serviceContractIds.length > 0) {
-        // Delete related records first
         await tx.serviceContractProperty.deleteMany({
           where: { serviceContractId: { in: serviceContractIds } },
         });
         await tx.serviceContractClauseHistory.deleteMany({
           where: { serviceContractId: { in: serviceContractIds } },
         });
-        // Now delete service contracts
         await tx.serviceContract.deleteMany({
           where: { ownerId: userBigInt },
         });
       }
 
-      // Nullify user references in other users (broker, creator, owner)
       await tx.user.updateMany({
         where: { brokerId: userBigInt },
         data: { brokerId: null },
@@ -780,7 +679,6 @@ export class UsersService {
         data: { ownerId: null },
       });
 
-      // Finally delete the user
       await tx.user.delete({
         where: { id: userBigInt },
       });
@@ -813,8 +711,6 @@ export class UsersService {
 
     return { message: 'Password changed successfully' };
   }
-
-  // ===== Profile Methods =====
 
   async getProfile(userId: string) {
     const user = await this.prisma.user.findUnique({
@@ -895,18 +791,15 @@ export class UsersService {
     if (dto.city !== undefined) updateData.city = dto.city;
     if (dto.state !== undefined) updateData.state = dto.state;
 
-    // Parse and save user's CRECI field (e.g., "123456/SP" or "CRECI/SP 123456")
     if (dto.creci !== undefined) {
       const creciValue = dto.creci.trim();
       if (creciValue.includes('/')) {
         const parts = creciValue.split('/');
         if (parts.length >= 2) {
-          // Handle formats like "123456/SP" or "CRECI/SP 123456"
           const lastPart = parts[parts.length - 1].trim();
           const stateMatch = lastPart.match(/^([A-Z]{2})/i);
           if (stateMatch) {
             updateData.creciState = stateMatch[1].toUpperCase();
-            // Remove state from creci number
             const creciNumber = creciValue.replace(/\/[A-Z]{2}(-[A-Z])?$/i, '').trim();
             updateData.creci = creciNumber;
           } else {
@@ -918,7 +811,6 @@ export class UsersService {
       }
     }
 
-    // Update agency fields if user is AGENCY_ADMIN and has an agency
     if (user.role === 'AGENCY_ADMIN' && user.agencyId) {
       const agencyUpdateData: any = {};
 
@@ -927,7 +819,6 @@ export class UsersService {
       if (dto.representativeName !== undefined) agencyUpdateData.representativeName = dto.representativeName;
       if (dto.representativeDocument !== undefined) agencyUpdateData.representativeDocument = dto.representativeDocument;
 
-      // Only update agency if there are changes
       if (Object.keys(agencyUpdateData).length > 0) {
         await this.prisma.agency.update({
           where: { id: user.agencyId },
@@ -975,24 +866,20 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // Validate file type
     const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedMimeTypes.includes(file.mimetype)) {
       throw new BadRequestException('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.');
     }
 
-    // Create uploads directory if it doesn't exist
     const uploadsDir = path.join(process.cwd(), 'uploads', 'profiles');
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
-    // Generate unique filename
     const fileExtension = path.extname(file.originalname);
     const filename = `${userId}-${Date.now()}${fileExtension}`;
     const filePath = path.join(uploadsDir, filename);
 
-    // Delete old photo if exists
     if (user.photoUrl) {
       const oldFilename = user.photoUrl.split('/').pop();
       const oldFilePath = path.join(uploadsDir, oldFilename || '');
@@ -1001,10 +888,8 @@ export class UsersService {
       }
     }
 
-    // Save new file
     fs.writeFileSync(filePath, file.buffer);
 
-    // Update user with new photo URL
     const photoUrl = `/uploads/profiles/${filename}`;
     await this.prisma.user.update({
       where: { id: BigInt(userId) },
@@ -1056,8 +941,6 @@ export class UsersService {
       console.log('[UsersService.getTenantsByScope] Scope:', JSON.stringify(scope, null, 2));
       console.log('[UsersService.getTenantsByScope] Search:', search);
 
-      // Build search condition if search query is provided
-      // Note: MySQL is case-insensitive by default with utf8 collation, no need for 'mode'
       const searchCondition = search ? {
         OR: [
           { name: { contains: search } },
@@ -1067,7 +950,6 @@ export class UsersService {
         ],
       } : null;
 
-      // If no scope is provided (CEO), return all tenants
       if (!scope.ownerId && !scope.agencyId && !scope.brokerId && !scope.managerId && !scope.createdById) {
         const tenants = await this.prisma.user.findMany({
           where: {
@@ -1116,34 +998,24 @@ export class UsersService {
       ...(searchCondition ? { AND: [searchCondition] } : {}),
     };
 
-    // ADMIN: sees only tenants they created (each admin is independent)
     if (scope.createdById) {
       where.createdBy = BigInt(scope.createdById);
       console.log('[UsersService.getTenantsByScope] Filtering by createdBy:', scope.createdById);
     }
 
-    // Owner sees only own tenants
     if (scope.ownerId) {
       where.ownerId = BigInt(scope.ownerId);
     }
 
-    // AGENCY_ADMIN: sees all tenants in their agency
     if (scope.agencyId && !scope.ownerId && !scope.managerId && !scope.brokerId && !scope.createdById) {
       where.agencyId = BigInt(scope.agencyId);
     }
 
-    // BROKER: sees only tenants created by themselves
     if (scope.brokerId) {
       where.createdBy = BigInt(scope.brokerId);
     }
 
-    // AGENCY_MANAGER: sees tenants in their agency
-    // This includes:
-    // 1. Tenants created by the manager themselves
-    // 2. Tenants created by brokers in their agency
-    // 3. Tenants created by ADMIN/CEO that belong to the same agency
     if (scope.managerId) {
-      // Find all brokers in the same agency
       const agencyBrokers = await this.prisma.user.findMany({
         where: {
           role: UserRole.BROKER,
@@ -1154,9 +1026,7 @@ export class UsersService {
 
       const agencyBrokerIds = agencyBrokers.map(b => b.id);
 
-      // Manager sees all tenants in their agency
       if (scope.agencyId) {
-        // If manager has an agencyId, show all tenants in that agency
         where = {
           AND: [
             { role: UserRole.INQUILINO },
@@ -1165,7 +1035,6 @@ export class UsersService {
           ],
         };
       } else {
-        // Fallback: only show tenants created by manager or their brokers
         where = {
           AND: [
             { role: UserRole.INQUILINO },
@@ -1227,14 +1096,12 @@ export class UsersService {
       },
     });
 
-      // Log tenant createdBy info for debugging
       console.log('[UsersService.getTenantsByScope] Tenants found:', tenants.map(t => ({
         id: t.id.toString(),
         name: t.name,
         createdBy: t.createdBy?.toString() || 'null'
       })));
 
-      // Serialize BigInt fields
       const result = tenants.map(tenant => {
         const { createdBy, agencyId, company, ...rest } = tenant;
         return {
@@ -1264,7 +1131,6 @@ export class UsersService {
   }
 
   async createTenant(requestingUserId: string, dto: CreateTenantDto, requestingUserRole?: string) {
-    // Check plan limits for tenant creation
     const planCheck = await this.plansService.checkPlanLimits(requestingUserId, 'tenant');
     if (!planCheck.allowed) {
       throw new ForbiddenException(planCheck.message || 'Você atingiu o limite de inquilinos do seu plano.');
@@ -1280,7 +1146,6 @@ export class UsersService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    // Determine the correct agencyId, ownerId, and brokerId based on the requesting user role
     let finalAgencyId: bigint | null = null;
     let finalOwnerId: bigint | null = null;
     let finalBrokerId: bigint | null = null;
@@ -1308,7 +1173,6 @@ export class UsersService {
       });
       finalOwnerId = null;
       finalAgencyId = brokerRecord?.agencyId ?? null;
-      // When broker creates tenant, automatically link the tenant to this broker
       finalBrokerId = BigInt(requestingUserId);
     } else if (requestingUserRole === 'PROPRIETARIO' || requestingUserRole === 'INDEPENDENT_OWNER') {
       finalOwnerId = BigInt(requestingUserId);
@@ -1319,7 +1183,6 @@ export class UsersService {
       finalBrokerId = dto.brokerId ? BigInt(dto.brokerId) : null;
     }
 
-    // Generate MR3X token for tenant
     const token = await this.tokenGenerator.generateToken(TokenEntityType.TENANT);
 
     const tenant = await this.prisma.user.create({
@@ -1401,7 +1264,6 @@ export class UsersService {
 
     const updateData: any = {};
 
-    // Generate token for existing tenants that don't have one
     if (!tenant.token) {
       updateData.token = await this.tokenGenerator.generateToken(TokenEntityType.TENANT);
     }
@@ -1426,7 +1288,6 @@ export class UsersService {
     if (dto.maritalStatus !== undefined) updateData.maritalStatus = dto.maritalStatus;
     if (dto.profession !== undefined) updateData.profession = dto.profession;
     if (dto.rg !== undefined) updateData.rg = dto.rg;
-    // Allow Manager/Admin to link broker to tenant
     if (dto.brokerId !== undefined) {
       updateData.brokerId = dto.brokerId ? BigInt(dto.brokerId) : null;
     }
@@ -1484,7 +1345,6 @@ export class UsersService {
       throw new BadRequestException('User is not a tenant');
     }
 
-    // Check if tenant has active contracts
     const activeContracts = await this.prisma.contract.findFirst({
       where: {
         tenantId: tenantBigInt,
@@ -1496,14 +1356,11 @@ export class UsersService {
       throw new BadRequestException('Não é possível excluir inquilino com contratos ativos. Cancele ou finalize os contratos primeiro.');
     }
 
-    // Delete related records in a transaction
     await this.prisma.$transaction(async (tx) => {
-      // Delete refresh tokens
       await tx.refreshToken.deleteMany({
         where: { userId: tenantBigInt },
       });
 
-      // Delete notifications where tenant is involved
       await tx.notification.deleteMany({
         where: {
           OR: [
@@ -1513,12 +1370,10 @@ export class UsersService {
         },
       });
 
-      // Delete active chats
       await tx.activeChat.deleteMany({
         where: { userId: tenantBigInt },
       });
 
-      // Delete messages sent or received by tenant
       await tx.message.deleteMany({
         where: {
           OR: [
@@ -1528,7 +1383,6 @@ export class UsersService {
         },
       });
 
-      // Delete chats where tenant is a participant
       await tx.chat.deleteMany({
         where: {
           OR: [
@@ -1538,33 +1392,27 @@ export class UsersService {
         },
       });
 
-      // Delete audit logs for this tenant
       await tx.auditLog.deleteMany({
         where: { userId: tenantBigInt },
       });
 
-      // Nullify tenant references in properties
       await tx.property.updateMany({
         where: { tenantId: tenantBigInt },
         data: { tenantId: null },
       });
 
-      // Delete payments made by tenant
       await tx.payment.deleteMany({
         where: { userId: tenantBigInt },
       });
 
-      // Delete transfers where tenant is the recipient
       await tx.transfer.deleteMany({
         where: { recipientId: tenantBigInt },
       });
 
-      // Delete inspections where tenant is the inspector
       await tx.inspection.deleteMany({
         where: { inspectorId: tenantBigInt },
       });
 
-      // Get inactive/cancelled contracts for this tenant
       const inactiveContracts = await tx.contract.findMany({
         where: {
           tenantId: tenantBigInt,
@@ -1576,23 +1424,19 @@ export class UsersService {
       const contractIds = inactiveContracts.map(c => c.id);
 
       if (contractIds.length > 0) {
-        // Delete contract audits for these contracts
         await tx.contractAudit.deleteMany({
           where: { contractId: { in: contractIds } },
         });
 
-        // Delete invoices for these contracts
         await tx.invoice.deleteMany({
           where: { contractId: { in: contractIds } },
         });
 
-        // Delete inactive/cancelled contracts
         await tx.contract.deleteMany({
           where: { id: { in: contractIds } },
         });
       }
 
-      // Finally delete the tenant user
       await tx.user.delete({
         where: { id: tenantBigInt },
       });

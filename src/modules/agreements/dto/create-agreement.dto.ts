@@ -2,21 +2,21 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsNumber, IsOptional, IsDateString, IsEnum, IsArray } from 'class-validator';
 
 export enum AgreementType {
-  PAYMENT_SETTLEMENT = 'PAYMENT_SETTLEMENT', // Acordo de Pagamento
-  DAMAGE_COMPENSATION = 'DAMAGE_COMPENSATION', // Acordo de Compensação por Danos
-  FINE_AGREEMENT = 'FINE_AGREEMENT', // Acordo de Multa
-  MOVE_OUT = 'MOVE_OUT', // Acordo de Entrega de Chaves
-  CONTRACT_ADJUSTMENT = 'CONTRACT_ADJUSTMENT', // Acordo de Ajuste de Contrato
-  OTHER = 'OTHER', // Outro
+  PAYMENT_SETTLEMENT = 'PAYMENT_SETTLEMENT',
+  DAMAGE_COMPENSATION = 'DAMAGE_COMPENSATION',
+  FINE_AGREEMENT = 'FINE_AGREEMENT',
+  MOVE_OUT = 'MOVE_OUT',
+  CONTRACT_ADJUSTMENT = 'CONTRACT_ADJUSTMENT',
+  OTHER = 'OTHER',
 }
 
 export enum AgreementStatus {
-  RASCUNHO = 'RASCUNHO', // Draft
-  AGUARDANDO_ASSINATURA = 'AGUARDANDO_ASSINATURA', // Awaiting signature
-  ASSINADO = 'ASSINADO', // Signed by all parties
-  CONCLUIDO = 'CONCLUIDO', // Completed/Executed
-  REJEITADO = 'REJEITADO', // Rejected
-  CANCELADO = 'CANCELADO', // Cancelled
+  RASCUNHO = 'RASCUNHO',
+  AGUARDANDO_ASSINATURA = 'AGUARDANDO_ASSINATURA',
+  ASSINADO = 'ASSINADO',
+  CONCLUIDO = 'CONCLUIDO',
+  REJEITADO = 'REJEITADO',
+  CANCELADO = 'CANCELADO',
 }
 
 export class CreateAgreementDto {
@@ -67,7 +67,6 @@ export class CreateAgreementDto {
   @IsString()
   ownerId?: string;
 
-  // Financial terms
   @ApiPropertyOptional({ description: 'Original amount' })
   @IsOptional()
   @IsNumber()
@@ -98,7 +97,6 @@ export class CreateAgreementDto {
   @IsNumber()
   installmentValue?: number;
 
-  // Dates
   @ApiPropertyOptional({ description: 'Effective date' })
   @IsOptional()
   @IsDateString()

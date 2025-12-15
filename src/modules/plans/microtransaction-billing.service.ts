@@ -13,7 +13,7 @@ export interface CreateMicrotransactionDTO {
   userId?: string;
   type: MicrotransactionType;
   description?: string;
-  referenceId?: string; // Contract ID, Inspection ID, etc.
+  referenceId?: string;
 }
 
 export interface MicrotransactionResult {
@@ -42,9 +42,6 @@ export interface UsageSummary {
 export class MicrotransactionBillingService {
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * Get pricing for a specific microtransaction type based on agency's plan
-   */
   async getPriceForType(agencyId: string, type: MicrotransactionType): Promise<number | null> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -68,9 +65,6 @@ export class MicrotransactionBillingService {
     }
   }
 
-  /**
-   * Check if a feature is included in the plan (no payment required)
-   */
   async isFeatureIncluded(agencyId: string, type: MicrotransactionType): Promise<boolean> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -92,22 +86,16 @@ export class MicrotransactionBillingService {
     }
   }
 
-  /**
-   * Create a microtransaction for a pay-per-use feature
-   */
   async createMicrotransaction(dto: CreateMicrotransactionDTO): Promise<MicrotransactionResult> {
-    // Check if feature is included in plan
     const isIncluded = await this.isFeatureIncluded(dto.agencyId, dto.type);
 
     if (isIncluded) {
-      // Feature is included, no payment required
-      // Just create a record for tracking
       const record = await this.prisma.microtransaction.create({
         data: {
           agencyId: BigInt(dto.agencyId),
           userId: dto.userId ? BigInt(dto.userId) : null,
           type: dto.type,
-          amount: 0, // No charge for included features
+          amount: 0,
           description: dto.description || `${dto.type} - Included in plan`,
           status: MicrotransactionStatus.PAID,
           paidAt: new Date(),
@@ -135,14 +123,14 @@ export class MicrotransactionBillingService {
       };
     }
 
-    // Get price for the feature
+
     const price = await this.getPriceForType(dto.agencyId, dto.type);
 
     if (price === null) {
       throw new BadRequestException(`Feature ${dto.type} is not available`);
     }
 
-    // Create pending microtransaction
+
     const record = await this.prisma.microtransaction.create({
       data: {
         agencyId: BigInt(dto.agencyId),
@@ -166,11 +154,7 @@ export class MicrotransactionBillingService {
       },
     });
 
-    // Record usage
     await this.recordUsage(dto.agencyId, dto.type, price, dto.referenceId);
-
-    // TODO: Integrate with Asaas for payment processing
-    // For now, return pending status
 
     return {
       id: record.id.toString(),
@@ -181,9 +165,6 @@ export class MicrotransactionBillingService {
     };
   }
 
-  /**
-   * Charge for an extra contract when over limit
-   */
   async chargeExtraContract(agencyId: string, contractId: string, userId?: string): Promise<MicrotransactionResult> {
     return this.createMicrotransaction({
       agencyId,
@@ -194,9 +175,6 @@ export class MicrotransactionBillingService {
     });
   }
 
-  /**
-   * Charge for an inspection (if not included in plan)
-   */
   async chargeInspection(agencyId: string, inspectionId: string, userId?: string): Promise<MicrotransactionResult> {
     return this.createMicrotransaction({
       agencyId,
@@ -207,9 +185,6 @@ export class MicrotransactionBillingService {
     });
   }
 
-  /**
-   * Charge for a settlement/agreement (if not included in plan)
-   */
   async chargeSettlement(agencyId: string, agreementId: string, userId?: string): Promise<MicrotransactionResult> {
     return this.createMicrotransaction({
       agencyId,
@@ -220,9 +195,6 @@ export class MicrotransactionBillingService {
     });
   }
 
-  /**
-   * Charge for tenant screening (always pay-per-use)
-   */
   async chargeScreening(agencyId: string, analysisId: string, userId?: string): Promise<MicrotransactionResult> {
     return this.createMicrotransaction({
       agencyId,
@@ -233,9 +205,6 @@ export class MicrotransactionBillingService {
     });
   }
 
-  /**
-   * Record usage for billing purposes
-   */
   private async recordUsage(
     agencyId: string,
     type: MicrotransactionType,
@@ -264,13 +233,10 @@ export class MicrotransactionBillingService {
       },
     });
 
-    // Update monthly usage counters
+
     await this.updateMonthlyUsage(agencyId, type);
   }
 
-  /**
-   * Update monthly usage counters on agency
-   */
   private async updateMonthlyUsage(agencyId: string, type: MicrotransactionType): Promise<void> {
     const updateData: any = {};
 
@@ -297,9 +263,6 @@ export class MicrotransactionBillingService {
     }
   }
 
-  /**
-   * Reset monthly usage counters (to be called at the start of each billing cycle)
-   */
   async resetMonthlyUsage(agencyId: string): Promise<void> {
     await this.prisma.agency.update({
       where: { id: BigInt(agencyId) },
@@ -313,9 +276,6 @@ export class MicrotransactionBillingService {
     });
   }
 
-  /**
-   * Get usage summary for an agency
-   */
   async getUsageSummary(agencyId: string, billingMonth?: string): Promise<UsageSummary> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -335,7 +295,6 @@ export class MicrotransactionBillingService {
     const now = new Date();
     const targetMonth = billingMonth || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    // Get usage records for the billing month
     const usageRecords = await this.prisma.usageRecord.findMany({
       where: {
         agencyId: BigInt(agencyId),
@@ -343,7 +302,6 @@ export class MicrotransactionBillingService {
       },
     });
 
-    // Get microtransactions for the billing month
     const startDate = new Date(`${targetMonth}-01`);
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + 1);
@@ -358,7 +316,7 @@ export class MicrotransactionBillingService {
       },
     });
 
-    // Calculate totals by type
+
     const extraContracts = microtransactions.filter(m => m.type === MicrotransactionType.EXTRA_CONTRACT);
     const inspections = microtransactions.filter(m => m.type === MicrotransactionType.INSPECTION);
     const settlements = microtransactions.filter(m => m.type === MicrotransactionType.SETTLEMENT);
@@ -393,9 +351,6 @@ export class MicrotransactionBillingService {
     };
   }
 
-  /**
-   * Get all pending microtransactions for an agency
-   */
   async getPendingMicrotransactions(agencyId: string): Promise<any[]> {
     const transactions = await this.prisma.microtransaction.findMany({
       where: {
@@ -419,9 +374,6 @@ export class MicrotransactionBillingService {
     }));
   }
 
-  /**
-   * Mark a microtransaction as paid
-   */
   async markAsPaid(microtransactionId: string, paymentDetails?: {
     asaasPaymentId?: string;
     paymentMethod?: string;
@@ -436,7 +388,7 @@ export class MicrotransactionBillingService {
       },
     });
 
-    // Mark usage record as billed
+
     const transaction = await this.prisma.microtransaction.findUnique({
       where: { id: BigInt(microtransactionId) },
       select: { agencyId: true, type: true, createdAt: true },
@@ -461,9 +413,6 @@ export class MicrotransactionBillingService {
     }
   }
 
-  /**
-   * Get billing history for an agency
-   */
   async getBillingHistory(agencyId: string, limit: number = 12): Promise<UsageSummary[]> {
     const now = new Date();
     const summaries: UsageSummary[] = [];
@@ -477,16 +426,12 @@ export class MicrotransactionBillingService {
         const summary = await this.getUsageSummary(agencyId, billingMonth);
         summaries.push(summary);
       } catch (e) {
-        // Skip if no data for this month
       }
     }
 
     return summaries;
   }
 
-  /**
-   * Get default description for a microtransaction type
-   */
   private getDefaultDescription(type: MicrotransactionType): string {
     switch (type) {
       case MicrotransactionType.EXTRA_CONTRACT:
@@ -508,9 +453,6 @@ export class MicrotransactionBillingService {
     }
   }
 
-  /**
-   * Get reference type for usage tracking
-   */
   private getReferenceType(type: MicrotransactionType): string {
     switch (type) {
       case MicrotransactionType.EXTRA_CONTRACT:

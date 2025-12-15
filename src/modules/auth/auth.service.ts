@@ -9,8 +9,8 @@ import { PlanEnforcementService } from '../plans/plan-enforcement.service';
 import { RegisterDto, LoginDto, VerifyEmailRequestDto, VerifyEmailConfirmDto, ForgotPasswordDto, ResetPasswordDto, CompleteRegisterDto } from './dto/auth.dto';
 import { UserRole } from '@prisma/client';
 
-const EMAIL_CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const EMAIL_CODE_COOLDOWN_MS = 60 * 1000; // 60 seconds
+const EMAIL_CODE_TTL_MS = 10 * 60 * 1000;
+const EMAIL_CODE_COOLDOWN_MS = 60 * 1000;
 
 @Injectable()
 export class AuthService {
@@ -87,7 +87,6 @@ export class AuthService {
       throw new UnauthorizedException('Account is inactive');
     }
 
-    // Check if user is frozen due to plan limits
     if (user.isFrozen) {
       throw new UnauthorizedException(
         'FROZEN_USER:' + (user.frozenReason || 'Sua conta está congelada devido ao limite do plano. Entre em contato com o administrador da agência.')
@@ -99,13 +98,10 @@ export class AuthService {
       data: { lastLogin: new Date() },
     });
 
-    // Enforce plan limits on login for agency users
-    // This ensures excess contracts/users are frozen
     if (user.agencyId) {
       try {
         await this.planEnforcement.enforceCurrentPlanLimits(user.agencyId.toString());
       } catch (error) {
-        // Log error but don't fail login
         console.error('Error enforcing plan limits on login:', error);
       }
     }

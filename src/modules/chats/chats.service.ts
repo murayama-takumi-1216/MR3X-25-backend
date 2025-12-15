@@ -8,7 +8,6 @@ export class ChatsService {
   async getChats(userId: string) {
     const userIdBigInt = BigInt(userId);
 
-    // Get active chats for the user
     const activeChats = await this.prisma.activeChat.findMany({
       where: {
         userId: userIdBigInt,
@@ -68,7 +67,6 @@ export class ChatsService {
       throw new NotFoundException('Chat not found');
     }
 
-    // Verify user is participant
     if (chat.participant1Id.toString() !== userId && chat.participant2Id.toString() !== userId) {
       throw new ForbiddenException('Access denied');
     }
@@ -114,17 +112,14 @@ export class ChatsService {
       throw new NotFoundException('Chat not found');
     }
 
-    // Verify user is participant
     if (chat.participant1Id.toString() !== userId && chat.participant2Id.toString() !== userId) {
       throw new ForbiddenException('Access denied');
     }
 
-    // Determine receiver
     const receiverId = chat.participant1Id.toString() === userId
       ? chat.participant2Id
       : chat.participant1Id;
 
-    // Create message
     const message = await this.prisma.message.create({
       data: {
         chatId: BigInt(chatId),
@@ -145,7 +140,6 @@ export class ChatsService {
       },
     });
 
-    // Update unread count for receiver
     await this.prisma.activeChat.updateMany({
       where: {
         chatId: BigInt(chatId),
@@ -172,7 +166,6 @@ export class ChatsService {
   }
 
   async createChat(userId: string, participantId: string) {
-    // Check if chat already exists
     const existingChat = await this.prisma.chat.findFirst({
       where: {
         OR: [
@@ -186,7 +179,6 @@ export class ChatsService {
       return { id: existingChat.id.toString() };
     }
 
-    // Get participant names
     const [user, participant] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: BigInt(userId) } }),
       this.prisma.user.findUnique({ where: { id: BigInt(participantId) } }),
@@ -196,7 +188,6 @@ export class ChatsService {
       throw new NotFoundException('Participant not found');
     }
 
-    // Create chat
     const chat = await this.prisma.chat.create({
       data: {
         participant1Id: BigInt(userId),
@@ -205,7 +196,6 @@ export class ChatsService {
       },
     });
 
-    // Create active chat entries for both users
     await Promise.all([
       this.prisma.activeChat.create({
         data: {
@@ -231,7 +221,6 @@ export class ChatsService {
   async getAvailableUsers(userId: string, role: string, userAgencyId?: string) {
     const userIdBigInt = BigInt(userId);
 
-    // CEO can chat with all ADMIN users
     if (role === 'CEO') {
       const adminUsers = await this.prisma.user.findMany({
         where: {
@@ -257,9 +246,7 @@ export class ChatsService {
       }));
     }
 
-    // ADMIN can chat with AGENCY_ADMIN users they created and other relevant users
     if (role === 'ADMIN') {
-      // Get users created by this admin (AGENCY_ADMIN, INDEPENDENT_OWNER, etc.)
       const createdUsers = await this.prisma.user.findMany({
         where: {
           id: { not: userIdBigInt },
@@ -275,7 +262,6 @@ export class ChatsService {
         },
       });
 
-      // Also get all AGENCY_ADMIN users (directors)
       const agencyAdmins = await this.prisma.user.findMany({
         where: {
           id: { not: userIdBigInt },
@@ -291,7 +277,6 @@ export class ChatsService {
         },
       });
 
-      // Combine and deduplicate
       const allUsers = [...createdUsers, ...agencyAdmins];
       const uniqueUsers = allUsers.filter((user, index, self) =>
         index === self.findIndex(u => u?.id?.toString() === user?.id?.toString())
@@ -306,7 +291,6 @@ export class ChatsService {
       }));
     }
 
-    // AGENCY_ADMIN can chat with all users in their agency (managers, brokers, tenants, owners)
     if (role === 'AGENCY_ADMIN' && userAgencyId) {
       const agencyUsers = await this.prisma.user.findMany({
         where: {
@@ -323,7 +307,6 @@ export class ChatsService {
         },
       });
 
-      // Also get tenants from contracts in this agency
       const agencyContracts = await this.prisma.contract.findMany({
         where: {
           agencyId: BigInt(userAgencyId),
@@ -347,7 +330,6 @@ export class ChatsService {
         .filter(c => c.tenantUser && c.tenantUser.id.toString() !== userId)
         .map(c => c.tenantUser);
 
-      // Combine and deduplicate
       const allUsers = [...agencyUsers, ...tenantUsers];
       const uniqueUsers = allUsers.filter((user, index, self) =>
         index === self.findIndex(u => u?.id?.toString() === user?.id?.toString())
@@ -362,7 +344,6 @@ export class ChatsService {
       }));
     }
 
-    // AGENCY_MANAGER can chat with agency admin, other managers, brokers, and tenants
     if (role === 'AGENCY_MANAGER' && userAgencyId) {
       const agencyUsers = await this.prisma.user.findMany({
         where: {
@@ -388,7 +369,6 @@ export class ChatsService {
       }));
     }
 
-    // BROKER can chat with agency users and their assigned tenants
     if (role === 'BROKER' && userAgencyId) {
       const agencyUsers = await this.prisma.user.findMany({
         where: {
@@ -406,7 +386,6 @@ export class ChatsService {
         },
       });
 
-      // Get tenants from properties assigned to this broker
       const brokerProperties = await this.prisma.property.findMany({
         where: {
           brokerId: userIdBigInt,
@@ -448,7 +427,6 @@ export class ChatsService {
       }));
     }
 
-    // INQUILINO can chat with their landlord/agency
     if (role === 'INQUILINO') {
       const tenantContracts = await this.prisma.contract.findMany({
         where: {
@@ -506,7 +484,6 @@ export class ChatsService {
       }));
     }
 
-    // PROPRIETARIO can chat with their tenants and agency
     if (role === 'PROPRIETARIO' || role === 'INDEPENDENT_OWNER') {
       const ownerContracts = await this.prisma.contract.findMany({
         where: {
@@ -564,7 +541,6 @@ export class ChatsService {
       }));
     }
 
-    // Default return empty array
     return [];
   }
 
@@ -577,22 +553,18 @@ export class ChatsService {
       throw new NotFoundException('Chat not found');
     }
 
-    // Verify user is participant
     if (chat.participant1Id.toString() !== userId && chat.participant2Id.toString() !== userId) {
       throw new ForbiddenException('Access denied');
     }
 
-    // Delete messages
     await this.prisma.message.deleteMany({
       where: { chatId: BigInt(chatId) },
     });
 
-    // Delete active chats
     await this.prisma.activeChat.deleteMany({
       where: { chatId: BigInt(chatId) },
     });
 
-    // Delete chat
     await this.prisma.chat.delete({
       where: { id: BigInt(chatId) },
     });
@@ -607,12 +579,10 @@ export class ChatsService {
       throw new NotFoundException('Chat not found');
     }
 
-    // Verify user is participant
     if (chat.participant1Id.toString() !== userId && chat.participant2Id.toString() !== userId) {
       throw new ForbiddenException('Access denied');
     }
 
-    // Mark messages as read
     await this.prisma.message.updateMany({
       where: {
         chatId: BigInt(chatId),
@@ -624,7 +594,6 @@ export class ChatsService {
       },
     });
 
-    // Reset unread count
     await this.prisma.activeChat.updateMany({
       where: {
         chatId: BigInt(chatId),

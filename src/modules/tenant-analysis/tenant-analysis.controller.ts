@@ -16,7 +16,6 @@ import { OwnerAction } from '../../common/constants/owner-permissions.constants'
 import { UserRole } from '@prisma/client';
 import { AnalyzeTenantDto, GetAnalysisHistoryDto } from './dto';
 
-// Configure multer storage for analysis photos
 const analysisPhotoStorage = diskStorage({
   destination: (_req, _file, cb) => {
     const uploadDir = path.join(process.cwd(), 'uploads', 'tenant-analysis');
@@ -31,7 +30,6 @@ const analysisPhotoStorage = diskStorage({
   },
 });
 
-// File filter for images only
 const imageFileFilter = (_req: any, file: any, cb: any) => {
   if (file.mimetype.startsWith('image/')) {
     cb(null, true);
@@ -82,7 +80,6 @@ export class TenantAnalysisController {
       return await this.tenantAnalysisService.analyzeTenant(dto, userId, agencyId);
     } catch (error) {
       console.error('Tenant analysis error:', error.message);
-      // Return user-friendly error response
       throw new HttpException(
         {
           statusCode: HttpStatus.BAD_REQUEST,
@@ -187,7 +184,7 @@ export class TenantAnalysisController {
       storage: analysisPhotoStorage,
       fileFilter: imageFileFilter,
       limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB
+        fileSize: 5 * 1024 * 1024,
       },
     }),
   )
@@ -204,7 +201,6 @@ export class TenantAnalysisController {
     return this.tenantAnalysisService.uploadPhoto(BigInt(id), file.path, file.filename, userId);
   }
 
-  // Legacy endpoints for backward compatibility
   @Post('financial')
   @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.AGENCY_MANAGER, UserRole.BROKER)
   @ApiOperation({ summary: 'Get financial analysis for a document (legacy)' })

@@ -19,15 +19,6 @@ export interface OwnerPermissionMetadata {
   action: OwnerAction;
 }
 
-/**
- * Guard that checks owner-specific permissions
- * Works in conjunction with RolesGuard
- *
- * Usage:
- * @OwnerPermission('payments', OwnerAction.CREATE)
- * @Post()
- * createPayment() { ... }
- */
 @Injectable()
 export class OwnerPermissionGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
@@ -38,7 +29,6 @@ export class OwnerPermissionGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
-    // No owner permission decorator, skip check
     if (!permissionMeta) {
       return true;
     }
@@ -52,9 +42,8 @@ export class OwnerPermissionGuard implements CanActivate {
 
     const userRole = user.role as UserRole;
 
-    // Only apply to owner roles
     if (!isAgencyManagedOwner(userRole) && userRole !== UserRole.INDEPENDENT_OWNER) {
-      return true; // Let other guards handle non-owner roles
+      return true;
     }
 
     const { module, action } = permissionMeta;

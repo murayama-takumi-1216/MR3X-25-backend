@@ -39,7 +39,7 @@ export class AgreementsService {
     startDate?: string;
     endDate?: string;
     search?: string;
-    accessFilter?: any;      // Permission-based filter from AgreementPermissionService
+    accessFilter?: any;
     userContext?: UserContext;
   }) {
     const {
@@ -59,12 +59,9 @@ export class AgreementsService {
       userContext,
     } = params;
 
-    // Start with permission-based filter
     const where: any = accessFilter ? { ...accessFilter } : {};
 
-    // Apply additional filters (these narrow down the permission-based results)
     if (agencyId) {
-      // Only apply if user has permission to view this agency's data
       where.agencyId = BigInt(agencyId);
     }
     if (propertyId) where.propertyId = BigInt(propertyId);
@@ -80,7 +77,6 @@ export class AgreementsService {
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
-    // Add search filter
     if (search && search.trim()) {
       where.OR = [
         { title: { contains: search.trim() } },
@@ -198,7 +194,6 @@ export class AgreementsService {
   }
 
   async create(data: CreateAgreementDto, userId: string, clientIP?: string, userAgent?: string) {
-    // Validate property exists
     const property = await this.prisma.property.findUnique({
       where: { id: BigInt(data.propertyId) },
     });
@@ -207,7 +202,6 @@ export class AgreementsService {
       throw new NotFoundException('Property not found');
     }
 
-    // If contract is provided, validate it exists and belongs to the property
     if (data.contractId) {
       const contract = await this.prisma.contract.findUnique({
         where: { id: BigInt(data.contractId) },
@@ -218,7 +212,6 @@ export class AgreementsService {
       }
     }
 
-    // Generate token and hash
     const agreementToken = this.generateAgreementToken();
     const contentToHash = `${data.title}|${data.type}|${data.propertyId}|${Date.now()}`;
     const agreementHash = this.generateHash(contentToHash);
@@ -268,14 +261,12 @@ export class AgreementsService {
       throw new NotFoundException('Agreement not found');
     }
 
-    // Check status-based restrictions
     if (!isEditableStatus(agreement.status)) {
       throw new ForbiddenException(
         `Agreement in status '${agreement.status}' cannot be edited. Only drafts and agreements awaiting signature can be modified.`
       );
     }
 
-    // Check if immutable
     if (isImmutableStatus(agreement.status)) {
       throw new ForbiddenException('Cannot update a completed or rejected agreement');
     }
@@ -323,7 +314,6 @@ export class AgreementsService {
       throw new NotFoundException('Agreement not found');
     }
 
-    // Check if agreement can be signed
     if (agreement.status !== AgreementStatusValue.RASCUNHO &&
         agreement.status !== AgreementStatusValue.AGUARDANDO_ASSINATURA) {
       throw new ForbiddenException(`Agreement in status '${agreement.status}' cannot be signed`);
@@ -345,11 +335,9 @@ export class AgreementsService {
       updateData.agencySignedAt = now;
     }
 
-    // Store client information for audit
     if (clientIP) updateData.clientIP = clientIP;
     if (userAgent) updateData.userAgent = userAgent;
 
-    // Update status to awaiting signature if it was in draft
     if (agreement.status === 'RASCUNHO') {
       updateData.status = 'AGUARDANDO_ASSINATURA';
     }
@@ -359,12 +347,10 @@ export class AgreementsService {
       data: updateData,
     });
 
-    // Check if all required signatures are present and update status
     const updated = await this.prisma.agreement.findUnique({
       where: { id: BigInt(id) },
     });
 
-    // If tenant and agency signed (minimum required), mark as signed
     if (updated?.tenantSignature && updated?.agencySignature) {
       await this.prisma.agreement.update({
         where: { id: BigInt(id) },
@@ -462,14 +448,12 @@ export class AgreementsService {
       throw new NotFoundException('Agreement not found');
     }
 
-    // Check if agreement is in deletable status
     if (!isDeletableStatus(agreement.status)) {
       throw new ForbiddenException(
         `Agreement in status '${agreement.status}' cannot be deleted. Only drafts can be deleted.`
       );
     }
 
-    // Check if agreement has been signed (prevents deletion even in draft)
     if (hasBeenSigned(agreement)) {
       throw new ForbiddenException(
         'Agreements that have been signed by any party cannot be deleted'
@@ -492,7 +476,6 @@ export class AgreementsService {
       throw new NotFoundException('Agreement not found');
     }
 
-    // Validate status transition
     if (isImmutableStatus(agreement.status)) {
       throw new ForbiddenException(
         `Cannot change status of agreement in '${agreement.status}' state`
@@ -525,12 +508,9 @@ export class AgreementsService {
       data: { status: 'AGUARDANDO_ASSINATURA' },
     });
 
-    // TODO: Send notification to parties for signature
-
     return this.findOne(id);
   }
 
-  // Templates methods
   async findAllTemplates(params: { agencyId?: string; type?: string; isDefault?: boolean }) {
     const { agencyId, type, isDefault } = params;
 
@@ -616,7 +596,6 @@ export class AgreementsService {
     return { message: 'Template deleted successfully' };
   }
 
-  // Statistics for dashboard
   async getStatistics(params: { accessFilter?: any }) {
     const { accessFilter } = params;
 
@@ -671,7 +650,6 @@ export class AgreementsService {
       updatedAt: agreement.updatedAt?.toISOString() || null,
     };
 
-    // Serialize property
     if (agreement.property) {
       serialized.property = {
         ...agreement.property,
@@ -696,7 +674,6 @@ export class AgreementsService {
       }
     }
 
-    // Serialize contract
     if (agreement.contract) {
       serialized.contract = {
         ...agreement.contract,
@@ -720,7 +697,6 @@ export class AgreementsService {
       }
     }
 
-    // Serialize user relations
     ['tenant', 'owner', 'approvedBy', 'createdByUser'].forEach(rel => {
       if (agreement[rel]) {
         serialized[rel] = {

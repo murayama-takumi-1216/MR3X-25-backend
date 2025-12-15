@@ -11,12 +11,10 @@ export class SettingsService {
   constructor(private prisma: PrismaService) {}
 
   async getPaymentConfig(): Promise<PaymentConfig> {
-    // Get platform fee from settings
     const platformFeeSetting = await this.prisma.platformSettings.findUnique({
       where: { key: 'platform_fee' },
     });
 
-    // Get default agency fee from settings
     const agencyFeeSetting = await this.prisma.platformSettings.findUnique({
       where: { key: 'default_agency_fee' },
     });
@@ -28,7 +26,6 @@ export class SettingsService {
   }
 
   async updatePaymentConfig(config: PaymentConfig): Promise<PaymentConfig> {
-    // Update or create platform fee
     await this.prisma.platformSettings.upsert({
       where: { key: 'platform_fee' },
       update: { value: config.platformFee.toString() },
@@ -39,7 +36,6 @@ export class SettingsService {
       },
     });
 
-    // Update or create default agency fee
     await this.prisma.platformSettings.upsert({
       where: { key: 'default_agency_fee' },
       update: { value: config.agencyFee.toString() },

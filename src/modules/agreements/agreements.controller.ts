@@ -30,8 +30,6 @@ import {
   SettlementOptionsResponseDto,
 } from './dto/calculation.dto';
 import { Request } from 'express';
-
-// Permission imports
 import { AgreementPermissionGuard } from './guards/agreement-permission.guard';
 import { LoadedAgreement, AgreementUserContext } from './guards/agreement-permission.guard';
 import {
@@ -88,7 +86,6 @@ export class AgreementsController {
     @Query('search') search?: string,
     @CurrentUser() user?: any,
   ) {
-    // Build user context for permission-based filtering
     const userContext: UserContext = {
       sub: user.sub,
       email: user.email,
@@ -99,7 +96,6 @@ export class AgreementsController {
       document: user.document,
     };
 
-    // Get permission-based filter
     const accessFilter = this.permissionService.getAccessFilter(userContext);
 
     return this.agreementsService.findAll({
@@ -115,8 +111,8 @@ export class AgreementsController {
       startDate,
       endDate,
       search,
-      accessFilter, // Pass the permission-based filter
-      userContext,  // Pass user context for additional filtering logic
+      accessFilter,
+      userContext,
     });
   }
 
@@ -152,7 +148,6 @@ export class AgreementsController {
       document: user.document,
     };
 
-    // Return available actions for the user
     return {
       role: user.role,
       canView: this.permissionService.canPerformAction(userContext, AgreementAction.VIEW).allowed,
@@ -223,10 +218,6 @@ export class AgreementsController {
   async removeTemplate(@Param('id') id: string) {
     return this.agreementsService.removeTemplate(id);
   }
-
-  // ============================================
-  // DEBT CALCULATION & SETTLEMENT ENDPOINTS
-  // ============================================
 
   @Get('calculate/invoice/:invoiceId')
   @AgreementPermission(AgreementAction.VIEW)
@@ -329,7 +320,6 @@ export class AgreementsController {
     const clientIP = req.ip || req.connection.remoteAddress;
     const userAgent = req.headers['user-agent'];
 
-    // Get settlement data
     const settlementData = await this.calculationService.acceptSettlement(
       body.invoiceId,
       body.optionId,
@@ -338,7 +328,6 @@ export class AgreementsController {
       userAgent,
     );
 
-    // Create the agreement
     const agreementData: CreateAgreementDto = {
       contractId: settlementData.contractId,
       propertyId: settlementData.propertyId,
@@ -365,10 +354,6 @@ export class AgreementsController {
     };
   }
 
-  // ============================================
-  // STANDARD AGREEMENT CRUD ENDPOINTS
-  // ============================================
-
   @Get(':id')
   @CanViewAgreement()
   @ApiOperation({ summary: 'Get agreement by ID' })
@@ -389,7 +374,6 @@ export class AgreementsController {
 
     const agreement = await this.agreementsService.findOne(id);
 
-    // Add available actions for this agreement
     const loadedAgreement = await this.permissionService.loadAgreementForPermissionCheck(id);
     if (loadedAgreement) {
       agreement.availableActions = this.permissionService.getAvailableActions(userContext, loadedAgreement);
@@ -464,7 +448,6 @@ export class AgreementsController {
     @Body() data: UpdateAgreementDto,
     @CurrentUser() user?: any,
   ) {
-    // Permission check is done by the guard, but we double-check status here
     return this.agreementsService.update(id, data, user);
   }
 
@@ -489,13 +472,11 @@ export class AgreementsController {
       document: user.document,
     };
 
-    // Determine signature type from the request body
     let signatureType: SignatureType | undefined;
     if (data.tenantSignature) signatureType = SignatureType.TENANT;
     else if (data.ownerSignature) signatureType = SignatureType.OWNER;
     else if (data.agencySignature) signatureType = SignatureType.AGENCY;
 
-    // Load agreement and validate permission for this specific signature type
     if (signatureType) {
       const agreement = await this.permissionService.loadAgreementForPermissionCheck(id);
       if (agreement) {

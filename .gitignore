@@ -1,17 +1,13 @@
-# Dependencies
 node_modules/
 uploads/
 
-# Environment
 .env
 .env.local
 .env.*.local
 
-# Build
 dist/
 build/
 
-# Logs
 logs/
 *.log
 *.md
@@ -19,22 +15,18 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
 .DS_Store
 Thumbs.db
 
-# Testing
 coverage/
 .nyc_output/
 
-# Prisma
 prisma/*.db
 prisma/*.db-journal
 

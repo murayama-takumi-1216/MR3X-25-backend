@@ -30,10 +30,6 @@ jobs:
       - name: Build backend
         run: npm run build
 
-      # Optional: run tests
-      # - name: Run tests
-      #   run: npm test
-
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -56,10 +52,6 @@ jobs:
 
             echo 'Building backend'
             npm run build
-
-            # Optional: run migrations
-            # echo 'Running migrations'
-            # npm run migrate
 
             echo 'Restarting backend with pm2'
             if pm2 list | grep -q mr3x-backend; then

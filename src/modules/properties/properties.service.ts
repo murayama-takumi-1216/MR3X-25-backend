@@ -24,7 +24,6 @@ export class PropertiesService {
     if (ownerId) where.ownerId = BigInt(ownerId);
     if (createdById) where.createdBy = BigInt(createdById);
 
-    // Add search filter for name, address, or owner/broker name
     if (search && search.trim()) {
       const searchTerm = search.trim();
       where.OR = [
@@ -235,18 +234,13 @@ export class PropertiesService {
   async create(data: any, user: { sub: string; role: string; agencyId?: string | null }) {
     const userId = user.sub;
 
-    // Determine the agencyId - use from data if provided, otherwise use user's agencyId
     const agencyId = data.agencyId || user.agencyId || null;
 
-    // Check plan limits for INDEPENDENT_OWNER users
     const planCheck = await this.plansService.checkPlanLimits(userId, 'property');
     if (!planCheck.allowed) {
       throw new ForbiddenException(planCheck.message || 'Você atingiu o limite de imóveis do seu plano.');
     }
 
-    // Note: Property creation is no longer limited by plan - only contract limits apply
-
-    // Generate unique MR3X token for the property
     const token = await this.tokenGenerator.generateToken(TokenEntityType.PROPERTY);
 
     const property = await this.prisma.property.create({
@@ -265,7 +259,6 @@ export class PropertiesService {
         agencyId: agencyId ? BigInt(agencyId) : null,
         brokerId: data.brokerId ? BigInt(data.brokerId) : null,
         createdBy: BigInt(userId),
-        // Additional property details for contracts
         registrationNumber: data.registrationNumber || null,
         builtArea: data.builtArea || null,
         totalArea: data.totalArea || null,
@@ -296,7 +289,6 @@ export class PropertiesService {
       throw new NotFoundException('Property not found');
     }
 
-    // Check if property is frozen
     if (property.isFrozen) {
       throw new ForbiddenException(
         property.frozenReason || 'Este imóvel está congelado. Faça upgrade do seu plano.'
@@ -308,7 +300,6 @@ export class PropertiesService {
     if (data.tenantId) updateData.tenantId = BigInt(data.tenantId);
     if (data.brokerId) updateData.brokerId = BigInt(data.brokerId);
     if (data.agencyId) updateData.agencyId = BigInt(data.agencyId);
-    // Handle state field - frontend may send 'state' or 'stateNumber', database uses 'stateNumber'
     if (data.state !== undefined && data.stateNumber === undefined) {
       updateData.stateNumber = data.state;
       delete updateData.state;
@@ -338,12 +329,10 @@ export class PropertiesService {
       throw new NotFoundException('Property already deleted');
     }
 
-    // Check if property has active contracts
     if (property.contracts && property.contracts.length > 0) {
       throw new ForbiddenException('Não é possível excluir este imóvel pois possui contratos ativos. Exclua os contratos primeiro.');
     }
 
-    // Soft delete the property (maintains referential integrity)
     await this.prisma.property.update({
       where: { id: BigInt(id) },
       data: {
@@ -373,7 +362,6 @@ export class PropertiesService {
       isFrozen: property.isFrozen || false,
       frozenReason: property.frozenReason || null,
       previousStatus: property.previousStatus || null,
-      // Additional property details for contracts
       builtArea: property.builtArea?.toString() || null,
       totalArea: property.totalArea?.toString() || null,
       condominiumFee: property.condominiumFee?.toString() || null,
@@ -385,9 +373,6 @@ export class PropertiesService {
     };
   }
 
-  /**
-   * Check if a property is frozen
-   */
   async isPropertyFrozen(propertyId: string): Promise<boolean> {
     const property = await this.prisma.property.findUnique({
       where: { id: BigInt(propertyId) },
@@ -396,9 +381,6 @@ export class PropertiesService {
     return property?.isFrozen ?? false;
   }
 
-  /**
-   * Assign a broker to a property
-   */
   async assignBroker(propertyId: string, brokerId: string | null, user: any) {
     const property = await this.prisma.property.findUnique({
       where: { id: BigInt(propertyId) },
@@ -488,9 +470,6 @@ export class PropertiesService {
     return this.serializeProperty(updated);
   }
 
-  /**
-   * Assign a tenant to a property
-   */
   async assignTenant(propertyId: string, data: { tenantId?: string | null }, user: any) {
     const property = await this.prisma.property.findUnique({
       where: { id: BigInt(propertyId) },

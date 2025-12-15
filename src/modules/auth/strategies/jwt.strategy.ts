@@ -36,7 +36,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found or inactive');
     }
 
-    // Block frozen users from all API access
     if (user.isFrozen) {
       throw new UnauthorizedException(
         user.frozenReason || 'Sua conta está temporariamente desativada devido ao limite do plano. Entre em contato com o administrador da agência.'

@@ -31,9 +31,6 @@ export class AsaasController {
     private asaasPaymentService: AsaasPaymentService,
   ) {}
 
-  /**
-   * Check if Asaas is configured and enabled
-   */
   @Get('status')
   getStatus() {
     return {
@@ -44,11 +41,6 @@ export class AsaasController {
     };
   }
 
-  // ==================== PAYMENT ENDPOINTS ====================
-
-  /**
-   * Create payment for an entity (invoice, agreement, or microtransaction)
-   */
   @Post('payments')
   async createPayment(@Body() dto: CreateEntityPaymentDto, @Request() req: any) {
     const userId = req.user.id;
@@ -73,41 +65,26 @@ export class AsaasController {
     }
   }
 
-  /**
-   * Get payment status
-   */
   @Get('payments/:paymentId/status')
   async getPaymentStatus(@Param('paymentId') paymentId: string) {
     return this.asaasPaymentService.getPaymentStatus(paymentId);
   }
 
-  /**
-   * Get PIX QR Code for a payment
-   */
   @Get('payments/:paymentId/pix')
   async getPixQrCode(@Param('paymentId') paymentId: string) {
     return this.asaasPaymentService.getPixQrCode(paymentId);
   }
 
-  /**
-   * Cancel a payment
-   */
   @Post('payments/cancel')
   async cancelPayment(@Body() dto: CancelPaymentDto) {
     return this.asaasPaymentService.cancelPayment(dto.paymentId);
   }
 
-  /**
-   * Refund a payment
-   */
   @Post('payments/refund')
   async refundPayment(@Body() dto: RefundPaymentDto) {
     return this.asaasPaymentService.refundPayment(dto.paymentId, dto.value);
   }
 
-  /**
-   * Mark payment as received in cash
-   */
   @Post('payments/receive-in-cash')
   async receiveInCash(@Body() dto: ReceiveInCashDto) {
     return this.asaasPaymentService.markAsReceivedInCash(
@@ -117,9 +94,6 @@ export class AsaasController {
     );
   }
 
-  /**
-   * List payments from Asaas
-   */
   @Get('payments')
   async listPayments(@Query() query: ListPaymentsDto) {
     return this.asaasService.listPayments({
@@ -132,17 +106,11 @@ export class AsaasController {
     });
   }
 
-  /**
-   * Get payment details from Asaas
-   */
   @Get('payments/:paymentId')
   async getPayment(@Param('paymentId') paymentId: string) {
     return this.asaasService.getPayment(paymentId);
   }
 
-  /**
-   * Create direct payment in Asaas
-   */
   @Post('payments/direct')
   async createDirectPayment(@Body() dto: CreateDirectPaymentDto) {
     return this.asaasService.createCompletePayment({
@@ -156,30 +124,17 @@ export class AsaasController {
     });
   }
 
-  // ==================== CUSTOMER ENDPOINTS ====================
-
-  /**
-   * Sync a user to Asaas
-   */
   @Post('customers/sync')
   async syncCustomer(@Body() dto: SyncCustomerDto, @Request() req: any) {
-    // Get user data from database
     const { PrismaService } = await import('../../config/prisma.service');
-    // Note: In production, inject PrismaService properly
     throw new BadRequestException('Use the entity-specific payment creation instead');
   }
 
-  /**
-   * Create customer directly in Asaas
-   */
   @Post('customers')
   async createCustomer(@Body() dto: CreateAsaasCustomerDto) {
     return this.asaasService.createCustomer(dto);
   }
 
-  /**
-   * Find customer by CPF/CNPJ
-   */
   @Get('customers/find')
   async findCustomer(@Query('cpfCnpj') cpfCnpj: string, @Query('externalReference') externalReference: string) {
     if (cpfCnpj) {
@@ -191,37 +146,21 @@ export class AsaasController {
     throw new BadRequestException('Provide cpfCnpj or externalReference');
   }
 
-  /**
-   * Get customer by ID
-   */
   @Get('customers/:customerId')
   async getCustomer(@Param('customerId') customerId: string) {
     return this.asaasService.getCustomer(customerId);
   }
 
-  /**
-   * List customers
-   */
   @Get('customers')
   async listCustomers(@Query('offset') offset: number = 0, @Query('limit') limit: number = 10) {
     return this.asaasService.listCustomers(offset, limit);
   }
 
-  // ==================== SYNC ENDPOINTS ====================
-
-  /**
-   * Sync pending payments (manual trigger)
-   */
   @Post('sync/payments')
   async syncPendingPayments(@Query('agencyId') agencyId?: string) {
     return this.asaasPaymentService.syncPendingPayments(agencyId);
   }
 
-  // ==================== INVOICE-SPECIFIC ENDPOINTS ====================
-
-  /**
-   * Create payment for specific invoice
-   */
   @Post('invoices/:invoiceId/payment')
   async createInvoicePayment(
     @Param('invoiceId') invoiceId: string,
@@ -235,11 +174,6 @@ export class AsaasController {
     });
   }
 
-  // ==================== AGREEMENT-SPECIFIC ENDPOINTS ====================
-
-  /**
-   * Create payment for specific agreement
-   */
   @Post('agreements/:agreementId/payment')
   async createAgreementPayment(
     @Param('agreementId') agreementId: string,

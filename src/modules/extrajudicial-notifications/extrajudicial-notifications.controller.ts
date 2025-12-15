@@ -50,7 +50,6 @@ export class ExtrajudicialNotificationsController {
   @Post('generate-automatic')
   @ApiOperation({ summary: 'Manually trigger automatic generation of extrajudicial notifications for overdue contracts' })
   async generateAutomaticNotifications(@CurrentUser() user: any) {
-    // Only allow admins and agency admins to trigger this
     if (!['CEO', 'ADMIN', 'AGENCY_ADMIN', 'AGENCY_MANAGER'].includes(user?.role)) {
       throw new Error('Unauthorized to trigger automatic generation');
     }
@@ -92,19 +91,14 @@ export class ExtrajudicialNotificationsController {
     let userId: string | undefined = user?.sub;
 
     if (user?.role === 'CEO') {
-      // CEO sees all - don't pass userId to allow seeing everything
       userId = undefined;
     } else if (user?.role === 'ADMIN' || user?.role === 'INDEPENDENT_OWNER') {
-      // For these roles, use userId to see notifications they created or are involved in
-      createdById = undefined; // Don't restrict by createdById, use userId instead
+      createdById = undefined;
     } else if (user?.role === 'INQUILINO') {
-      // INQUILINO (tenant) sees only notifications where they are the debtor
-      // Keep userId to filter by debtorId in the service
-      // Don't set agencyId to avoid filtering by agency
       effectiveAgencyId = undefined;
     } else if (user?.agencyId) {
       effectiveAgencyId = user.agencyId;
-      userId = undefined; // Agency users see all agency notifications
+      userId = undefined;
     }
 
     return this.notificationsService.findAll({
@@ -133,14 +127,11 @@ export class ExtrajudicialNotificationsController {
     let userId: string | undefined;
 
     if (user?.role === 'CEO') {
-      // CEO sees all
     } else if (user?.role === 'ADMIN' || user?.role === 'INDEPENDENT_OWNER') {
       userId = user.sub;
     } else if (user?.role === 'PROPRIETARIO') {
-      // PROPRIETARIO sees notifications where they are the creditor
       userId = user.sub;
     } else if (user?.role === 'INQUILINO') {
-      // INQUILINO sees notifications where they are the debtor
       userId = user.sub;
     } else if (user?.agencyId) {
       agencyId = user.agencyId;
@@ -152,7 +143,7 @@ export class ExtrajudicialNotificationsController {
   }
 
   @Get('token/:token')
-  @ApiOperation({ summary: 'Get notification by token (for external verification)' })
+  @ApiOperation({ summary: 'Get notification by token' })
   async findByToken(@Param('token') token: string) {
     return this.notificationsService.findByToken(token);
   }
@@ -192,8 +183,6 @@ export class ExtrajudicialNotificationsController {
   async remove(@Param('id') id: string) {
     return this.notificationsService.remove(id);
   }
-
-  // ==================== Workflow Actions ====================
 
   @Post(':id/send')
   @ApiOperation({ summary: 'Send notification to debtor' })
@@ -274,8 +263,6 @@ export class ExtrajudicialNotificationsController {
     return this.notificationsService.cancel(id, userId, reason);
   }
 
-  // ==================== PDF Generation ====================
-
   @Get(':id/pdf/provisional')
   @ApiOperation({ summary: 'Generate provisional PDF (with watermark)' })
   async generateProvisionalPdf(
@@ -333,8 +320,6 @@ export class ExtrajudicialNotificationsController {
     res.end(pdfBuffer);
   }
 
-  // ==================== Finalization ====================
-
   @Post(':id/finalize')
   @ApiOperation({ summary: 'Finalize notification with final PDF and hash' })
   @OwnerPermission('extrajudicial-notifications', OwnerAction.APPROVE)
@@ -346,15 +331,11 @@ export class ExtrajudicialNotificationsController {
     return { message: 'Notificacao extrajudicial finalizada com sucesso' };
   }
 
-  // ==================== Hash Verification ====================
-
   @Get(':id/verify')
   @ApiOperation({ summary: 'Verify document hash integrity' })
   async verifyHash(@Param('id') id: string) {
     return this.hashService.verifyNotificationHash(id);
   }
-
-  // ==================== Audit Log ====================
 
   @Get(':id/audit-log')
   @ApiOperation({ summary: 'Get audit log for notification' })

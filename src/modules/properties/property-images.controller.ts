@@ -21,7 +21,6 @@ import { PropertyImagesService } from './property-images.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
-// Configure multer storage
 const storage = diskStorage({
   destination: (_req, _file, cb) => {
     const uploadDir = path.join(process.cwd(), 'uploads', 'properties');
@@ -36,7 +35,6 @@ const storage = diskStorage({
   },
 });
 
-// File filter for images only
 const imageFileFilter = (_req: any, file: any, cb: any) => {
   if (file.mimetype.startsWith('image/')) {
     cb(null, true);
@@ -74,7 +72,7 @@ export class PropertyImagesController {
       storage,
       fileFilter: imageFileFilter,
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB
+        fileSize: 10 * 1024 * 1024,
       },
     }),
   )

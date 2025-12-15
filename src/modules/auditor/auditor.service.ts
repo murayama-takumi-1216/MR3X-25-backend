@@ -5,14 +5,12 @@ import { PrismaService } from '../../config/prisma.service';
 export class AuditorService {
   constructor(private prisma: PrismaService) {}
 
-  // Dashboard Metrics
   async getDashboardMetrics() {
     const now = new Date();
     const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    // Current counts
     const [
       totalAgencies,
       totalUsers,
@@ -27,7 +25,6 @@ export class AuditorService {
       this.prisma.payment.count(),
     ]);
 
-    // Previous month counts for trend calculation
     const [
       agenciesLastMonth,
       usersLastMonth,
@@ -52,7 +49,6 @@ export class AuditorService {
       }),
     ]);
 
-    // Calculate trends
     const calculateTrend = (current: number, previous: number) => {
       if (previous === 0) return { trend: current > 0 ? 'up' : 'neutral', change: current > 0 ? '+100%' : '0%' };
       const diff = current - previous;
@@ -118,7 +114,6 @@ export class AuditorService {
     ];
   }
 
-  // Agency Plan Distribution
   async getAgencyPlanDistribution() {
     const agencies = await this.prisma.agency.groupBy({
       by: ['plan'],
@@ -142,7 +137,6 @@ export class AuditorService {
     }));
   }
 
-  // Contract Status Distribution
   async getContractStatusDistribution() {
     const contracts = await this.prisma.contract.groupBy({
       by: ['status'],
@@ -168,7 +162,6 @@ export class AuditorService {
     }));
   }
 
-  // Monthly Transactions
   async getMonthlyTransactions() {
     const now = new Date();
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
@@ -183,7 +176,6 @@ export class AuditorService {
       },
     });
 
-    // Group by month with both count and total
     const monthlyData = new Map<string, { transactions: number; revenue: number }>();
     for (let i = 5; i >= 0; i--) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -209,9 +201,7 @@ export class AuditorService {
     }));
   }
 
-  // Signature Activity
   async getSignatureActivity() {
-    // Generate last 7 days of signature activity
     const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     const today = new Date();
     const result: { day: string; assinaturas: number; verificacoes: number }[] = [];
@@ -249,7 +239,6 @@ export class AuditorService {
     return result;
   }
 
-  // User Role Distribution
   async getUserRoleDistribution() {
     const users = await this.prisma.user.groupBy({
       by: ['role'],
@@ -280,7 +269,6 @@ export class AuditorService {
     }));
   }
 
-  // Payment Status Distribution
   async getPaymentStatusDistribution() {
     const now = new Date();
     const contracts = await this.prisma.contract.findMany({
@@ -315,26 +303,22 @@ export class AuditorService {
     ];
   }
 
-  // Logs Summary
   async getLogsSummary() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
 
-    // Group logs by event type for the last 24 hours
     const logs = await this.prisma.auditLog.findMany({
       where: { timestamp: { gte: yesterday } },
       select: { event: true },
     });
 
-    // Count by event type
     const eventCounts = new Map<string, number>();
     logs.forEach((log: any) => {
       const eventType = log.event?.split('_')[0] || 'OTHER';
       eventCounts.set(eventType, (eventCounts.get(eventType) || 0) + 1);
     });
 
-    // If no logs, return default categories
     if (eventCounts.size === 0) {
       return [
         { type: 'LOGIN', count: 0 },
@@ -351,7 +335,6 @@ export class AuditorService {
     }));
   }
 
-  // Revenue Trend
   async getRevenueTrend() {
     const now = new Date();
     const result: { month: string; receita: number; taxa: number }[] = [];
@@ -374,14 +357,13 @@ export class AuditorService {
       result.push({
         month: startDate.toLocaleDateString('pt-BR', { month: 'short' }),
         receita,
-        taxa: receita * 0.02, // 2% MR3X fee
+        taxa: receita * 0.02,
       });
     }
 
     return result;
   }
 
-  // Recent Activity
   async getRecentActivity() {
     const logs = await this.prisma.auditLog.findMany({
       orderBy: { timestamp: 'desc' },
@@ -398,7 +380,6 @@ export class AuditorService {
       const hours = timestamp.getHours().toString().padStart(2, '0');
       const minutes = timestamp.getMinutes().toString().padStart(2, '0');
 
-      // Determine type based on event
       let type = 'info';
       if (log.event?.toLowerCase().includes('error') || log.event?.toLowerCase().includes('fail')) {
         type = 'warning';
@@ -414,19 +395,15 @@ export class AuditorService {
     });
   }
 
-  // System Status
   async getSystemStatus() {
-    // Measure real database latency
     const dbStart = Date.now();
     await this.prisma.$queryRaw`SELECT 1`;
     const dbLatency = Date.now() - dbStart;
 
-    // Measure API response time (self-check)
     const apiStart = Date.now();
     await this.prisma.user.count();
     const apiLatency = Date.now() - apiStart;
 
-    // Get last hour error count from audit logs
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const errorCount = await this.prisma.auditLog.count({
       where: {
@@ -435,7 +412,6 @@ export class AuditorService {
       },
     });
 
-    // Determine status based on latency thresholds
     const getStatus = (latency: number, threshold: number) =>
       latency < threshold ? 'healthy' : latency < threshold * 2 ? 'warning' : 'critical';
 
@@ -458,7 +434,6 @@ export class AuditorService {
     ];
   }
 
-  // Summary Stats
   async getSummaryStats() {
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -499,25 +474,21 @@ export class AuditorService {
       this.prisma.contract.count({
         where: { deleted: false, status: 'ATIVO' },
       }),
-      // Count successful login events in last 24h
       this.prisma.auditLog.count({
         where: {
           timestamp: { gte: oneDayAgo },
           event: { contains: 'LOGIN_SUCCESS' },
         },
       }),
-      // Count failed login events in last 24h
       this.prisma.auditLog.count({
         where: {
           timestamp: { gte: oneDayAgo },
           event: { contains: 'LOGIN_FAILED' },
         },
       }),
-      // Total contracts for signature rate
       this.prisma.contract.count({
         where: { deleted: false },
       }),
-      // Signed contracts
       this.prisma.contract.count({
         where: {
           deleted: false,
@@ -530,25 +501,23 @@ export class AuditorService {
     ]);
 
     const revenueThisMonth = Number(paymentsThisMonth._sum.valorPago || 0);
-    const mr3xFee = revenueThisMonth * 0.02; // 2% fee
+    const mr3xFee = revenueThisMonth * 0.02;
     const delinquencyRate = totalActiveContracts > 0
       ? ((overdueContracts / totalActiveContracts) * 100).toFixed(1) + '%'
       : '0%';
 
-    // Calculate success rate based on signed contracts vs total
     const successRate = totalContracts > 0
       ? ((signedContracts / totalContracts) * 100).toFixed(1) + '%'
       : '0%';
 
-    // Calculate login success rate
     const totalLogins = successfulLogins + failedLogins;
     const loginSuccessRate = totalLogins > 0
       ? ((successfulLogins / totalLogins) * 100).toFixed(1) + '%'
       : '100%';
 
     return {
-      successRate, // Signature success rate
-      loginSuccessRate, // Login success rate (last 24h)
+      successRate,
+      loginSuccessRate,
       activeUsers,
       weeklySignatures,
       delinquencyRate,
@@ -556,7 +525,6 @@ export class AuditorService {
     };
   }
 
-  // Get Agencies
   async getAgencies(search?: string) {
     const baseWhere: any = {};
     if (search) {
@@ -567,7 +535,6 @@ export class AuditorService {
       ];
     }
 
-    // Get stats
     const [total, active, inactive, suspended] = await Promise.all([
       this.prisma.agency.count({ where: baseWhere }),
       this.prisma.agency.count({ where: { ...baseWhere, status: 'ACTIVE' } }),
@@ -589,17 +556,14 @@ export class AuditorService {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Get document counts per agency via properties
     const agenciesWithStats = await Promise.all(
       agencies.map(async (agency: any) => {
-        // Count documents via properties that belong to this agency
         const documentCount = await this.prisma.document.count({
           where: {
             property: { agencyId: agency.id },
           },
         }).catch(() => 0);
 
-        // Use updatedAt as last activity indicator
         const lastActivity = new Date(agency.updatedAt || agency.createdAt).toLocaleDateString('pt-BR');
 
         return {
@@ -633,7 +597,6 @@ export class AuditorService {
     };
   }
 
-  // Get Users
   async getUsers(params?: { role?: string; status?: string; search?: string }) {
     const where: any = {};
     if (params?.role) where.role = params.role;
@@ -675,10 +638,7 @@ export class AuditorService {
     }));
   }
 
-  // Get Documents
   async getDocuments(params?: { type?: string; status?: string; search?: string }) {
-    // Since there's no specific document model structure visible,
-    // we'll return contract documents and inspection data
     const contracts = await this.prisma.contract.findMany({
       where: { deleted: false },
       select: {
@@ -709,7 +669,6 @@ export class AuditorService {
     }));
   }
 
-  // Get Logs
   async getLogs(params?: { event?: string; entity?: string; dateFrom?: string; dateTo?: string }) {
     const where: any = {};
     if (params?.event) where.event = { contains: params.event };
@@ -742,7 +701,6 @@ export class AuditorService {
     }));
   }
 
-  // Get Payments
   async getPayments(params?: { status?: string; dateFrom?: string; dateTo?: string }) {
     const where: any = {};
     if (params?.dateFrom) where.dataPagamento = { ...where.dataPagamento, gte: new Date(params.dateFrom) };
@@ -776,7 +734,6 @@ export class AuditorService {
     }));
   }
 
-  // Get Security Data
   async getSecurityData() {
     const [
       recentLogins,
@@ -808,7 +765,6 @@ export class AuditorService {
     };
   }
 
-  // Get Integrity Data
   async getIntegrityData() {
     const [
       totalRecords,

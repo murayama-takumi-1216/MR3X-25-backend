@@ -21,23 +21,16 @@ export class TenantAnalysisService {
     this.analysisValidityDays = this.configService.get<number>('TENANT_ANALYSIS_VALIDITY_DAYS', 30);
   }
 
-  /**
-   * Generate unique token for tenant analysis in format MR3X-PSQ-YEAR-XXXXX
-   */
   private generateAnalysisToken(): string {
     const year = new Date().getFullYear();
     const random = crypto.randomBytes(3).toString('hex').toUpperCase();
     return `MR3X-PSQ-${year}-${random}`;
   }
 
-  /**
-   * Perform a full tenant analysis
-   */
   async analyzeTenant(dto: AnalyzeTenantDto, userId: bigint, agencyId?: bigint) {
     const { document, analysisType = AnalysisType.FULL, name, lgpdAccepted } = dto;
     const documentType = document.length === 11 ? 'CPF' : 'CNPJ';
 
-    // Verify LGPD acceptance
     if (!lgpdAccepted) {
       throw new BadRequestException(
         'Você deve aceitar o Termo de Responsabilidade para realizar a consulta. O usuário declara possuir base legal válida e assume total responsabilidade pelo uso das informações obtidas, nos termos da LGPD.'
@@ -46,14 +39,12 @@ export class TenantAnalysisService {
 
     this.logger.log(`Starting ${analysisType} analysis for document: ${this.maskDocument(document)}`);
 
-    // Check for recent valid analysis
     const existingAnalysis = await this.findRecentAnalysis(document);
     if (existingAnalysis) {
       this.logger.log(`Found recent valid analysis for document: ${this.maskDocument(document)}`);
       return this.formatAnalysisResponse(existingAnalysis);
     }
 
-    // Perform analysis FIRST - don't save to DB if it fails
     let financial, background, documentValidation;
 
     try {
@@ -71,23 +62,18 @@ export class TenantAnalysisService {
     } catch (error) {
       this.logger.error(`Analysis failed for ${this.maskDocument(document)}: ${error.message}`);
 
-      // Extract user-friendly error message
       const errorMessage = this.extractErrorMessage(error);
 
-      // Don't save to DB - just throw the error with clear message
       throw new Error(errorMessage);
     }
 
-    // Calculate risk score and level
     const { riskScore, riskLevel } = this.calculateRiskScore(financial, background, documentValidation);
     const recommendation = this.getRecommendation(riskScore, riskLevel, background);
     const validUntil = new Date();
     validUntil.setDate(validUntil.getDate() + this.analysisValidityDays);
 
-    // Generate unique token
     const token = this.generateAnalysisToken();
 
-    // Extract basic data from document validation or financial data
     const isCPF = documentType === 'CPF';
     const address = documentValidation?.address || financial?.address;
     const fullAddress = address
@@ -95,7 +81,6 @@ export class TenantAnalysisService {
       : null;
     const phones = documentValidation?.phones || financial?.phones || [];
 
-    // Only save to DB after successful analysis
     const analysis = await this.prisma.tenantAnalysis.create({
       data: {
         token,
@@ -105,7 +90,6 @@ export class TenantAnalysisService {
         requestedById: userId,
         agencyId,
 
-        // Basic data for CPF
         ...(isCPF ? {
           personStatus: documentValidation?.situacaoCadastral || financial?.situacaoCadastral,
           personAddress: fullAddress,
@@ -117,10 +101,9 @@ export class TenantAnalysisService {
           motherName: documentValidation?.motherName || financial?.motherName,
         } : {}),
 
-        // Basic data for CNPJ
         ...(!isCPF ? {
           companyName: documentValidation?.registrationName || financial?.name,
-          tradingName: null, // Would need additional API call
+          tradingName: null,
           companyStatus: documentValidation?.situacaoCadastral || financial?.situacaoCadastral,
           companyAddress: fullAddress,
           companyCity: address?.cidade,
@@ -129,11 +112,9 @@ export class TenantAnalysisService {
           companyPhone: phones?.[0] || null,
         } : {}),
 
-        // LGPD tracking
         lgpdAcceptedAt: new Date(),
         lgpdAcceptedBy: userId,
 
-        // Financial data
         creditScore: financial?.creditScore,
         totalDebts: financial?.totalDebts,
         activeDebts: financial?.activeDebts,
@@ -143,13 +124,11 @@ export class TenantAnalysisService {
         financialDetails: financial?.debtDetails ? JSON.stringify(financial.debtDetails) : null,
         financialStatus: financial?.status,
 
-        // Criminal data
         hasCriminalRecords: background?.hasCriminalRecords,
         criminalRecordsCount: background?.criminalRecords?.length || 0,
         criminalDetails: background?.criminalRecords ? JSON.stringify(background.criminalRecords) : null,
         criminalStatus: background?.hasCriminalRecords ? 'WARNING' : 'CLEAR',
 
-        // Judicial data
         hasJudicialRecords: background?.hasJudicialRecords,
         judicialRecordsCount: background?.judicialRecords?.length || 0,
         hasEvictions: background?.hasEvictions,
@@ -157,32 +136,27 @@ export class TenantAnalysisService {
         judicialDetails: background?.judicialRecords ? JSON.stringify(background.judicialRecords) : null,
         judicialStatus: background?.hasEvictions ? 'CRITICAL' : (background?.hasJudicialRecords ? 'WARNING' : 'CLEAR'),
 
-        // Protest data
         hasProtests: background?.hasProtests,
         protestsCount: background?.protestRecords?.length || 0,
         totalProtestValue: background?.totalProtestValue,
         protestDetails: background?.protestRecords ? JSON.stringify(background.protestRecords) : null,
         protestStatus: background?.hasProtests ? 'WARNING' : 'CLEAR',
 
-        // Document validation
         documentValid: documentValidation?.documentValid,
         documentActive: documentValidation?.documentActive,
         documentOwnerMatch: documentValidation?.documentOwnerMatch,
         hasFraudAlerts: documentValidation?.hasFraudAlerts,
         documentStatus: documentValidation?.status,
 
-        // Risk assessment
         riskScore,
         riskLevel,
         recommendation: recommendation.recommendation,
         recommendationNotes: recommendation.notes,
 
-        // Status
         status: TenantAnalysisStatus.COMPLETED,
         analyzedAt: new Date(),
         validUntil,
 
-        // Raw response for auditing
         rawResponse: JSON.stringify({ financial, background, documentValidation }),
       },
       include: {
@@ -196,13 +170,9 @@ export class TenantAnalysisService {
     return this.formatAnalysisResponse(analysis);
   }
 
-  /**
-   * Extract user-friendly error message from API errors
-   */
   private extractErrorMessage(error: any): string {
     const message = error.message || 'Unknown error';
 
-    // Map common error messages to user-friendly Portuguese messages
     if (message.includes('Insufficient Cellere credits')) {
       return 'Créditos insuficientes na API Cellere. Por favor, adicione mais créditos na sua conta.';
     }
@@ -225,28 +195,16 @@ export class TenantAnalysisService {
       return 'Erro interno no serviço de análise. Tente novamente mais tarde.';
     }
 
-    // Return original message if no mapping found
     return `Erro na análise: ${message}`;
   }
 
-  /**
-   * Get analysis history with filters
-   * Each user type only sees analyses from their own scope:
-   * - Agency users (AGENCY_ADMIN, AGENCY_MANAGER, BROKER): only their agency's analyses
-   * - INDEPENDENT_OWNER/PROPRIETARIO: only their own analyses
-   * - ADMIN: can see all platform internal searches (not from agencies)
-   * - CEO: no access to search history (platform oversight, not operational)
-   */
   async getAnalysisHistory(dto: GetAnalysisHistoryDto, userId: bigint, userRole: string, agencyId?: bigint) {
     const { document, riskLevel, status, page = 1, limit = 10 } = dto;
     const skip = (page - 1) * limit;
 
-    // Build where clause based on user role - each scope only sees their own data
     const where: any = {};
 
-    // Apply role-based scoping
     if (userRole === 'CEO') {
-      // CEO should not see search history - return empty
       return {
         data: [],
         total: 0,
@@ -255,10 +213,8 @@ export class TenantAnalysisService {
         totalPages: 0,
       };
     } else if (userRole === 'ADMIN') {
-      // ADMIN sees only platform internal searches (no agencyId)
       where.agencyId = null;
     } else if (['AGENCY_ADMIN', 'AGENCY_MANAGER', 'BROKER'].includes(userRole)) {
-      // Agency users see only their agency's analyses
       if (!agencyId) {
         return {
           data: [],
@@ -270,10 +226,8 @@ export class TenantAnalysisService {
       }
       where.agencyId = agencyId;
     } else if (['INDEPENDENT_OWNER', 'PROPRIETARIO'].includes(userRole)) {
-      // Independent owners and proprietors only see their own analyses
       where.requestedById = userId;
     } else {
-      // Unknown role - return empty
       return {
         data: [],
         total: 0,
@@ -283,7 +237,6 @@ export class TenantAnalysisService {
       };
     }
 
-    // Apply additional filters
     if (document) {
       where.document = { contains: document };
     }
@@ -326,7 +279,6 @@ export class TenantAnalysisService {
           name: item.requestedBy.name,
           email: item.requestedBy.email,
         },
-        // Include basicData for tenant registration
         basicData: item.documentType === 'CPF' ? {
           type: 'CPF',
           phone: item.personPhone,
@@ -351,14 +303,6 @@ export class TenantAnalysisService {
     };
   }
 
-  /**
-   * Get a specific analysis by ID
-   * Access is restricted based on user role scope:
-   * - Agency users: only their agency's analyses
-   * - Independent owners/proprietors: only their own analyses
-   * - ADMIN: only platform internal analyses
-   * - CEO: no access
-   */
   async getAnalysisById(id: bigint, userId: bigint, userRole: string, agencyId?: bigint) {
     const analysis = await this.prisma.tenantAnalysis.findUnique({
       where: { id },
@@ -373,48 +317,31 @@ export class TenantAnalysisService {
       throw new NotFoundException('Análise não encontrada');
     }
 
-    // Apply role-based access control
     if (userRole === 'CEO') {
-      // CEO should not access individual analyses
       throw new NotFoundException('Acesso negado. CEO não tem acesso ao histórico de pesquisas.');
     } else if (userRole === 'ADMIN') {
-      // ADMIN can only access platform internal analyses (no agencyId)
       if (analysis.agencyId !== null) {
         throw new NotFoundException('Análise não encontrada');
       }
     } else if (['AGENCY_ADMIN', 'AGENCY_MANAGER', 'BROKER'].includes(userRole)) {
-      // Agency users can only access their agency's analyses
       if (!agencyId || analysis.agencyId !== agencyId) {
         throw new NotFoundException('Análise não encontrada');
       }
     } else if (['INDEPENDENT_OWNER', 'PROPRIETARIO'].includes(userRole)) {
-      // Independent owners/proprietors can only access their own analyses
       if (analysis.requestedById !== userId) {
         throw new NotFoundException('Análise não encontrada');
       }
     } else {
-      // Unknown role - deny access
       throw new NotFoundException('Análise não encontrada');
     }
 
     return this.formatAnalysisResponse(analysis);
   }
 
-  /**
-   * Get statistics for dashboard
-   * Statistics are scoped based on user role:
-   * - Agency users: only their agency's statistics
-   * - Independent owners/proprietors: only their own statistics
-   * - ADMIN: only platform internal statistics
-   * - CEO: no access to statistics (returns empty)
-   */
   async getAnalysisStats(userId: bigint, userRole: string, agencyId?: bigint) {
-    // Build where clause based on user role
     const where: any = {};
 
-    // Apply role-based scoping
     if (userRole === 'CEO') {
-      // CEO should not see search statistics - return empty
       return {
         total: 0,
         byRiskLevel: {},
@@ -422,10 +349,8 @@ export class TenantAnalysisService {
         recentAnalyses: [],
       };
     } else if (userRole === 'ADMIN') {
-      // ADMIN sees only platform internal statistics (no agencyId)
       where.agencyId = null;
     } else if (['AGENCY_ADMIN', 'AGENCY_MANAGER', 'BROKER'].includes(userRole)) {
-      // Agency users see only their agency's statistics
       if (!agencyId) {
         return {
           total: 0,
@@ -436,10 +361,8 @@ export class TenantAnalysisService {
       }
       where.agencyId = agencyId;
     } else if (['INDEPENDENT_OWNER', 'PROPRIETARIO'].includes(userRole)) {
-      // Independent owners/proprietors only see their own statistics
       where.requestedById = userId;
     } else {
-      // Unknown role - return empty
       return {
         total: 0,
         byRiskLevel: {},
@@ -496,8 +419,6 @@ export class TenantAnalysisService {
     };
   }
 
-  // ==================== Private Methods ====================
-
   private async findRecentAnalysis(document: string) {
     const analysis = await this.prisma.tenantAnalysis.findFirst({
       where: {
@@ -533,15 +454,12 @@ export class TenantAnalysisService {
       includeProtests: true,
     });
 
-    // Enhance with InfoSimples CENPROT-SP protest data
     try {
       const infoSimplesProtests = await this.infoSimplesService.analyzeProtests(document);
 
-      // Merge protest data from InfoSimples
       if (infoSimplesProtests && infoSimplesProtests.hasProtests) {
         this.logger.log(`InfoSimples found ${infoSimplesProtests.totalProtests} protests for ${this.maskDocument(document)}`);
 
-        // Map InfoSimples protests to our format
         const mappedProtests = infoSimplesProtests.protests.map(p => ({
           notaryOffice: p.notaryOffice,
           amount: p.amount || 0,
@@ -555,7 +473,6 @@ export class TenantAnalysisService {
           source: 'INFOSIMPLES_CENPROT_SP',
         }));
 
-        // Combine protests from both sources, removing duplicates by protocol/amount
         const existingProtests = baseBackground.protestRecords || [];
         const allProtests = [...existingProtests];
 
@@ -569,13 +486,11 @@ export class TenantAnalysisService {
           }
         }
 
-        // Update background with merged protest data
         baseBackground = {
           ...baseBackground,
           hasProtests: allProtests.length > 0,
           protestRecords: allProtests,
           totalProtestValue: allProtests.reduce((sum, p) => sum + (p.amount || 0), 0),
-          // Add InfoSimples specific data
           infoSimplesData: {
             source: infoSimplesProtests.source,
             consultationProtocol: infoSimplesProtests.consultationProtocol,
@@ -586,7 +501,6 @@ export class TenantAnalysisService {
       }
     } catch (error) {
       this.logger.warn(`Failed to fetch InfoSimples protest data: ${error.message}`);
-      // Continue with base background data if InfoSimples fails
     }
 
     return baseBackground;
@@ -597,9 +511,8 @@ export class TenantAnalysisService {
   }
 
   private calculateRiskScore(financial: any, background: any, documentValidation: any): { riskScore: number; riskLevel: RiskLevel } {
-    let score = 1000; // Start with perfect score
+    let score = 1000;
 
-    // Financial factors (40% weight)
     if (financial) {
       if (financial.creditScore) {
         score -= Math.max(0, (1000 - financial.creditScore) * 0.3);
@@ -618,9 +531,7 @@ export class TenantAnalysisService {
       }
     }
 
-    // Background factors (50% weight)
     if (background) {
-      // Criminal records - severe impact
       if (background.hasCriminalRecords) {
         background.criminalRecords?.forEach((record: any) => {
           if (record.severity === 'HIGH') score -= 250;
@@ -629,7 +540,6 @@ export class TenantAnalysisService {
         });
       }
 
-      // Judicial records - classify by type and severity
       if (background.hasJudicialRecords && background.judicialRecords?.length > 0) {
         let judicialDeduction = 0;
 
@@ -637,37 +547,30 @@ export class TenantAnalysisService {
           const type = (record.type || '').toLowerCase();
           const processNumber = (record.processNumber || '').toLowerCase();
 
-          // Check if it's an eviction-related process
           if (this.isEvictionRelated(type)) {
-            judicialDeduction += 100; // Eviction is serious
+            judicialDeduction += 100;
           }
-          // Minor records (TERMO CIRCUNSTANCIADO, traffic, small claims)
           else if (this.isMinorJudicialRecord(type)) {
-            judicialDeduction += 5; // Minor impact
+            judicialDeduction += 5;
           }
-          // Regular lawsuits
           else {
             judicialDeduction += 20;
           }
         });
 
-        // Cap judicial deduction at 200 points max
         score -= Math.min(200, judicialDeduction);
       }
 
-      // Evictions - very severe impact (already counted separately)
       if (background.hasEvictions) {
         score -= Math.min(300, background.evictionsCount * 150);
       }
 
-      // Protests
       if (background.hasProtests) {
         score -= Math.min(100, (background.protestRecords?.length || 0) * 20);
         score -= Math.min(100, (background.totalProtestValue || 0) / 500);
       }
     }
 
-    // Document validation (10% weight)
     if (documentValidation) {
       if (!documentValidation.documentValid) {
         score -= 200;
@@ -680,10 +583,8 @@ export class TenantAnalysisService {
       }
     }
 
-    // Ensure score is within bounds
     score = Math.max(0, Math.min(1000, Math.round(score)));
 
-    // Determine risk level
     let riskLevel: RiskLevel;
     if (score >= 800) riskLevel = RiskLevel.LOW;
     else if (score >= 600) riskLevel = RiskLevel.MEDIUM;
@@ -695,9 +596,6 @@ export class TenantAnalysisService {
     return { riskScore: score, riskLevel };
   }
 
-  /**
-   * Check if a judicial record type is eviction-related
-   */
   private isEvictionRelated(type: string): boolean {
     const evictionKeywords = [
       'despejo', 'desocupação', 'desocupacao', 'imissão', 'imissao',
@@ -707,9 +605,6 @@ export class TenantAnalysisService {
     return evictionKeywords.some(keyword => type.includes(keyword));
   }
 
-  /**
-   * Check if a judicial record is minor (low impact)
-   */
   private isMinorJudicialRecord(type: string): boolean {
     const minorKeywords = [
       'termo circunstanciado', 'tco', 'juizado especial', 'pequenas causas',
@@ -722,7 +617,6 @@ export class TenantAnalysisService {
   }
 
   private getRecommendation(riskScore: number, riskLevel: RiskLevel, background: any): { recommendation: string; notes: string } {
-    // Check for automatic rejection conditions
     if (background?.hasEvictions && background.evictionsCount >= 2) {
       return {
         recommendation: 'REJECTED',
@@ -740,7 +634,6 @@ export class TenantAnalysisService {
       }
     }
 
-    // Score-based recommendations
     if (riskLevel === RiskLevel.LOW) {
       return {
         recommendation: 'APPROVED',
@@ -779,7 +672,6 @@ export class TenantAnalysisService {
       documentType: analysis.documentType,
       name: analysis.name,
 
-      // Basic data for CPF
       basicData: isCPF ? {
         type: 'CPF',
         name: analysis.name,
@@ -804,7 +696,6 @@ export class TenantAnalysisService {
         openingDate: analysis.companyOpeningDate?.toISOString()?.split('T')[0],
       },
 
-      // Photo
       photo: analysis.photoPath ? {
         path: analysis.photoPath,
         filename: analysis.photoFilename,
@@ -853,7 +744,6 @@ export class TenantAnalysisService {
       analyzedAt: analysis.analyzedAt?.toISOString(),
       validUntil: analysis.validUntil?.toISOString(),
 
-      // LGPD tracking
       lgpd: {
         acceptedAt: analysis.lgpdAcceptedAt?.toISOString(),
         acceptedBy: analysis.lgpdAcceptedBy?.toString(),
@@ -888,14 +778,11 @@ export class TenantAnalysisService {
   private maskDocument(document: string): string {
     if (!document) return '';
     if (document.length === 11) {
-      // CPF: show first 3 and last 2 digits
       return `${document.slice(0, 3)}.***.***-${document.slice(-2)}`;
     }
-    // CNPJ: show first 2 and last 2 digits
     return `${document.slice(0, 2)}.***.***/${document.slice(-6, -2)}-${document.slice(-2)}`;
   }
 
-  // Legacy methods for backward compatibility
   async analyzeFinancial(document: string) {
     return this.getFinancialAnalysis(document);
   }
@@ -905,10 +792,7 @@ export class TenantAnalysisService {
   }
 
   async getFullAnalysis(document: string) {
-    // This is the legacy method - create a simple DTO and call the new method
-    // For legacy support, we assume LGPD acceptance
     const dto: AnalyzeTenantDto = { document, analysisType: AnalysisType.FULL, lgpdAccepted: true };
-    // Note: This will need a userId in production - for legacy support, we'll use a system user
     return this.analyzeTenant(dto, BigInt(1));
   }
 
@@ -921,9 +805,6 @@ export class TenantAnalysisService {
     };
   }
 
-  /**
-   * Upload photo for an analysis
-   */
   async uploadPhoto(analysisId: bigint, photoPath: string, photoFilename: string, userId: bigint) {
     const analysis = await this.prisma.tenantAnalysis.findUnique({
       where: { id: analysisId },
@@ -933,7 +814,6 @@ export class TenantAnalysisService {
       throw new NotFoundException('Análise não encontrada');
     }
 
-    // Delete old photo if exists
     if (analysis.photoPath) {
       try {
         const fs = require('fs');

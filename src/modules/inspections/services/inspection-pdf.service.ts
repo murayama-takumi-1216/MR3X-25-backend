@@ -68,7 +68,6 @@ export class InspectionPdfService {
   ) {
     this.uploadsDir = path.join(process.cwd(), 'uploads', 'inspections');
 
-    // Ensure directories exist
     this.ensureDirectoryExists(path.join(this.uploadsDir, 'provisional'));
     this.ensureDirectoryExists(path.join(this.uploadsDir, 'final'));
   }
@@ -79,9 +78,6 @@ export class InspectionPdfService {
     }
   }
 
-  /**
-   * Generate unique token in format MR3X-INS-YEAR-XXXX-XXXX
-   */
   generateInspectionToken(): string {
     const year = new Date().getFullYear();
     const random1 = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -89,9 +85,6 @@ export class InspectionPdfService {
     return `MR3X-INS-${year}-${random1}-${random2}`;
   }
 
-  /**
-   * Generate barcode as base64 PNG
-   */
   async generateBarcodeBase64(token: string): Promise<string> {
     try {
       const png = await bwipjs.toBuffer({
@@ -109,9 +102,6 @@ export class InspectionPdfService {
     }
   }
 
-  /**
-   * Generate QR code as base64 PNG
-   */
   async generateQRCodeBase64(url: string): Promise<string> {
     try {
       const qrDataUrl = await QRCode.toDataURL(url, {
@@ -129,9 +119,6 @@ export class InspectionPdfService {
     }
   }
 
-  /**
-   * Get inspection data for PDF generation
-   */
   private async getInspectionData(inspectionId: bigint): Promise<InspectionData> {
     const inspection = await this.prisma.inspection.findUnique({
       where: { id: inspectionId },
@@ -151,7 +138,6 @@ export class InspectionPdfService {
       throw new NotFoundException('Vistoria não encontrada');
     }
 
-    // Get agency if exists
     const agency = inspection.agencyId
       ? await this.prisma.agency.findUnique({
           where: { id: inspection.agencyId },
@@ -249,9 +235,6 @@ export class InspectionPdfService {
     };
   }
 
-  /**
-   * Render HTML template with data
-   */
   private async renderHtmlTemplate(data: InspectionData, isProvisional: boolean): Promise<string> {
     const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify/inspection/${data.token}`;
     const barcodeBase64 = await this.generateBarcodeBase64(data.token);
@@ -315,9 +298,6 @@ export class InspectionPdfService {
     return colors[condition] || '#333';
   }
 
-  /**
-   * Generate provisional PDF (with watermark)
-   */
   async generateProvisionalPdf(inspectionId: bigint): Promise<Buffer> {
     const data = await this.getInspectionData(inspectionId);
     const html = await this.renderHtmlTemplate(data, true);
@@ -344,7 +324,6 @@ export class InspectionPdfService {
 
       const pdfBuffer = Buffer.from(pdfUint8Array);
 
-      // Save provisional PDF
       const timestamp = Date.now();
       const filename = `inspection-provisional-${timestamp}.pdf`;
       const filePath = path.join(this.uploadsDir, 'provisional', data.id, filename);
@@ -352,7 +331,6 @@ export class InspectionPdfService {
       this.ensureDirectoryExists(path.dirname(filePath));
       fs.writeFileSync(filePath, pdfBuffer);
 
-      // Generate and store provisional hash
       const hash = this.hashService.generateHash(pdfBuffer);
       await this.prisma.inspection.update({
         where: { id: inspectionId },
@@ -369,9 +347,6 @@ export class InspectionPdfService {
     }
   }
 
-  /**
-   * Generate final PDF (no watermark, with all signatures)
-   */
   async generateFinalPdf(inspectionId: bigint): Promise<Buffer> {
     const data = await this.getInspectionData(inspectionId);
     const html = await this.renderHtmlTemplate(data, false);
@@ -398,7 +373,6 @@ export class InspectionPdfService {
 
       const pdfBuffer = Buffer.from(pdfUint8Array);
 
-      // Save final PDF
       const timestamp = Date.now();
       const filename = `inspection-final-${timestamp}.pdf`;
       const filePath = path.join(this.uploadsDir, 'final', data.id, filename);
@@ -406,7 +380,6 @@ export class InspectionPdfService {
       this.ensureDirectoryExists(path.dirname(filePath));
       fs.writeFileSync(filePath, pdfBuffer);
 
-      // Generate and store final hash
       const hash = this.hashService.generateHash(pdfBuffer);
       const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify/inspection/${data.token}`;
 
@@ -427,9 +400,6 @@ export class InspectionPdfService {
     }
   }
 
-  /**
-   * Get stored PDF file
-   */
   async getStoredPdf(inspectionId: bigint, type: 'provisional' | 'final'): Promise<Buffer | null> {
     const inspection = await this.prisma.inspection.findUnique({
       where: { id: inspectionId },
@@ -449,9 +419,6 @@ export class InspectionPdfService {
     return fs.readFileSync(filePath);
   }
 
-  /**
-   * Get inspection HTML template
-   */
   private getInspectionHtmlTemplate(data: any): string {
     const itemsHtml = data.items
       .map(

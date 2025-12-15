@@ -20,7 +20,6 @@ export class PlansController {
     private readonly microtransactionBillingService: MicrotransactionBillingService,
   ) {}
 
-  // ==================== PUBLIC PLAN ENDPOINTS ====================
 
   @Get()
   @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.AGENCY_MANAGER, UserRole.BROKER, UserRole.PROPRIETARIO, UserRole.INDEPENDENT_OWNER, UserRole.PLATFORM_MANAGER)
@@ -46,8 +45,6 @@ export class PlansController {
     return config;
   }
 
-  // ==================== PLAN MODIFICATION REQUESTS ====================
-  // NOTE: These routes MUST be defined before the :id route to avoid being caught by it
 
   @Get('modification-requests/pending')
   @Roles(UserRole.CEO)
@@ -70,7 +67,6 @@ export class PlansController {
     return this.plansService.getPlanById(id);
   }
 
-  // ==================== AGENCY USAGE & BILLING ====================
 
   @Get('agency/:agencyId/usage')
   @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.PLATFORM_MANAGER)
@@ -115,7 +111,6 @@ export class PlansController {
     return this.plansService.getMicrotransactionPricingForAgency(agencyId);
   }
 
-  // ==================== PLAN LIMITS & ENFORCEMENT ====================
 
   @Get('agency/:agencyId/frozen')
   @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.PLATFORM_MANAGER)
@@ -184,7 +179,6 @@ export class PlansController {
     return { price };
   }
 
-  // ==================== UPGRADE & DOWNGRADE ====================
 
   @Get('agency/:agencyId/calculate-upgrade/:targetPlan')
   @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.PLATFORM_MANAGER)
@@ -223,7 +217,6 @@ export class PlansController {
     return this.planEnforcementService.enforceCurrentPlanLimits(agencyId);
   }
 
-  // ==================== API ADD-ON ====================
 
   @Post('agency/:agencyId/api-addon/enable')
   @Roles(UserRole.AGENCY_ADMIN)
@@ -247,7 +240,6 @@ export class PlansController {
     return this.planEnforcementService.checkApiAccessAllowed(agencyId);
   }
 
-  // ==================== MICROTRANSACTION CHARGES ====================
 
   @Post('agency/:agencyId/charge/extra-contract')
   @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.PLATFORM_MANAGER)
@@ -328,7 +320,6 @@ export class PlansController {
     return { success: true, message: 'Monthly usage reset successfully' };
   }
 
-  // ==================== PLAN MODIFICATION & UPDATE ====================
 
   @Put(':id')
   @Roles(UserRole.CEO, UserRole.ADMIN)
@@ -375,7 +366,6 @@ export class PlansController {
     return this.plansService.updateSubscriberCounts();
   }
 
-  // ==================== LEGACY ENDPOINTS (BACKWARD COMPATIBILITY) ====================
 
   @Get('user/:userId/limits')
   @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.INDEPENDENT_OWNER)

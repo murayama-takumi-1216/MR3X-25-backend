@@ -3,7 +3,6 @@ import { PrismaService } from '../../config/prisma.service';
 import { PLANS_CONFIG, getPlanLimits, getPlanByName, EntityType, PlanLimits } from './plans.data';
 import { UserRole } from '@prisma/client';
 
-// Message templates in Portuguese
 export const PLAN_MESSAGES = {
   CONTRACT_FROZEN: 'Este contrato está congelado. Seu plano atual permite apenas {limit} contrato(s) ativo(s). Faça upgrade para desbloquear.',
   USER_FROZEN: 'Este usuário está congelados devido ao limite do plano. Faça upgrade para reativar.',
@@ -26,7 +25,6 @@ export const PLAN_MESSAGES = {
   API_ADDON_AVAILABLE: 'Acesso à API disponível como add-on por R$ 29,00/mês no plano PROFESSIONAL.',
 };
 
-// Result interfaces
 export interface OperationResult {
   allowed: boolean;
   message?: string;
@@ -101,16 +99,10 @@ export interface FrozenEntitiesList {
 export class PlanEnforcementService {
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * Get plan limits for a specific entity type
-   */
   getPlanLimitsForAgency(planName: string): PlanLimits {
     return getPlanLimits(planName, 'agency');
   }
 
-  /**
-   * Check if a contract operation is allowed based on agency plan
-   */
   async checkContractOperationAllowed(
     agencyId: string,
     operation: 'create' | 'update' | 'delete',
@@ -128,7 +120,6 @@ export class PlanEnforcementService {
     const planConfig = getPlanByName(agency.plan) || PLANS_CONFIG.FREE;
     const limits = this.getPlanLimitsForAgency(agency.plan);
 
-    // For update/delete, check if the specific contract is frozen
     if ((operation === 'update' || operation === 'delete') && contractId) {
       const contract = await this.prisma.contract.findUnique({
         where: { id: BigInt(contractId) },
@@ -143,7 +134,6 @@ export class PlanEnforcementService {
       }
     }
 
-    // For create, check if agency has reached contract limit
     if (operation === 'create') {
       const activeContractCount = await this.prisma.contract.count({
         where: {
@@ -172,9 +162,6 @@ export class PlanEnforcementService {
     return { allowed: true };
   }
 
-  /**
-   * Check if a user operation is allowed based on agency plan
-   */
   async checkUserOperationAllowed(
     agencyId: string,
     operation: 'create' | 'update' | 'delete',
@@ -192,7 +179,6 @@ export class PlanEnforcementService {
     const planConfig = getPlanByName(agency.plan) || PLANS_CONFIG.FREE;
     const limits = this.getPlanLimitsForAgency(agency.plan);
 
-    // For update/delete, check if the specific user is frozen
     if ((operation === 'update' || operation === 'delete') && userId) {
       const user = await this.prisma.user.findUnique({
         where: { id: BigInt(userId) },
@@ -207,9 +193,7 @@ export class PlanEnforcementService {
       }
     }
 
-    // For create, check if agency has reached user limit
     if (operation === 'create') {
-      // Count ALL users (except AGENCY_ADMIN who is never frozen)
       const activeUserCount = await this.prisma.user.count({
         where: {
           agencyId: BigInt(agencyId),
@@ -221,7 +205,6 @@ export class PlanEnforcementService {
         },
       });
 
-      // Check if unlimited users
       if (planConfig.unlimitedUsers || limits.users >= 9999) {
         return { allowed: true };
       }
@@ -241,10 +224,6 @@ export class PlanEnforcementService {
     return { allowed: true };
   }
 
-  /**
-   * Check if a property operation is allowed based on user/agency plan
-   * This checks against maxProperties limit
-   */
   async checkPropertyOperationAllowed(
     userId: string,
     operation: 'create' | 'update' | 'delete',
@@ -259,7 +238,6 @@ export class PlanEnforcementService {
       return { allowed: false, message: 'Usuário não encontrado' };
     }
 
-    // For update/delete, check if the specific property is frozen
     if ((operation === 'update' || operation === 'delete') && propertyId) {
       const property = await this.prisma.property.findUnique({
         where: { id: BigInt(propertyId) },
@@ -274,9 +252,7 @@ export class PlanEnforcementService {
       }
     }
 
-    // For create, check property limits
     if (operation === 'create') {
-      // If user belongs to an agency, check agency limits
       if (user.agencyId) {
         const agency = await this.prisma.agency.findUnique({
           where: { id: user.agencyId },
@@ -306,7 +282,6 @@ export class PlanEnforcementService {
           }
         }
       } else {
-        // For independent owners, check their personal plan limits
         const planConfig = getPlanByName(user.plan || 'FREE') || PLANS_CONFIG.FREE;
 
         const propertyCount = await this.prisma.property.count({
@@ -333,10 +308,6 @@ export class PlanEnforcementService {
     return { allowed: true };
   }
 
-  /**
-   * Check if a tenant operation is allowed based on user/agency plan
-   * This checks against maxTenants limit
-   */
   async checkTenantOperationAllowed(
     userId: string,
     operation: 'create' | 'update' | 'delete',
@@ -351,7 +322,6 @@ export class PlanEnforcementService {
       return { allowed: false, message: 'Usuário não encontrado' };
     }
 
-    // For update/delete, check if the specific tenant user is frozen
     if ((operation === 'update' || operation === 'delete') && tenantId) {
       const tenant = await this.prisma.user.findUnique({
         where: { id: BigInt(tenantId) },
@@ -366,9 +336,7 @@ export class PlanEnforcementService {
       }
     }
 
-    // For create, check tenant limits
     if (operation === 'create') {
-      // If user belongs to an agency, check agency limits
       if (user.agencyId) {
         const agency = await this.prisma.agency.findUnique({
           where: { id: user.agencyId },
@@ -378,7 +346,6 @@ export class PlanEnforcementService {
         if (agency) {
           const planConfig = getPlanByName(agency.plan) || PLANS_CONFIG.FREE;
 
-          // Count tenants (INQUILINO role users) linked to this agency
           const tenantCount = await this.prisma.user.count({
             where: {
               agencyId: user.agencyId,
@@ -388,7 +355,6 @@ export class PlanEnforcementService {
             },
           });
 
-          // maxTenants 9999 means unlimited
           if (planConfig.maxTenants < 9999 && tenantCount >= planConfig.maxTenants) {
             return {
               allowed: false,
@@ -401,10 +367,8 @@ export class PlanEnforcementService {
           }
         }
       } else {
-        // For independent owners, check their personal plan limits
         const planConfig = getPlanByName(user.plan || 'FREE') || PLANS_CONFIG.FREE;
 
-        // Count tenants linked to this independent owner's properties
         const tenantCount = await this.prisma.user.count({
           where: {
             createdBy: user.id,
@@ -414,7 +378,6 @@ export class PlanEnforcementService {
           },
         });
 
-        // maxTenants 9999 means unlimited
         if (planConfig.maxTenants < 9999 && tenantCount >= planConfig.maxTenants) {
           return {
             allowed: false,
@@ -431,9 +394,6 @@ export class PlanEnforcementService {
     return { allowed: true };
   }
 
-  /**
-   * Check if an inspection can be performed
-   */
   async checkInspectionAllowed(agencyId: string): Promise<OperationResult> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -456,9 +416,6 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Check if a settlement/agreement can be created
-   */
   async checkSettlementAllowed(agencyId: string): Promise<OperationResult> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -481,9 +438,6 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Check if payment can be registered for a contract
-   */
   async checkPaymentOperationAllowed(contractId: string): Promise<OperationResult> {
     const contract = await this.prisma.contract.findUnique({
       where: { id: BigInt(contractId) },
@@ -504,9 +458,6 @@ export class PlanEnforcementService {
     return { allowed: true };
   }
 
-  /**
-   * Check if a user can login (frozen users cannot login)
-   */
   async checkUserCanLogin(userId: string): Promise<OperationResult> {
     const user = await this.prisma.user.findUnique({
       where: { id: BigInt(userId) },
@@ -527,9 +478,6 @@ export class PlanEnforcementService {
     return { allowed: true };
   }
 
-  /**
-   * Check if API access is allowed
-   */
   async checkApiAccessAllowed(agencyId: string): Promise<OperationResult> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -542,17 +490,14 @@ export class PlanEnforcementService {
 
     const planConfig = getPlanByName(agency.plan) || PLANS_CONFIG.FREE;
 
-    // API included in plan
     if (planConfig.apiAccessIncluded && agency.apiEnabled) {
       return { allowed: true };
     }
 
-    // API add-on enabled for PROFESSIONAL
     if (planConfig.apiAccessOptional && agency.apiAddOnEnabled && agency.apiEnabled) {
       return { allowed: true };
     }
 
-    // API not available
     if (!planConfig.apiAccessIncluded && !planConfig.apiAccessOptional) {
       return {
         allowed: false,
@@ -560,7 +505,6 @@ export class PlanEnforcementService {
       };
     }
 
-    // API add-on available but not enabled
     if (planConfig.apiAccessOptional && !agency.apiAddOnEnabled) {
       return {
         allowed: false,
@@ -573,10 +517,6 @@ export class PlanEnforcementService {
     return { allowed: false, message: PLAN_MESSAGES.API_DISABLED };
   }
 
-  /**
-   * Enforce current plan limits for an agency
-   * This is used to apply limits on existing users/contracts/properties that exceed the current plan
-   */
   async enforceCurrentPlanLimits(agencyId: string): Promise<EnforcementResult> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -602,20 +542,16 @@ export class PlanEnforcementService {
       message: '',
     };
 
-    // Freeze excess contracts
     const contractResult = await this.freezeExcessContracts(agencyId, planConfig.maxActiveContracts);
     result.contractsFrozen = contractResult.frozen;
 
-    // Freeze excess users (internal)
     const userLimit = planConfig.maxInternalUsers === -1 ? 9999 : planConfig.maxInternalUsers;
     const userResult = await this.freezeExcessUsers(agencyId, userLimit);
     result.usersFrozen = userResult.frozen;
 
-    // Freeze excess properties
     const propertyResult = await this.freezeExcessProperties(agencyId, planConfig.maxProperties);
     result.propertiesFrozen = propertyResult.frozen;
 
-    // Freeze excess tenants
     const tenantResult = await this.freezeExcessTenants(agencyId, planConfig.maxTenants);
     result.tenantsFrozen = tenantResult.frozen;
 
@@ -629,7 +565,6 @@ export class PlanEnforcementService {
       ? `Limites do plano ${planConfig.displayName} aplicados. ${frozen.join(', ')} foram congelados.`
       : `Todos os recursos estão dentro dos limites do plano ${planConfig.displayName}. Nenhuma alteração necessária.`;
 
-    // Update frozen counts
     await this.prisma.agency.update({
       where: { id: BigInt(agencyId) },
       data: {
@@ -638,16 +573,11 @@ export class PlanEnforcementService {
       },
     });
 
-    // Log the enforcement action
     await this.logEnforcementAction(agencyId, 'PLAN_LIMITS_ENFORCED', result);
 
     return result;
   }
 
-  /**
-   * Enforce plan limits when agency plan changes
-   * This is the main entry point for plan enforcement
-   */
   async enforcePlanLimits(agencyId: string, newPlan: string): Promise<EnforcementResult> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -674,40 +604,32 @@ export class PlanEnforcementService {
       message: '',
     };
 
-    // Check if downgrading any limit
     const isDowngrade =
       newConfig.maxActiveContracts < oldConfig.maxActiveContracts ||
       newConfig.maxProperties < oldConfig.maxProperties ||
       newConfig.maxTenants < oldConfig.maxTenants ||
       (newConfig.maxInternalUsers !== -1 && newConfig.maxInternalUsers < (oldConfig.maxInternalUsers === -1 ? 9999 : oldConfig.maxInternalUsers));
 
-    // Check if upgrading any limit
     const isUpgrade =
       newConfig.maxActiveContracts > oldConfig.maxActiveContracts ||
       newConfig.maxProperties > oldConfig.maxProperties ||
       newConfig.maxTenants > oldConfig.maxTenants ||
       (newConfig.maxInternalUsers === -1 || newConfig.maxInternalUsers > (oldConfig.maxInternalUsers === -1 ? 9999 : oldConfig.maxInternalUsers));
 
-    // Downgrade scenario: freeze excess entities
     if (isDowngrade) {
-      // Freeze excess contracts
       const contractResult = await this.freezeExcessContracts(agencyId, newConfig.maxActiveContracts);
       result.contractsFrozen = contractResult.frozen;
 
-      // Freeze excess users (internal)
       const userLimit = newConfig.maxInternalUsers === -1 ? 9999 : newConfig.maxInternalUsers;
       const userResult = await this.freezeExcessUsers(agencyId, userLimit);
       result.usersFrozen = userResult.frozen;
 
-      // Freeze excess properties
       const propertyResult = await this.freezeExcessProperties(agencyId, newConfig.maxProperties);
       result.propertiesFrozen = propertyResult.frozen;
 
-      // Freeze excess tenants
       const tenantResult = await this.freezeExcessTenants(agencyId, newConfig.maxTenants);
       result.tenantsFrozen = tenantResult.frozen;
 
-      // Disable API access if downgrading to a plan without API
       if (!newConfig.apiAccessIncluded && !newConfig.apiAccessOptional) {
         await this.disableApiAccess(agencyId);
       }
@@ -720,26 +642,20 @@ export class PlanEnforcementService {
 
       result.message = `Plano alterado de ${oldConfig.displayName} para ${newConfig.displayName}. ${frozen.length > 0 ? frozen.join(', ') + ' foram congelados.' : 'Nenhuma entidade foi congelada.'}`;
     }
-    // Upgrade scenario: unfreeze entities up to new limit
     else if (isUpgrade) {
-      // Unfreeze contracts up to new limit
       const contractResult = await this.unfreezeContracts(agencyId, newConfig.maxActiveContracts);
       result.contractsUnfrozen = contractResult.unfrozen;
 
-      // Unfreeze users up to new limit
       const userLimit = newConfig.maxInternalUsers === -1 ? 9999 : newConfig.maxInternalUsers;
       const userResult = await this.unfreezeUsers(agencyId, userLimit);
       result.usersUnfrozen = userResult.unfrozen;
 
-      // Unfreeze properties up to new limit
       const propertyResult = await this.unfreezeProperties(agencyId, newConfig.maxProperties);
       result.propertiesUnfrozen = propertyResult.unfrozen;
 
-      // Unfreeze tenants up to new limit
       const tenantResult = await this.unfreezeTenants(agencyId, newConfig.maxTenants);
       result.tenantsUnfrozen = tenantResult.unfrozen;
 
-      // Enable API access if upgrading to a plan with API
       if (newConfig.apiAccessIncluded) {
         await this.enableApiAccess(agencyId);
       }
@@ -756,7 +672,6 @@ export class PlanEnforcementService {
       result.message = `Plano mantido em ${newConfig.displayName}. Nenhuma alteração necessária.`;
     }
 
-    // Update agency plan and tracking fields
     const limits = this.getPlanLimitsForAgency(newPlan);
     await this.prisma.agency.update({
       where: { id: BigInt(agencyId) },
@@ -771,15 +686,11 @@ export class PlanEnforcementService {
       },
     });
 
-    // Log the enforcement action
     await this.logEnforcementAction(agencyId, 'PLAN_CHANGED', result);
 
     return result;
   }
 
-  /**
-   * Enforce plan limits when independent owner plan changes
-   */
   async enforcePlanLimitsForOwner(ownerId: string, newPlan: string): Promise<EnforcementResult> {
     const owner = await this.prisma.user.findUnique({
       where: { id: BigInt(ownerId) },
@@ -806,23 +717,18 @@ export class PlanEnforcementService {
       message: '',
     };
 
-    // Check if downgrading any limit
     const isDowngrade =
       newConfig.maxProperties < oldConfig.maxProperties ||
       newConfig.maxTenants < oldConfig.maxTenants;
 
-    // Check if upgrading any limit
     const isUpgrade =
       newConfig.maxProperties > oldConfig.maxProperties ||
       newConfig.maxTenants > oldConfig.maxTenants;
 
-    // Downgrade scenario: freeze excess entities
     if (isDowngrade) {
-      // Freeze excess properties
       const propertyResult = await this.freezeExcessPropertiesForOwner(ownerId, newConfig.maxProperties);
       result.propertiesFrozen = propertyResult.frozen;
 
-      // Freeze excess tenants
       const tenantResult = await this.freezeExcessTenantsForOwner(ownerId, newConfig.maxTenants);
       result.tenantsFrozen = tenantResult.frozen;
 
@@ -832,13 +738,10 @@ export class PlanEnforcementService {
 
       result.message = `Plano alterado de ${oldConfig.displayName} para ${newConfig.displayName}. ${frozen.length > 0 ? frozen.join(', ') + ' foram congelados.' : 'Nenhuma entidade foi congelada.'}`;
     }
-    // Upgrade scenario: unfreeze entities up to new limit
     else if (isUpgrade) {
-      // Unfreeze properties up to new limit
       const propertyResult = await this.unfreezePropertiesForOwner(ownerId, newConfig.maxProperties);
       result.propertiesUnfrozen = propertyResult.unfrozen;
 
-      // Unfreeze tenants up to new limit
       const tenantResult = await this.unfreezeTenantsForOwner(ownerId, newConfig.maxTenants);
       result.tenantsUnfrozen = tenantResult.unfrozen;
 
@@ -852,7 +755,6 @@ export class PlanEnforcementService {
       result.message = `Plano mantido em ${newConfig.displayName}. Nenhuma alteração necessária.`;
     }
 
-    // Update owner plan
     await this.prisma.user.update({
       where: { id: BigInt(ownerId) },
       data: {
@@ -860,18 +762,12 @@ export class PlanEnforcementService {
       },
     });
 
-    // Log the enforcement action
     await this.logEnforcementAction(ownerId, 'OWNER_PLAN_CHANGED', result);
 
     return result;
   }
 
-  /**
-   * Freeze contracts exceeding the limit
-   * Keeps the oldest (first registered) contracts active and freezes the newest ones
-   */
   async freezeExcessContracts(agencyId: string, limit: number): Promise<FreezeResult> {
-    // Get all active (non-frozen, non-deleted) contracts for agency
     const activeContracts = await this.prisma.contract.findMany({
       where: {
         agencyId: BigInt(agencyId),
@@ -879,7 +775,7 @@ export class PlanEnforcementService {
         isFrozen: false,
         status: { in: ['ATIVO', 'ACTIVE', 'PENDENTE', 'PENDING'] },
       },
-      orderBy: { createdAt: 'asc' }, // Oldest first - keep these active
+      orderBy: { createdAt: 'asc' },
       select: {
         id: true,
         status: true,
@@ -888,7 +784,6 @@ export class PlanEnforcementService {
       },
     });
 
-    // If within limit, nothing to freeze
     if (activeContracts.length <= limit) {
       return {
         frozen: 0,
@@ -897,12 +792,9 @@ export class PlanEnforcementService {
       };
     }
 
-    // Keep the oldest 'limit' contracts active (first registered)
     const toKeepActive = activeContracts.slice(0, limit);
-    // Freeze the newest contracts (registered after the limit was reached)
     const toFreeze = activeContracts.slice(limit);
 
-    // Freeze excess contracts
     const frozenIds: string[] = [];
     for (const contract of toFreeze) {
       await this.prisma.contract.update({
@@ -924,27 +816,20 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Freeze users exceeding the limit
-   * Keeps the oldest (first registered) users active and freezes the newest ones
-   * ALL users count against a single limit (except AGENCY_ADMIN who is never frozen)
-   */
   async freezeExcessUsers(agencyId: string, limit: number): Promise<FreezeResult> {
-    // Get all active (non-frozen) users for agency (ALL roles except AGENCY_ADMIN)
     const activeUsers = await this.prisma.user.findMany({
       where: {
         agencyId: BigInt(agencyId),
         isFrozen: false,
         status: 'ACTIVE',
         role: {
-          not: UserRole.AGENCY_ADMIN, // AGENCY_ADMIN never frozen and doesn't count against limit
+          not: UserRole.AGENCY_ADMIN,
         },
       },
-      orderBy: { createdAt: 'asc' }, // Oldest first - keep these active
+      orderBy: { createdAt: 'asc' },
       select: { id: true, name: true, email: true, role: true, createdAt: true },
     });
 
-    // If unlimited users
     if (limit >= 9999 || limit === -1) {
       return {
         frozen: 0,
@@ -953,7 +838,6 @@ export class PlanEnforcementService {
       };
     }
 
-    // If within limit, nothing to freeze
     if (activeUsers.length <= limit) {
       return {
         frozen: 0,
@@ -962,12 +846,9 @@ export class PlanEnforcementService {
       };
     }
 
-    // Keep the oldest users up to the limit (first registered)
     const toKeepActive = activeUsers.slice(0, limit);
-    // Freeze the newest users (registered after the limit was reached)
     const toFreeze = activeUsers.slice(limit);
 
-    // Freeze excess users
     const frozenIds: string[] = [];
     for (const user of toFreeze) {
       await this.prisma.user.update({
@@ -988,12 +869,7 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Unfreeze contracts up to the new limit
-   * Unfreezes in order of when they were frozen (oldest frozen first)
-   */
   async unfreezeContracts(agencyId: string, newLimit: number): Promise<UnfreezeResult> {
-    // Get current active contracts count
     const activeCount = await this.prisma.contract.count({
       where: {
         agencyId: BigInt(agencyId),
@@ -1003,7 +879,6 @@ export class PlanEnforcementService {
       },
     });
 
-    // Calculate how many can be unfrozen
     const canUnfreeze = Math.max(0, newLimit - activeCount);
 
     if (canUnfreeze === 0) {
@@ -1013,19 +888,17 @@ export class PlanEnforcementService {
       };
     }
 
-    // Get frozen contracts, oldest frozen first
     const frozenContracts = await this.prisma.contract.findMany({
       where: {
         agencyId: BigInt(agencyId),
         deleted: false,
         isFrozen: true,
       },
-      orderBy: { frozenAt: 'asc' }, // Oldest frozen first
+      orderBy: { frozenAt: 'asc' },
       take: canUnfreeze,
       select: { id: true, previousStatus: true },
     });
 
-    // Unfreeze contracts
     for (const contract of frozenContracts) {
       await this.prisma.contract.update({
         where: { id: contract.id },
@@ -1045,12 +918,7 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Unfreeze users up to the new limit
-   * ALL users count against a single limit (except AGENCY_ADMIN)
-   */
   async unfreezeUsers(agencyId: string, newLimit: number): Promise<UnfreezeResult> {
-    // Get current active users count (ALL roles except AGENCY_ADMIN)
     const activeCount = await this.prisma.user.count({
       where: {
         agencyId: BigInt(agencyId),
@@ -1062,7 +930,6 @@ export class PlanEnforcementService {
       },
     });
 
-    // Calculate how many can be unfrozen
     const canUnfreeze = Math.max(0, newLimit - activeCount);
 
     if (canUnfreeze === 0) {
@@ -1072,7 +939,6 @@ export class PlanEnforcementService {
       };
     }
 
-    // Get frozen users, oldest frozen first
     const frozenUsers = await this.prisma.user.findMany({
       where: {
         agencyId: BigInt(agencyId),
@@ -1083,7 +949,6 @@ export class PlanEnforcementService {
       select: { id: true },
     });
 
-    // Unfreeze users
     for (const user of frozenUsers) {
       await this.prisma.user.update({
         where: { id: user.id },
@@ -1101,19 +966,14 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Freeze properties exceeding the limit
-   * Keeps the oldest (first registered) properties active and freezes the newest ones
-   */
   async freezeExcessProperties(agencyId: string, limit: number): Promise<FreezeResult> {
-    // Get all active (non-frozen, non-deleted) properties for agency
     const activeProperties = await this.prisma.property.findMany({
       where: {
         agencyId: BigInt(agencyId),
         deleted: false,
         isFrozen: false,
       },
-      orderBy: { createdAt: 'asc' }, // Oldest first - keep these active
+      orderBy: { createdAt: 'asc' },
       select: {
         id: true,
         status: true,
@@ -1122,7 +982,6 @@ export class PlanEnforcementService {
       },
     });
 
-    // If within limit, nothing to freeze
     if (activeProperties.length <= limit) {
       return {
         frozen: 0,
@@ -1131,12 +990,9 @@ export class PlanEnforcementService {
       };
     }
 
-    // Keep the oldest 'limit' properties active (first registered)
     const toKeepActive = activeProperties.slice(0, limit);
-    // Freeze the newest properties (registered after the limit was reached)
     const toFreeze = activeProperties.slice(limit);
 
-    // Freeze excess properties
     const frozenIds: string[] = [];
     for (const property of toFreeze) {
       await this.prisma.property.update({
@@ -1158,19 +1014,14 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Freeze properties for independent owner exceeding the limit
-   * Keeps the oldest (first registered) properties active and freezes the newest ones
-   */
   async freezeExcessPropertiesForOwner(ownerId: string, limit: number): Promise<FreezeResult> {
-    // Get all active (non-frozen, non-deleted) properties for owner
     const activeProperties = await this.prisma.property.findMany({
       where: {
         ownerId: BigInt(ownerId),
         deleted: false,
         isFrozen: false,
       },
-      orderBy: { createdAt: 'asc' }, // Oldest first - keep these active
+      orderBy: { createdAt: 'asc' },
       select: {
         id: true,
         status: true,
@@ -1179,7 +1030,6 @@ export class PlanEnforcementService {
       },
     });
 
-    // If within limit, nothing to freeze
     if (activeProperties.length <= limit) {
       return {
         frozen: 0,
@@ -1188,12 +1038,9 @@ export class PlanEnforcementService {
       };
     }
 
-    // Keep the oldest 'limit' properties active (first registered)
     const toKeepActive = activeProperties.slice(0, limit);
-    // Freeze the newest properties (registered after the limit was reached)
     const toFreeze = activeProperties.slice(limit);
 
-    // Freeze excess properties
     for (const property of toFreeze) {
       await this.prisma.property.update({
         where: { id: property.id },
@@ -1213,11 +1060,7 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Unfreeze properties up to the new limit
-   */
   async unfreezeProperties(agencyId: string, newLimit: number): Promise<UnfreezeResult> {
-    // Get current active properties count
     const activeCount = await this.prisma.property.count({
       where: {
         agencyId: BigInt(agencyId),
@@ -1226,7 +1069,6 @@ export class PlanEnforcementService {
       },
     });
 
-    // Calculate how many can be unfrozen
     const canUnfreeze = Math.max(0, newLimit - activeCount);
 
     if (canUnfreeze === 0) {
@@ -1236,19 +1078,17 @@ export class PlanEnforcementService {
       };
     }
 
-    // Get frozen properties, oldest frozen first
     const frozenProperties = await this.prisma.property.findMany({
       where: {
         agencyId: BigInt(agencyId),
         deleted: false,
         isFrozen: true,
       },
-      orderBy: { frozenAt: 'asc' }, // Oldest frozen first
+      orderBy: { frozenAt: 'asc' },
       take: canUnfreeze,
       select: { id: true, previousStatus: true },
     });
 
-    // Unfreeze properties
     for (const property of frozenProperties) {
       await this.prisma.property.update({
         where: { id: property.id },
@@ -1268,11 +1108,7 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Unfreeze properties for independent owner up to the new limit
-   */
   async unfreezePropertiesForOwner(ownerId: string, newLimit: number): Promise<UnfreezeResult> {
-    // Get current active properties count
     const activeCount = await this.prisma.property.count({
       where: {
         ownerId: BigInt(ownerId),
@@ -1281,7 +1117,6 @@ export class PlanEnforcementService {
       },
     });
 
-    // Calculate how many can be unfrozen
     const canUnfreeze = Math.max(0, newLimit - activeCount);
 
     if (canUnfreeze === 0) {
@@ -1291,19 +1126,17 @@ export class PlanEnforcementService {
       };
     }
 
-    // Get frozen properties, oldest frozen first
     const frozenProperties = await this.prisma.property.findMany({
       where: {
         ownerId: BigInt(ownerId),
         deleted: false,
         isFrozen: true,
       },
-      orderBy: { frozenAt: 'asc' }, // Oldest frozen first
+      orderBy: { frozenAt: 'asc' },
       take: canUnfreeze,
       select: { id: true, previousStatus: true },
     });
 
-    // Unfreeze properties
     for (const property of frozenProperties) {
       await this.prisma.property.update({
         where: { id: property.id },
@@ -1323,12 +1156,7 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Freeze tenants exceeding the limit
-   * Keeps the oldest (first registered) tenants active and freezes the newest ones
-   */
   async freezeExcessTenants(agencyId: string, limit: number): Promise<FreezeResult> {
-    // If unlimited tenants (9999), nothing to freeze
     if (limit >= 9999) {
       return {
         frozen: 0,
@@ -1337,7 +1165,6 @@ export class PlanEnforcementService {
       };
     }
 
-    // Get all active (non-frozen) tenants for agency
     const activeTenants = await this.prisma.user.findMany({
       where: {
         agencyId: BigInt(agencyId),
@@ -1345,11 +1172,10 @@ export class PlanEnforcementService {
         status: 'ACTIVE',
         role: UserRole.INQUILINO,
       },
-      orderBy: { createdAt: 'asc' }, // Oldest first - keep these active
+      orderBy: { createdAt: 'asc' },
       select: { id: true, name: true, email: true, createdAt: true },
     });
 
-    // If within limit, nothing to freeze
     if (activeTenants.length <= limit) {
       return {
         frozen: 0,
@@ -1358,12 +1184,9 @@ export class PlanEnforcementService {
       };
     }
 
-    // Keep the oldest 'limit' tenants active (first registered)
     const toKeepActive = activeTenants.slice(0, limit);
-    // Freeze the newest tenants (registered after the limit was reached)
     const toFreeze = activeTenants.slice(limit);
 
-    // Freeze excess tenants
     for (const tenant of toFreeze) {
       await this.prisma.user.update({
         where: { id: tenant.id },
@@ -1382,12 +1205,7 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Freeze tenants for independent owner exceeding the limit
-   * Keeps the oldest (first registered) tenants active and freezes the newest ones
-   */
   async freezeExcessTenantsForOwner(ownerId: string, limit: number): Promise<FreezeResult> {
-    // If unlimited tenants (9999), nothing to freeze
     if (limit >= 9999) {
       return {
         frozen: 0,
@@ -1396,7 +1214,6 @@ export class PlanEnforcementService {
       };
     }
 
-    // Get all active (non-frozen) tenants created by this owner
     const activeTenants = await this.prisma.user.findMany({
       where: {
         createdBy: BigInt(ownerId),
@@ -1404,11 +1221,10 @@ export class PlanEnforcementService {
         status: 'ACTIVE',
         role: UserRole.INQUILINO,
       },
-      orderBy: { createdAt: 'asc' }, // Oldest first - keep these active
+      orderBy: { createdAt: 'asc' },
       select: { id: true, name: true, email: true, createdAt: true },
     });
 
-    // If within limit, nothing to freeze
     if (activeTenants.length <= limit) {
       return {
         frozen: 0,
@@ -1417,12 +1233,9 @@ export class PlanEnforcementService {
       };
     }
 
-    // Keep the oldest 'limit' tenants active (first registered)
     const toKeepActive = activeTenants.slice(0, limit);
-    // Freeze the newest tenants (registered after the limit was reached)
     const toFreeze = activeTenants.slice(limit);
 
-    // Freeze excess tenants
     for (const tenant of toFreeze) {
       await this.prisma.user.update({
         where: { id: tenant.id },
@@ -1441,14 +1254,9 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Unfreeze tenants up to the new limit
-   */
   async unfreezeTenants(agencyId: string, newLimit: number): Promise<UnfreezeResult> {
-    // If unlimited tenants (9999), unfreeze all
     const effectiveLimit = newLimit >= 9999 ? 9999 : newLimit;
 
-    // Get current active tenants count
     const activeCount = await this.prisma.user.count({
       where: {
         agencyId: BigInt(agencyId),
@@ -1458,7 +1266,6 @@ export class PlanEnforcementService {
       },
     });
 
-    // Calculate how many can be unfrozen
     const canUnfreeze = Math.max(0, effectiveLimit - activeCount);
 
     if (canUnfreeze === 0 && effectiveLimit < 9999) {
@@ -1468,7 +1275,6 @@ export class PlanEnforcementService {
       };
     }
 
-    // Get frozen tenants, oldest frozen first
     const frozenTenants = await this.prisma.user.findMany({
       where: {
         agencyId: BigInt(agencyId),
@@ -1480,7 +1286,6 @@ export class PlanEnforcementService {
       select: { id: true },
     });
 
-    // Unfreeze tenants
     for (const tenant of frozenTenants) {
       await this.prisma.user.update({
         where: { id: tenant.id },
@@ -1498,14 +1303,9 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Unfreeze tenants for independent owner up to the new limit
-   */
   async unfreezeTenantsForOwner(ownerId: string, newLimit: number): Promise<UnfreezeResult> {
-    // If unlimited tenants (9999), unfreeze all
     const effectiveLimit = newLimit >= 9999 ? 9999 : newLimit;
 
-    // Get current active tenants count
     const activeCount = await this.prisma.user.count({
       where: {
         createdBy: BigInt(ownerId),
@@ -1515,7 +1315,6 @@ export class PlanEnforcementService {
       },
     });
 
-    // Calculate how many can be unfrozen
     const canUnfreeze = Math.max(0, effectiveLimit - activeCount);
 
     if (canUnfreeze === 0 && effectiveLimit < 9999) {
@@ -1525,7 +1324,6 @@ export class PlanEnforcementService {
       };
     }
 
-    // Get frozen tenants, oldest frozen first
     const frozenTenants = await this.prisma.user.findMany({
       where: {
         createdBy: BigInt(ownerId),
@@ -1537,7 +1335,6 @@ export class PlanEnforcementService {
       select: { id: true },
     });
 
-    // Unfreeze tenants
     for (const tenant of frozenTenants) {
       await this.prisma.user.update({
         where: { id: tenant.id },
@@ -1555,10 +1352,6 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Switch which contract is active (for FREE plan with 1 contract limit)
-   * Freezes the current active contract and unfreezes the selected one
-   */
   async switchActiveContract(agencyId: string, newActiveContractId: string): Promise<SwitchResult> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -1571,12 +1364,10 @@ export class PlanEnforcementService {
 
     const planConfig = getPlanByName(agency.plan) || PLANS_CONFIG.FREE;
 
-    // This operation is mainly for FREE plan or when limit is 1
     if (planConfig.maxActiveContracts > 1) {
       throw new BadRequestException('Esta operação só é disponível para planos com limite de 1 contrato.');
     }
 
-    // Get the contract to activate
     const newActiveContract = await this.prisma.contract.findFirst({
       where: {
         id: BigInt(newActiveContractId),
@@ -1595,7 +1386,6 @@ export class PlanEnforcementService {
       throw new NotFoundException('Contrato não encontrado ou não pertence a esta agência.');
     }
 
-    // Get the currently active contract
     const currentActiveContract = await this.prisma.contract.findFirst({
       where: {
         agencyId: BigInt(agencyId),
@@ -1610,7 +1400,6 @@ export class PlanEnforcementService {
       },
     });
 
-    // If the new contract is already active, no change needed
     if (!newActiveContract.isFrozen) {
       return {
         success: false,
@@ -1618,7 +1407,6 @@ export class PlanEnforcementService {
       };
     }
 
-    // Freeze the current active contract (if exists)
     if (currentActiveContract) {
       await this.prisma.contract.update({
         where: { id: currentActiveContract.id },
@@ -1631,7 +1419,6 @@ export class PlanEnforcementService {
       });
     }
 
-    // Unfreeze the new active contract
     await this.prisma.contract.update({
       where: { id: newActiveContract.id },
       data: {
@@ -1643,7 +1430,6 @@ export class PlanEnforcementService {
       },
     });
 
-    // Update frozen count
     await this.updateFrozenCounts(agencyId);
 
     return {
@@ -1660,9 +1446,6 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Get summary of frozen entities for an agency
-   */
   async getFrozenEntitiesSummary(agencyId: string): Promise<FrozenSummary> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -1676,7 +1459,6 @@ export class PlanEnforcementService {
     const planConfig = getPlanByName(agency.plan) || PLANS_CONFIG.FREE;
     const limits = this.getPlanLimitsForAgency(agency.plan);
 
-    // Count contracts
     const [activeContracts, frozenContracts, totalContracts] = await Promise.all([
       this.prisma.contract.count({
         where: {
@@ -1694,7 +1476,6 @@ export class PlanEnforcementService {
       }),
     ]);
 
-    // Count ALL users (except AGENCY_ADMIN who is never frozen)
     const [activeUsers, frozenUsers, totalUsers] = await Promise.all([
       this.prisma.user.count({
         where: {
@@ -1741,11 +1522,7 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Get list of frozen entities for an agency
-   */
   async getFrozenEntitiesList(agencyId: string): Promise<FrozenEntitiesList> {
-    // Get frozen contracts
     const frozenContracts = await this.prisma.contract.findMany({
       where: {
         agencyId: BigInt(agencyId),
@@ -1762,7 +1539,6 @@ export class PlanEnforcementService {
       orderBy: { frozenAt: 'desc' },
     });
 
-    // Get frozen users
     const frozenUsers = await this.prisma.user.findMany({
       where: {
         agencyId: BigInt(agencyId),
@@ -1797,9 +1573,6 @@ export class PlanEnforcementService {
     };
   }
 
-  /**
-   * Check if a specific contract is frozen
-   */
   async isContractFrozen(contractId: string): Promise<boolean> {
     const contract = await this.prisma.contract.findUnique({
       where: { id: BigInt(contractId) },
@@ -1808,9 +1581,6 @@ export class PlanEnforcementService {
     return contract?.isFrozen ?? false;
   }
 
-  /**
-   * Check if a specific user is frozen
-   */
   async isUserFrozen(userId: string): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
       where: { id: BigInt(userId) },
@@ -1819,9 +1589,6 @@ export class PlanEnforcementService {
     return user?.isFrozen ?? false;
   }
 
-  /**
-   * Preview what would happen if agency changes to a different plan
-   */
   async previewPlanChange(agencyId: string, newPlan: string): Promise<{
     currentPlan: string;
     newPlan: string;
@@ -1845,7 +1612,6 @@ export class PlanEnforcementService {
     const currentConfig = getPlanByName(agency.plan) || PLANS_CONFIG.FREE;
     const newConfig = getPlanByName(newPlan) || PLANS_CONFIG.FREE;
 
-    // Count current active entities
     const activeContracts = await this.prisma.contract.count({
       where: {
         agencyId: BigInt(agencyId),
@@ -1864,7 +1630,6 @@ export class PlanEnforcementService {
       },
     });
 
-    // Count currently frozen entities
     const frozenContracts = await this.prisma.contract.count({
       where: { agencyId: BigInt(agencyId), deleted: false, isFrozen: true },
     });
@@ -1873,7 +1638,6 @@ export class PlanEnforcementService {
       where: { agencyId: BigInt(agencyId), isFrozen: true },
     });
 
-    // Calculate what would happen
     const contractsWouldFreeze = Math.max(0, activeContracts - newConfig.maxActiveContracts);
     const newUserLimit = newConfig.maxInternalUsers === -1 ? 9999 : newConfig.maxInternalUsers;
     const usersWouldFreeze = Math.max(0, activeUsers - newUserLimit);
@@ -1892,10 +1656,8 @@ export class PlanEnforcementService {
         .replace('{userFreezeCount}', usersWouldFreeze.toString());
     }
 
-    // Get current limits
     const currentUserLimit = currentConfig.maxInternalUsers === -1 ? 9999 : currentConfig.maxInternalUsers;
 
-    // Determine if this is an upgrade (new plan has higher limits)
     const isUpgrade = newConfig.maxProperties > currentConfig.maxProperties ||
                       newUserLimit > currentUserLimit;
 
@@ -1926,8 +1688,6 @@ export class PlanEnforcementService {
       warning,
     };
   }
-
-  // Private helper methods
 
   private async countFrozenContracts(agencyId: string): Promise<number> {
     return this.prisma.contract.count({
@@ -1968,7 +1728,6 @@ export class PlanEnforcementService {
   }
 
   private async enableApiAccess(agencyId: string): Promise<void> {
-    // Generate new API key if upgrading to a plan with API access
     const apiKey = this.generateApiKey();
     await this.prisma.agency.update({
       where: { id: BigInt(agencyId) },

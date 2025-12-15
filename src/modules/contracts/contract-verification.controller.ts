@@ -28,9 +28,6 @@ export class ContractVerificationController {
     private readonly signatureLinkService: SignatureLinkService,
   ) {}
 
-  /**
-   * Verify contract by token (public)
-   */
   @Get(':token')
   @Public()
   @ApiOperation({ summary: 'Verify contract authenticity by token' })
@@ -59,9 +56,6 @@ export class ContractVerificationController {
     };
   }
 
-  /**
-   * Validate PDF hash against stored hash (public)
-   */
   @Post(':token/validate-hash')
   @Public()
   @ApiOperation({ summary: 'Validate uploaded PDF hash against stored hash' })
@@ -86,9 +80,6 @@ export class ContractVerificationController {
     };
   }
 
-  /**
-   * Upload PDF and validate its hash (public)
-   */
   @Post(':token/validate-pdf')
   @Public()
   @UseInterceptors(FileInterceptor('file'))
@@ -121,9 +112,6 @@ export class ContractVerificationController {
   }
 }
 
-/**
- * Controller for external signing via invitation links
- */
 @ApiTags('External Signing (Public)')
 @Controller('sign')
 export class ExternalSigningController {
@@ -132,9 +120,6 @@ export class ExternalSigningController {
     private readonly signatureLinkService: SignatureLinkService,
   ) {}
 
-  /**
-   * Get contract data for signing page (via invitation link)
-   */
   @Get(':linkToken')
   @Public()
   @ApiOperation({ summary: 'Get contract data for external signing' })
@@ -159,9 +144,6 @@ export class ExternalSigningController {
     };
   }
 
-  /**
-   * Submit signature via invitation link (public)
-   */
   @Post(':linkToken/submit')
   @Public()
   @ApiOperation({ summary: 'Submit signature via external link' })
@@ -178,7 +160,6 @@ export class ExternalSigningController {
     },
     @Req() req: Request,
   ) {
-    // Validate geolocation is provided (REQUIRED)
     if (!body.geoLat || !body.geoLng) {
       throw new BadRequestException('Geolocalização é obrigatória para assinar o contrato');
     }
@@ -191,20 +172,16 @@ export class ExternalSigningController {
       throw new BadRequestException('Assinatura é obrigatória');
     }
 
-    // Validate link
     const validation = await this.signatureLinkService.validateSignatureLink(linkToken);
 
     if (!validation.valid) {
       throw new BadRequestException(validation.message);
     }
 
-    // Get client info
     const clientIP = req.ip || req.connection?.remoteAddress || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
 
-    // Submit signature using a system user ID (since this is external)
-    // In production, you might want to create a temporary user or use a service account
-    const systemUserId = '1'; // System user for external signatures
+    const systemUserId = '1';
 
     const contract = await this.contractsService.signContractWithGeo(
       validation.contractId!,
@@ -222,7 +199,6 @@ export class ExternalSigningController {
       systemUserId,
     );
 
-    // Mark link as used
     await this.signatureLinkService.markLinkUsed(linkToken);
 
     return {

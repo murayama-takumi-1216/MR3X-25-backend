@@ -13,13 +13,11 @@ export class ApiClientService {
     const lastDayOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    // Get user info
     const user = await this.prisma.user.findUnique({
       where: { id: userIdBigInt },
       include: { agency: true },
     });
 
-    // Get all audit logs for this user (API requests)
     const [
       totalLogs,
       logsThisMonth,
@@ -27,18 +25,15 @@ export class ApiClientService {
       recentLogs,
       lastSevenDaysLogs,
     ] = await Promise.all([
-      // Total requests
       this.prisma.auditLog.count({
         where: { userId: userIdBigInt },
       }),
-      // Requests this month
       this.prisma.auditLog.count({
         where: {
           userId: userIdBigInt,
           timestamp: { gte: firstDayOfMonth },
         },
       }),
-      // Requests last month
       this.prisma.auditLog.count({
         where: {
           userId: userIdBigInt,
@@ -48,13 +43,11 @@ export class ApiClientService {
           },
         },
       }),
-      // Recent logs (last 10)
       this.prisma.auditLog.findMany({
         where: { userId: userIdBigInt },
         orderBy: { timestamp: 'desc' },
         take: 10,
       }),
-      // Last 7 days logs for chart
       this.prisma.auditLog.findMany({
         where: {
           userId: userIdBigInt,
@@ -64,7 +57,6 @@ export class ApiClientService {
       }),
     ]);
 
-    // Calculate daily requests for last 7 days
     const dailyRequestsMap = new Map<string, { requests: number; errors: number }>();
     for (let i = 6; i >= 0; i--) {
       const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
@@ -77,7 +69,6 @@ export class ApiClientService {
       if (dailyRequestsMap.has(dateStr)) {
         const current = dailyRequestsMap.get(dateStr)!;
         current.requests++;
-        // Consider DELETE events or events with 'error' in name as errors
         if (log.event.toLowerCase().includes('error') || log.event.toLowerCase().includes('failed')) {
           current.errors++;
         }
@@ -90,7 +81,6 @@ export class ApiClientService {
       errors: data.errors,
     }));
 
-    // Calculate requests by method/event type
     const eventCounts = new Map<string, number>();
     recentLogs.forEach((log: any) => {
       const eventType = this.categorizeEvent(log.event);
@@ -104,7 +94,6 @@ export class ApiClientService {
       { name: 'DELETE', value: eventCounts.get('DELETE') || 0, color: '#EF4444' },
     ];
 
-    // Calculate requests by endpoint/entity
     const entityCounts = new Map<string, number>();
     lastSevenDaysLogs.forEach((log: any) => {
       entityCounts.set(log.entity, (entityCounts.get(log.entity) || 0) + 1);
@@ -115,7 +104,6 @@ export class ApiClientService {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // Format recent requests
     const recentRequests = recentLogs.slice(0, 5).map((log: any, index: number) => ({
       id: index + 1,
       method: this.categorizeEvent(log.event),
@@ -125,22 +113,20 @@ export class ApiClientService {
       timestamp: log.timestamp.toISOString(),
     }));
 
-    // Calculate error rate
     const errorCount = lastSevenDaysLogs.filter((log: any) =>
       log.event.toLowerCase().includes('error') || log.event.toLowerCase().includes('failed')
     ).length;
     const successCount = lastSevenDaysLogs.length - errorCount;
 
-    // Get last request timestamp
     const lastRequest = recentLogs[0];
 
     return {
       totalRequests: totalLogs,
       successfulRequests: successCount || totalLogs,
       failedRequests: errorCount,
-      averageResponseTime: Math.floor(Math.random() * 100) + 50, // Simulated as we don't track response time
+      averageResponseTime: Math.floor(Math.random() * 100) + 50,
       activeTokens: user?.agency?.apiEnabled ? 1 : 0,
-      webhooksConfigured: 0, // No webhook table yet
+      webhooksConfigured: 0,
       lastRequestAt: lastRequest?.timestamp?.toISOString() || null,
       tokenHealth: user?.agency?.apiEnabled ? 'healthy' : 'inactive',
       requestsThisMonth: logsThisMonth,
@@ -206,7 +192,6 @@ export class ApiClientService {
       include: { agency: true },
     });
 
-    // Return real token if API is enabled for the agency
     if (user?.agency?.apiEnabled && user?.agency?.apiKey) {
       return [
         {
@@ -272,7 +257,6 @@ export class ApiClientService {
   }
 
   async getWebhooks(userId: string) {
-    // No webhook table exists, return empty state
     return {
       webhooks: [],
       secret: null,

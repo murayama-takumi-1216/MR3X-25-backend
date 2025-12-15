@@ -2,30 +2,21 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../config/prisma.service';
 
 export enum TokenEntityType {
-  CONTRACT = 'CTR', // MR3X-CTR-YEAR-XXXX-XXXX
-  PROPERTY = 'IMO', // MR3X-IMO-YEAR-XXXX-XXXX (Imóvel)
-  TENANT = 'INQ', // MR3X-INQ-YEAR-XXXX-XXXX (Inquilino)
-  OWNER = 'PRO', // MR3X-PRO-YEAR-XXXX-XXXX (Proprietário)
-  BROKER = 'COR', // MR3X-COR-YEAR-XXXX-XXXX (Corretor)
-  MANAGER = 'GER', // MR3X-GER-YEAR-XXXX-XXXX (Gerente)
-  DOCUMENT = 'DOC', // MR3X-DOC-YEAR-XXXX-XXXX
-  INVOICE = 'INV', // MR3X-INV-YEAR-XXXX-XXXX
-  AGENCY = 'AGE', // MR3X-AGE-YEAR-XXXX-XXXX (Agência)
+  CONTRACT = 'CTR',
+  PROPERTY = 'IMO',
+  TENANT = 'INQ',
+  OWNER = 'PRO',
+  BROKER = 'COR',
+  MANAGER = 'GER',
+  DOCUMENT = 'DOC',
+  INVOICE = 'INV',
+  AGENCY = 'AGE',
 }
 
-/**
- * Service for generating unique MR3X tokens in government-required format
- * Format: MR3X-{TYPE}-{YEAR}-{XXXX}-{XXXX}
- * Example: MR3X-IMO-2025-A7F2-B9D4
- */
 @Injectable()
 export class TokenGeneratorService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Generate a unique token for any entity type
-   * Ensures uniqueness by checking the database
-   */
   async generateToken(entityType: TokenEntityType): Promise<string> {
     const maxAttempts = 10;
     let attempt = 0;
@@ -33,7 +24,6 @@ export class TokenGeneratorService {
     while (attempt < maxAttempts) {
       const token = this.createToken(entityType);
 
-      // Check if token is unique in the system
       const exists = await this.tokenExists(token, entityType);
 
       if (!exists) {
@@ -48,9 +38,6 @@ export class TokenGeneratorService {
     );
   }
 
-  /**
-   * Create a token string in MR3X format
-   */
   private createToken(entityType: TokenEntityType): string {
     const year = new Date().getFullYear();
     const segment1 = this.generateRandomSegment();
@@ -59,10 +46,6 @@ export class TokenGeneratorService {
     return `MR3X-${entityType}-${year}-${segment1}-${segment2}`;
   }
 
-  /**
-   * Generate a random 4-character alphanumeric segment
-   * Uses uppercase letters and numbers for clarity
-   */
   private generateRandomSegment(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let segment = '';
@@ -74,9 +57,6 @@ export class TokenGeneratorService {
     return segment;
   }
 
-  /**
-   * Check if a token already exists in the database
-   */
   private async tokenExists(
     token: string,
     entityType: TokenEntityType,
@@ -126,14 +106,10 @@ export class TokenGeneratorService {
           return false;
       }
     } catch (error) {
-      // If table doesn't have token field yet, return false
       return false;
     }
   }
 
-  /**
-   * Parse a token to extract its components
-   */
   parseToken(token: string): {
     prefix: string;
     entityType: string;
@@ -156,17 +132,11 @@ export class TokenGeneratorService {
     };
   }
 
-  /**
-   * Validate a token format
-   */
   isValidTokenFormat(token: string): boolean {
     const pattern = /^MR3X-[A-Z]{3}-\d{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
     return pattern.test(token);
   }
 
-  /**
-   * Get entity type from token
-   */
   getEntityTypeFromToken(token: string): TokenEntityType | null {
     const parsed = this.parseToken(token);
     if (!parsed) {
@@ -177,7 +147,7 @@ export class TokenGeneratorService {
       CTR: TokenEntityType.CONTRACT,
       IMO: TokenEntityType.PROPERTY,
       INQ: TokenEntityType.TENANT,
-      LOC: TokenEntityType.TENANT, // Legacy support
+      LOC: TokenEntityType.TENANT,
       PRO: TokenEntityType.OWNER,
       COR: TokenEntityType.BROKER,
       GER: TokenEntityType.MANAGER,

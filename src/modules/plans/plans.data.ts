@@ -1,13 +1,3 @@
-/**
- * MR3X Subscription Plans Configuration
- *
- * Plan Structure (Contract-Based Limits):
- * - FREE: R$ 0 - 1 active contract, 2 internal users
- * - BASIC: R$ 89.90 - 20 active contracts, 5 internal users
- * - PROFESSIONAL: R$ 189.90 - 60 active contracts, 10 internal users
- * - ENTERPRISE: R$ 449.90 - 200 active contracts, unlimited internal users
- */
-
 export interface PlanConfig {
   id: string;
   name: string;
@@ -15,15 +5,12 @@ export interface PlanConfig {
   description: string;
   price: number;
 
-  // Contract-based limits (primary limit)
   maxActiveContracts: number;
   maxInternalUsers: number;
 
-  // Property and Tenant limits (as shown in UI)
   maxProperties: number;
   maxTenants: number;
 
-  // Feature flags
   unlimitedInspections: boolean;
   unlimitedSettlements: boolean;
   unlimitedUsers: boolean;
@@ -35,17 +22,14 @@ export interface PlanConfig {
   prioritySupport: boolean;
   support24x7: boolean;
 
-  // Pay-per-use pricing (R$)
   extraContractPrice: number;
   inspectionPrice: number | null;
   settlementPrice: number | null;
   screeningPrice: number;
   apiAddOnPrice: number | null;
 
-  // Support tier
   supportTier: 'EMAIL' | 'PRIORITY' | '24X7';
 
-  // Display properties
   features: string[];
   isPopular: boolean;
   displayOrder: number;
@@ -61,7 +45,6 @@ export interface MicrotransactionPricing {
   apiCall?: number;
 }
 
-// Plan names as constants
 export const PLAN_NAMES = {
   FREE: 'FREE',
   BASIC: 'BASIC',
@@ -71,10 +54,8 @@ export const PLAN_NAMES = {
 
 export type PlanName = keyof typeof PLAN_NAMES;
 
-// Entity type for plan limits differentiation
 export type EntityType = 'agency' | 'independent_owner';
 
-// Plan limits structure for different entity types
 export interface PlanLimits {
   contracts: number;
   users: number;
@@ -87,9 +68,6 @@ export interface PlanLimits {
   unlimitedSettlements: boolean;
 }
 
-/**
- * Complete plan configuration based on the strategic analysis
- */
 export const PLANS_CONFIG: Record<string, PlanConfig> = {
   FREE: {
     id: 'free',
@@ -98,15 +76,12 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     description: 'Plano gratuito para testar e iniciar - Ideal para onboarding',
     price: 0,
 
-    // Contract-based limits
     maxActiveContracts: 1,
     maxInternalUsers: 2,
 
-    // Property and Tenant limits
     maxProperties: 1,
     maxTenants: 2,
 
-    // Features
     unlimitedInspections: false,
     unlimitedSettlements: false,
     unlimitedUsers: false,
@@ -118,12 +93,11 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     prioritySupport: false,
     support24x7: false,
 
-    // Pay-per-use pricing (R$)
     extraContractPrice: 4.90,
     inspectionPrice: 3.90,
     settlementPrice: 6.90,
     screeningPrice: 8.90,
-    apiAddOnPrice: null, // Not available
+    apiAddOnPrice: null,
 
     supportTier: 'EMAIL',
 
@@ -147,16 +121,13 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     description: 'Entrada real para pequenas imobiliárias',
     price: 89.90,
 
-    // Contract-based limits
     maxActiveContracts: 20,
     maxInternalUsers: 5,
 
-    // Property and Tenant limits
     maxProperties: 20,
     maxTenants: 5,
 
-    // Features
-    unlimitedInspections: true, // Included
+    unlimitedInspections: true,
     unlimitedSettlements: false,
     unlimitedUsers: false,
     apiAccessIncluded: false,
@@ -167,12 +138,11 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     prioritySupport: true,
     support24x7: false,
 
-    // Pay-per-use pricing (R$)
     extraContractPrice: 2.90,
-    inspectionPrice: null, // Unlimited/Included
+    inspectionPrice: null,
     settlementPrice: 4.90,
     screeningPrice: 6.90,
-    apiAddOnPrice: null, // Not available
+    apiAddOnPrice: null,
 
     supportTier: 'PRIORITY',
 
@@ -197,32 +167,28 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     description: 'Para imobiliárias em expansão',
     price: 189.90,
 
-    // Contract-based limits
     maxActiveContracts: 60,
     maxInternalUsers: 10,
 
-    // Property and Tenant limits
     maxProperties: 60,
     maxTenants: 10,
 
-    // Features
     unlimitedInspections: true,
-    unlimitedSettlements: true, // Included
+    unlimitedSettlements: true,
     unlimitedUsers: false,
     apiAccessIncluded: false,
-    apiAccessOptional: true, // Can add API for R$ 29/month
+    apiAccessOptional: true,
     advancedReports: true,
     automations: true,
     whiteLabel: false,
     prioritySupport: true,
     support24x7: false,
 
-    // Pay-per-use pricing (R$)
     extraContractPrice: 1.90,
-    inspectionPrice: null, // Unlimited/Included
-    settlementPrice: null, // Unlimited/Included
+    inspectionPrice: null,
+    settlementPrice: null,
     screeningPrice: 4.90,
-    apiAddOnPrice: 29.00, // Optional add-on
+    apiAddOnPrice: 29.00,
 
     supportTier: 'PRIORITY',
 
@@ -248,15 +214,12 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     description: 'Para grandes imobiliárias - Máximo retorno',
     price: 449.90,
 
-    // Contract-based limits
     maxActiveContracts: 200,
-    maxInternalUsers: -1, // Unlimited
+    maxInternalUsers: -1,
 
-    // Property and Tenant limits
     maxProperties: 200,
-    maxTenants: 9999, // Unlimited
+    maxTenants: 9999,
 
-    // Features
     unlimitedInspections: true,
     unlimitedSettlements: true,
     unlimitedUsers: true,
@@ -268,12 +231,11 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     prioritySupport: true,
     support24x7: true,
 
-    // Pay-per-use pricing (R$)
-    extraContractPrice: 0.90, // R$ 0.90 per excess contract
-    inspectionPrice: null, // Unlimited/Included
-    settlementPrice: null, // Unlimited/Included
+    extraContractPrice: 0.90,
+    inspectionPrice: null,
+    settlementPrice: null,
     screeningPrice: 3.90,
-    apiAddOnPrice: null, // Already included
+    apiAddOnPrice: null,
 
     supportTier: '24X7',
 
@@ -293,9 +255,6 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
   },
 };
 
-/**
- * Get microtransaction pricing for a specific plan
- */
 export function getMicrotransactionPricing(planName: string): MicrotransactionPricing {
   const plan = PLANS_CONFIG[planName] || PLANS_CONFIG.FREE;
 
@@ -307,10 +266,6 @@ export function getMicrotransactionPricing(planName: string): MicrotransactionPr
   };
 }
 
-/**
- * Get plan limits for a specific entity type
- * Note: Both agency and independent_owner have the same limits now
- */
 export function getPlanLimits(planName: string, entityType: EntityType = 'agency'): PlanLimits {
   const plan = PLANS_CONFIG[planName] || PLANS_CONFIG.FREE;
 
@@ -327,13 +282,8 @@ export function getPlanLimits(planName: string, entityType: EntityType = 'agency
   };
 }
 
-// Legacy alias for backward compatibility
 export const getPlanLimitsForEntity = getPlanLimits;
 
-/**
- * Plan limits by entity type - for backward compatibility
- * Now both types have the same limits
- */
 export const PLAN_LIMITS: Record<string, Record<EntityType, PlanLimits>> = {
   FREE: {
     agency: getPlanLimits('FREE', 'agency'),
@@ -353,9 +303,6 @@ export const PLAN_LIMITS: Record<string, Record<EntityType, PlanLimits>> = {
   },
 };
 
-/**
- * Check if a feature is available for a plan
- */
 export function isPlanFeatureAvailable(
   planName: string,
   feature: 'inspections' | 'settlements' | 'api' | 'advancedReports' | 'automations' | 'whiteLabel'
@@ -380,9 +327,6 @@ export function isPlanFeatureAvailable(
   }
 }
 
-/**
- * Check if a feature requires payment (pay-per-use)
- */
 export function isFeaturePayPerUse(
   planName: string,
   feature: 'inspection' | 'settlement' | 'screening' | 'extraContract'
@@ -395,17 +339,14 @@ export function isFeaturePayPerUse(
     case 'settlement':
       return plan.settlementPrice !== null;
     case 'screening':
-      return true; // Always pay-per-use
+      return true;
     case 'extraContract':
-      return true; // Always pay-per-use
+      return true;
     default:
       return true;
   }
 }
 
-/**
- * Get the price for a specific feature
- */
 export function getFeaturePrice(
   planName: string,
   feature: 'inspection' | 'settlement' | 'screening' | 'extraContract' | 'apiAddOn'
@@ -428,23 +369,14 @@ export function getFeaturePrice(
   }
 }
 
-/**
- * Get all plans for display (sorted by displayOrder)
- */
 export function getAllPlansForDisplay(): PlanConfig[] {
   return Object.values(PLANS_CONFIG).sort((a, b) => a.displayOrder - b.displayOrder);
 }
 
-/**
- * Get plan by name
- */
 export function getPlanByName(planName: string): PlanConfig | null {
   return PLANS_CONFIG[planName] || null;
 }
 
-/**
- * Calculate upgrade cost between plans
- */
 export function calculateUpgradeCost(
   currentPlan: string,
   targetPlan: string,
@@ -466,7 +398,6 @@ export function calculateUpgradeCost(
   };
 }
 
-// Legacy interfaces for backward compatibility
 export interface Plan {
   id: string;
   name: string;
@@ -481,15 +412,12 @@ export interface Plan {
   updatedAt: Date;
 }
 
-/**
- * Convert PlanConfig to legacy Plan format
- */
 export function toLegacyPlan(config: PlanConfig): Omit<Plan, 'subscribers' | 'createdAt' | 'updatedAt'> {
   return {
     id: config.id,
     name: config.name,
     price: config.price,
-    propertyLimit: config.maxActiveContracts, // Now represents contracts
+    propertyLimit: config.maxActiveContracts,
     userLimit: config.maxInternalUsers === -1 ? 9999 : config.maxInternalUsers,
     features: config.features,
     description: config.description,
@@ -497,10 +425,8 @@ export function toLegacyPlan(config: PlanConfig): Omit<Plan, 'subscribers' | 'cr
   };
 }
 
-// Export default plans in legacy format for backward compatibility
 export const DEFAULT_PLANS = Object.values(PLANS_CONFIG).map(toLegacyPlan);
 
-// In-memory storage for plan updates (if needed for dynamic pricing)
 const planUpdates = new Map<string, Partial<PlanConfig>>();
 
 export function getPlanUpdates(): Map<string, Partial<PlanConfig>> {

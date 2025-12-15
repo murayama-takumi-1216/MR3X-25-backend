@@ -26,12 +26,10 @@ export interface FinancialAnalysisResponse {
     averageDelay: number;
   };
   status?: 'CLEAR' | 'WARNING' | 'CRITICAL';
-  // Raw data from Cellere
   name?: string;
   birthDate?: string;
   motherName?: string;
   situacaoCadastral?: string;
-  // Address and contact info
   address?: {
     logradouro?: string;
     numero?: string;
@@ -142,7 +140,6 @@ export class CellereService {
       },
     });
 
-    // Request interceptor for logging
     this.client.interceptors.request.use(
       (config) => {
         this.logger.log(`Cellere API Request: ${config.method?.toUpperCase()} ${config.url}`);
@@ -154,7 +151,6 @@ export class CellereService {
       }
     );
 
-    // Response interceptor for logging
     this.client.interceptors.response.use(
       (response) => {
         this.logger.log(`Cellere API Response: ${response.status}`);
@@ -183,7 +179,6 @@ export class CellereService {
     }
 
     try {
-      // Check balance to verify API is working
       const response = await this.client.get('/utilitarias/saldo-portal');
       this.logger.log(`Cellere balance: ${response.data?.amount} credits`);
       return true;
@@ -193,9 +188,6 @@ export class CellereService {
     }
   }
 
-  /**
-   * Get account balance from Cellere
-   */
   async getBalance(): Promise<{ amount: number; units: string }> {
     const response = await this.client.get('/utilitarias/saldo-portal');
     return {
@@ -204,10 +196,6 @@ export class CellereService {
     };
   }
 
-  /**
-   * Get financial analysis (CPF/CNPJ complete info)
-   * Uses: GET /analise-financeira/cpf-completo or /cnpj-completo
-   */
   async getFinancialAnalysis(request: FinancialAnalysisRequest): Promise<FinancialAnalysisResponse> {
     if (!this.isEnabled) {
       throw new Error('Tenant analysis is disabled');
@@ -228,7 +216,6 @@ export class CellereService {
 
       return this.mapFinancialResponse(response.data, isCPF);
     } catch (error: any) {
-      // Check for insufficient balance
       if (error.response?.data?.reason === 'insufficientBalance') {
         throw new Error('Insufficient Cellere credits. Please add more credits to your account.');
       }
@@ -236,12 +223,6 @@ export class CellereService {
     }
   }
 
-  /**
-   * Get background check (court processes, arrest warrants)
-   * Uses: GET /bg-check/cpf-completo or /cnpj-completo
-   *       GET /consultas/validacao-fiscal-pj (court processes)
-   *       GET /consultas/br/cnj/mandados-prisao (arrest warrants)
-   */
   async getBackgroundCheck(request: BackgroundCheckRequest): Promise<BackgroundCheckResponse> {
     if (!this.isEnabled) {
       throw new Error('Tenant analysis is disabled');
@@ -253,13 +234,11 @@ export class CellereService {
     this.logger.log(`Getting background check for ${param}: ${this.maskDocument(request.document)}`);
 
     try {
-      // Get complete info from bg-check
       const bgEndpoint = isCPF ? '/bg-check/cpf-completo' : '/bg-check/cnpj-completo';
       const bgResponse = await this.client.get(bgEndpoint, {
         params: { [param]: request.document },
       });
 
-      // Get court processes
       let courtProcesses: any = null;
       if (request.includeJudicial) {
         try {
@@ -272,7 +251,6 @@ export class CellereService {
         }
       }
 
-      // Get arrest warrants (CPF only)
       let arrestWarrants: any = null;
       if (isCPF && request.includeCriminal) {
         try {
@@ -294,10 +272,6 @@ export class CellereService {
     }
   }
 
-  /**
-   * Validate CPF/CNPJ document
-   * Uses: GET /bg-check/cpf-validacao-cadastral or /bg-check/cpf-completo
-   */
   async getDocumentValidation(document: string): Promise<DocumentValidationResponse> {
     if (!this.isEnabled) {
       throw new Error('Tenant analysis is disabled');
@@ -308,13 +282,11 @@ export class CellereService {
 
     try {
       if (isCPF) {
-        // Use advanced CPF validation
         const response = await this.client.get('/bg-check/cpf-validacao-cadastral', {
           params: { cpf: document },
         });
         return this.mapCPFValidationResponse(response.data);
       } else {
-        // Use CNPJ complete
         const response = await this.client.get('/bg-check/cnpj-completo', {
           params: { cnpj: document },
         });
@@ -324,7 +296,6 @@ export class CellereService {
       if (error.response?.data?.reason === 'insufficientBalance') {
         throw new Error('Insufficient Cellere credits. Please add more credits to your account.');
       }
-      // Return basic validation if API fails
       this.logger.warn('Document validation API failed, returning basic validation');
       return {
         documentValid: this.validateDocumentFormat(document),
@@ -336,10 +307,6 @@ export class CellereService {
     }
   }
 
-  /**
-   * FaceMatch - Compare selfie with document photo
-   * Uses: POST /facematch/one-image (single image) or POST /facematch/ (two images)
-   */
   async getFacematch(selfieBase64: string, documentBase64?: string): Promise<{ match: boolean; confidence: number }> {
     if (!this.isEnabled) {
       throw new Error('Tenant analysis is disabled');
@@ -348,13 +315,11 @@ export class CellereService {
     try {
       let response;
       if (documentBase64) {
-        // Two images comparison
         response = await this.client.post('/facematch/', {
           image1: selfieBase64,
           image2: documentBase64,
         });
       } else {
-        // Single image (selfie holding document)
         response = await this.client.post('/facematch/one-image', {
           image: selfieBase64,
         });
@@ -376,10 +341,6 @@ export class CellereService {
     }
   }
 
-  /**
-   * Extract data from CNH document
-   * Uses: POST /contextus/cnh
-   */
   async extractCNH(imageBase64: string): Promise<any> {
     if (!this.isEnabled) {
       throw new Error('Tenant analysis is disabled');
@@ -395,10 +356,6 @@ export class CellereService {
     }
   }
 
-  /**
-   * Extract data from address proof
-   * Uses: POST /contextus/comp_endereco_v2
-   */
   async extractAddressProof(imageBase64: string): Promise<any> {
     if (!this.isEnabled) {
       throw new Error('Tenant analysis is disabled');
@@ -414,10 +371,6 @@ export class CellereService {
     }
   }
 
-  /**
-   * Extract data from rental contract
-   * Uses: POST /contextus/contrato-locacao-v2
-   */
   async extractRentalContract(imageBase64: string): Promise<any> {
     if (!this.isEnabled) {
       throw new Error('Tenant analysis is disabled');
@@ -433,9 +386,6 @@ export class CellereService {
     }
   }
 
-  /**
-   * KYC Phone validation (Claro, Tim, Vivo)
-   */
   async validatePhone(phone: string, cpf: string, carrier?: 'claro' | 'tim' | 'vivo'): Promise<{ valid: boolean; matches: any }> {
     if (!this.isEnabled) {
       throw new Error('Tenant analysis is disabled');
@@ -465,14 +415,12 @@ export class CellereService {
     return { valid: false, matches: null };
   }
 
-  // ==================== Response Mapping ====================
 
   private mapFinancialResponse(data: any, isCPF: boolean): FinancialAnalysisResponse {
     if (isCPF) {
       const cpfData = data?.CadastroPessoaFisica || data;
       const rfData = data?.ReceitaFederalCpf || {};
 
-      // Debug: Log available fields for address/phone extraction
       this.logger.debug(`CPF Data keys: ${Object.keys(cpfData || {}).join(', ')}`);
       if (cpfData?.Endereco) this.logger.debug(`Endereco keys: ${Object.keys(cpfData.Endereco).join(', ')}`);
       if (cpfData?.EnderecoResidencial) this.logger.debug(`EnderecoResidencial keys: ${Object.keys(cpfData.EnderecoResidencial).join(', ')}`);
@@ -480,18 +428,15 @@ export class CellereService {
       const situacao = rfData?.SituacaoCadastral || cpfData?.SituacaoReceitaBancoDados || '';
       const hasIssues = situacao !== 'REGULAR' && situacao !== '';
 
-      // Extract address from various possible locations
       const endereco = cpfData?.Endereco || cpfData?.EnderecoResidencial || {};
       const hasAddress = endereco?.Logradouro || cpfData?.Logradouro;
 
-      // Extract phones
       const phones: string[] = [];
       if (cpfData?.Telefone) phones.push(cpfData.Telefone);
       if (cpfData?.TelefoneComDDD) phones.push(cpfData.TelefoneComDDD);
       if (cpfData?.Celular) phones.push(cpfData.Celular);
       if (endereco?.Telefone) phones.push(endereco.Telefone);
 
-      // Extract emails
       const emails: string[] = [];
       if (cpfData?.Email) emails.push(cpfData.Email);
       if (cpfData?.EnderecoEmail) emails.push(cpfData.EnderecoEmail);
@@ -502,7 +447,7 @@ export class CellereService {
         motherName: cpfData?.NomeMae,
         situacaoCadastral: situacao,
         creditScore: this.estimateCreditScore(situacao, cpfData?.RendaEstimada),
-        totalDebts: 0, // Not available in this endpoint
+        totalDebts: 0,
         activeDebts: 0,
         hasNegativeRecords: hasIssues,
         paymentDelays: 0,
@@ -521,14 +466,11 @@ export class CellereService {
         emails: emails.length > 0 ? emails : undefined,
       };
     } else {
-      // CNPJ
       const situacao = data?.SituacaoCadastral || '';
       const hasIssues = situacao !== 'ATIVA' && situacao !== '';
 
-      // Extract address for CNPJ
       const hasAddress = data?.Logradouro;
 
-      // Extract phones for CNPJ
       const phones: string[] = [];
       if (data?.Telefone) phones.push(data.Telefone);
       if (data?.TelefoneComDDD) phones.push(data.TelefoneComDDD);
@@ -555,7 +497,6 @@ export class CellereService {
   }
 
   private mapBackgroundResponse(bgData: any, courtData: any, warrantsData: any, isCPF: boolean): BackgroundCheckResponse {
-    // Process court records
     const processos = courtData?.Processos || [];
     const judicialRecords = processos.map((p: any) => ({
       processNumber: p.Numero || '',
@@ -567,7 +508,6 @@ export class CellereService {
 
     const evictions = judicialRecords.filter((r: any) => r.isEviction);
 
-    // Process arrest warrants
     const mandados = warrantsData?.Mandados || [];
     const hasArrestWarrants = mandados.length > 0;
     const arrestWarrants = mandados.map((m: any) => ({
@@ -577,7 +517,6 @@ export class CellereService {
       dataExpedicao: m.DataExpedicao || '',
     }));
 
-    // Determine status
     let status: 'CLEAR' | 'WARNING' | 'CRITICAL' = 'CLEAR';
     if (hasArrestWarrants || evictions.length > 0) {
       status = 'CRITICAL';
@@ -597,7 +536,7 @@ export class CellereService {
       judicialRecords,
       hasEvictions: evictions.length > 0,
       evictionsCount: evictions.length,
-      hasProtests: false, // Would need separate protest API
+      hasProtests: false,
       protestRecords: [],
       totalProtestValue: 0,
       hasArrestWarrants,
@@ -682,8 +621,6 @@ export class CellereService {
     };
   }
 
-  // ==================== Helper Methods ====================
-
   private isEvictionProcess(record: any): boolean {
     const type = (record.Tipo || record.Assunto || '').toLowerCase();
     const evictionKeywords = ['despejo', 'desocupação', 'desocupacao', 'imissão', 'imissao'];
@@ -691,10 +628,8 @@ export class CellereService {
   }
 
   private estimateCreditScore(situacao: string, rendaEstimada?: string): number {
-    // Base score
     let score = 700;
 
-    // Adjust based on status
     if (situacao === 'REGULAR') {
       score = 800;
     } else if (situacao === 'TITULAR FALECIDO') {
@@ -705,7 +640,6 @@ export class CellereService {
       score = 500;
     }
 
-    // Adjust based on estimated income
     if (rendaEstimada) {
       const renda = parseFloat(rendaEstimada);
       if (renda > 10000) score += 50;

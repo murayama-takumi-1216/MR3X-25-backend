@@ -5,7 +5,6 @@ import { PrismaService } from '../../config/prisma.service';
 export class SalesMessageService {
   constructor(private prisma: PrismaService) {}
 
-  // Get all messages for a user (inbox)
   async getMessages(userId: bigint) {
     const messages = await this.prisma.salesMessage.findMany({
       where: {
@@ -64,7 +63,6 @@ export class SalesMessageService {
     }));
   }
 
-  // Create a new message
   async createMessage(
     senderId: bigint,
     recipientId: bigint,
@@ -106,7 +104,6 @@ export class SalesMessageService {
     };
   }
 
-  // Mark message as read
   async markAsRead(messageId: bigint, userId: bigint) {
     const message = await this.prisma.salesMessage.updateMany({
       where: {
@@ -126,9 +123,7 @@ export class SalesMessageService {
     };
   }
 
-  // Toggle star status
   async toggleStar(messageId: bigint, userId: bigint) {
-    // First get current star status
     const currentMessage = await this.prisma.salesMessage.findFirst({
       where: {
         id: messageId,
@@ -153,7 +148,6 @@ export class SalesMessageService {
     };
   }
 
-  // Delete message (soft delete)
   async deleteMessage(messageId: bigint, userId: bigint) {
     await this.prisma.salesMessage.updateMany({
       where: {
@@ -171,9 +165,7 @@ export class SalesMessageService {
     };
   }
 
-  // Reply to a message
   async replyToMessage(messageId: bigint, senderId: bigint, content: string) {
-    // First verify the message exists
     const message = await this.prisma.salesMessage.findUnique({
       where: { id: messageId },
     });
@@ -209,7 +201,6 @@ export class SalesMessageService {
     };
   }
 
-  // Get notifications for a user
   async getNotifications(userId: bigint) {
     const notifications = await this.prisma.salesNotification.findMany({
       where: {
@@ -231,7 +222,6 @@ export class SalesMessageService {
     }));
   }
 
-  // Create a notification
   async createNotification(
     userId: bigint,
     type: string,
@@ -260,7 +250,6 @@ export class SalesMessageService {
     };
   }
 
-  // Mark notification as read
   async markNotificationAsRead(notificationId: bigint, userId: bigint) {
     await this.prisma.salesNotification.updateMany({
       where: {

@@ -18,10 +18,6 @@ export interface CreateMicrotransactionDto {
 export class MicrotransactionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Create a new microtransaction record
-   * This creates a pending charge that needs to be paid before the feature is unlocked
-   */
   async createMicrotransaction(dto: CreateMicrotransactionDto) {
     const microtransaction = await this.prisma.microtransaction.create({
       data: {
@@ -41,10 +37,6 @@ export class MicrotransactionsService {
     return microtransaction;
   }
 
-  /**
-   * Generate payment link for a microtransaction (Asaas integration placeholder)
-   * In production, this would integrate with Asaas API to create a payment
-   */
   async generatePaymentLink(microtransactionId: bigint): Promise<string> {
     const transaction = await this.prisma.microtransaction.findUnique({
       where: { id: microtransactionId },
@@ -62,11 +54,8 @@ export class MicrotransactionsService {
       throw new BadRequestException('Microtransaction is not pending payment');
     }
 
-    // TODO: Integrate with Asaas API to create payment
-    // For now, generate a placeholder payment link
     const paymentLink = `https://payments.mr3x.com.br/pay/${transaction.id}`;
 
-    // Update transaction with payment link
     await this.prisma.microtransaction.update({
       where: { id: microtransactionId },
       data: {
@@ -78,10 +67,6 @@ export class MicrotransactionsService {
     return paymentLink;
   }
 
-  /**
-   * Mark a microtransaction as paid
-   * This is typically called by a webhook from the payment gateway
-   */
   async markAsPaid(
     microtransactionId: bigint,
     paymentMethod: string,
@@ -100,7 +85,6 @@ export class MicrotransactionsService {
       },
     });
 
-    // Update agency's total spent
     if (transaction.agencyId) {
       await this.prisma.agency.update({
         where: { id: transaction.agencyId },
@@ -115,9 +99,6 @@ export class MicrotransactionsService {
     return transaction;
   }
 
-  /**
-   * Mark a microtransaction as failed
-   */
   async markAsFailed(microtransactionId: bigint, reason?: string) {
     return await this.prisma.microtransaction.update({
       where: { id: microtransactionId },
@@ -128,9 +109,6 @@ export class MicrotransactionsService {
     });
   }
 
-  /**
-   * Refund a microtransaction
-   */
   async refundMicrotransaction(
     microtransactionId: bigint,
     refundAmount: number,
@@ -148,7 +126,6 @@ export class MicrotransactionsService {
       throw new BadRequestException('Can only refund paid transactions');
     }
 
-    // Update transaction
     const refunded = await this.prisma.microtransaction.update({
       where: { id: microtransactionId },
       data: {
@@ -159,7 +136,6 @@ export class MicrotransactionsService {
       },
     });
 
-    // Update agency's total spent
     if (transaction.agencyId) {
       await this.prisma.agency.update({
         where: { id: transaction.agencyId },
@@ -172,9 +148,6 @@ export class MicrotransactionsService {
     return refunded;
   }
 
-  /**
-   * Get all microtransactions for an agency
-   */
   async getAgencyMicrotransactions(
     agencyId: bigint,
     filters?: {
@@ -219,14 +192,10 @@ export class MicrotransactionsService {
     });
   }
 
-  /**
-   * Get microtransaction summary for an agency
-   */
   async getAgencySummary(agencyId: bigint, month?: string) {
     const where: any = { agencyId };
 
     if (month) {
-      // month format: YYYY-MM
       const [year, monthNum] = month.split('-').map(Number);
       const startDate = new Date(year, monthNum - 1, 1);
       const endDate = new Date(year, monthNum, 0, 23, 59, 59);
@@ -252,13 +221,10 @@ export class MicrotransactionsService {
     };
 
     transactions.forEach((t) => {
-      // Count by status
       summary.byStatus[t.status] = (summary.byStatus[t.status] || 0) + 1;
 
-      // Count by type
       summary.byType[t.type] = (summary.byType[t.type] || 0) + 1;
 
-      // Sum amounts
       const amount = Number(t.amount);
       summary.totalAmount += amount;
 
@@ -274,9 +240,6 @@ export class MicrotransactionsService {
     return summary;
   }
 
-  /**
-   * Check if a microtransaction has been paid
-   */
   async isPaid(microtransactionId: bigint): Promise<boolean> {
     const transaction = await this.prisma.microtransaction.findUnique({
       where: { id: microtransactionId },
@@ -286,9 +249,6 @@ export class MicrotransactionsService {
     return transaction?.status === MicrotransactionStatus.PAID;
   }
 
-  /**
-   * Get total microtransaction spending for an agency in a period
-   */
   async getTotalSpending(
     agencyId: bigint,
     startDate: Date,
@@ -311,9 +271,6 @@ export class MicrotransactionsService {
     return Number(result._sum.amount || 0);
   }
 
-  /**
-   * Get microtransaction details by ID
-   */
   async getMicrotransactionById(microtransactionId: bigint) {
     const transaction = await this.prisma.microtransaction.findUnique({
       where: { id: microtransactionId },

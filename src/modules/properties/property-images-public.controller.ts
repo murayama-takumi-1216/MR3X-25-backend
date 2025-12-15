@@ -19,15 +19,12 @@ export class PropertyImagesPublicController {
     @Res() res: Response,
   ) {
     try {
-      // Get images without authentication check (public endpoint)
       const images = await this.propertyImagesService.getPropertyImagesPublic(propertyId);
 
       let selectedImage;
       if (imageId) {
-        // If specific imageId is requested, find that image
         selectedImage = images.find((img: any) => img.id.toString() === imageId);
       } else {
-        // Otherwise, get primary image or first image
         selectedImage = images.find((img: any) => img.isPrimary) || images[0];
       }
 
@@ -35,16 +32,13 @@ export class PropertyImagesPublicController {
         return res.status(404).json({ error: 'No images found' });
       }
 
-      // Set CORS headers
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-      res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
 
-      // Set Content-Type header
       res.setHeader('Content-Type', selectedImage.mimeType || 'image/jpeg');
 
-      // Read file and send as buffer
       const filePath = path.resolve(selectedImage.path);
       if (fs.existsSync(filePath)) {
         const fileBuffer = fs.readFileSync(filePath);

@@ -15,7 +15,6 @@ import { AuditorService } from './auditor.service';
 export class AuditorController {
   constructor(private readonly auditorService: AuditorService) {}
 
-  // ==================== DASHBOARD ====================
   @Get('dashboard/metrics')
   async getDashboardMetrics() {
     return this.auditorService.getDashboardMetrics();
@@ -76,13 +75,11 @@ export class AuditorController {
     return this.auditorService.getSummaryStats();
   }
 
-  // ==================== AGENCIES ====================
   @Get('agencies')
   async getAgencies(@Query('search') search?: string) {
     return this.auditorService.getAgencies(search);
   }
 
-  // ==================== USERS ====================
   @Get('users')
   async getUsers(
     @Query('role') role?: string,
@@ -92,7 +89,6 @@ export class AuditorController {
     return this.auditorService.getUsers({ role, status, search });
   }
 
-  // ==================== DOCUMENTS ====================
   @Get('documents')
   async getDocuments(
     @Query('type') type?: string,
@@ -102,7 +98,6 @@ export class AuditorController {
     return this.auditorService.getDocuments({ type, status, search });
   }
 
-  // ==================== LOGS ====================
   @Get('logs')
   async getLogs(
     @Query('event') event?: string,
@@ -113,7 +108,6 @@ export class AuditorController {
     return this.auditorService.getLogs({ event, entity, dateFrom, dateTo });
   }
 
-  // ==================== PAYMENTS ====================
   @Get('payments')
   async getPayments(
     @Query('status') status?: string,
@@ -123,13 +117,11 @@ export class AuditorController {
     return this.auditorService.getPayments({ status, dateFrom, dateTo });
   }
 
-  // ==================== SECURITY ====================
   @Get('security')
   async getSecurityData() {
     return this.auditorService.getSecurityData();
   }
 
-  // ==================== INTEGRITY ====================
   @Get('integrity')
   async getIntegrityData() {
     return this.auditorService.getIntegrityData();

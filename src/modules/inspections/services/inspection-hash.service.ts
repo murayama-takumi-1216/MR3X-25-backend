@@ -6,16 +6,10 @@ import { PrismaService } from '@config/prisma.service';
 export class InspectionHashService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Generate SHA-256 hash from a buffer (PDF content)
-   */
   generateHash(buffer: Buffer): string {
     return createHash('sha256').update(buffer).digest('hex');
   }
 
-  /**
-   * Store the provisional hash (before signatures)
-   */
   async storeProvisionalHash(inspectionId: bigint, hash: string): Promise<void> {
     await this.prisma.inspection.update({
       where: { id: inspectionId },
@@ -23,9 +17,6 @@ export class InspectionHashService {
     });
   }
 
-  /**
-   * Store the final hash (after all signatures)
-   */
   async storeFinalHash(inspectionId: bigint, hash: string): Promise<void> {
     await this.prisma.inspection.update({
       where: { id: inspectionId },
@@ -33,9 +24,6 @@ export class InspectionHashService {
     });
   }
 
-  /**
-   * Verify if a provided hash matches the stored final hash
-   */
   async verifyHash(inspectionId: bigint, providedHash: string): Promise<boolean> {
     const inspection = await this.prisma.inspection.findUnique({
       where: { id: inspectionId },
@@ -49,9 +37,6 @@ export class InspectionHashService {
     return inspection.hashFinal === providedHash;
   }
 
-  /**
-   * Verify hash by inspection token (public access)
-   */
   async verifyHashByToken(token: string, providedHash: string): Promise<{ valid: boolean; message: string }> {
     const inspection = await this.prisma.inspection.findUnique({
       where: { inspectionToken: token },
@@ -76,9 +61,6 @@ export class InspectionHashService {
     };
   }
 
-  /**
-   * Generate hash from uploaded file and compare with stored hash
-   */
   async validateUploadedPdf(
     inspectionToken: string,
     fileBuffer: Buffer,
@@ -120,9 +102,6 @@ export class InspectionHashService {
     };
   }
 
-  /**
-   * Get inspection verification data by token (public)
-   */
   async getVerificationData(token: string): Promise<{
     found: boolean;
     data?: {

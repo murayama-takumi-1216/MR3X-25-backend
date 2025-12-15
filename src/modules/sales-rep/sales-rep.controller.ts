@@ -25,14 +25,12 @@ export class SalesRepController {
     private readonly salesMessageService: SalesMessageService,
     private readonly salesRepService: SalesRepService,
   ) {}
-  // ==================== STATS ====================
   @Get('stats')
   async getStats(@Request() req: any) {
     const salesRepId = BigInt(req.user.sub);
     return this.salesRepService.getStats(salesRepId);
   }
 
-  // ==================== PROSPECTS ====================
   @Get('prospects')
   async getProspects(@Request() req: any) {
     const salesRepId = BigInt(req.user.sub);
@@ -60,7 +58,6 @@ export class SalesRepController {
     return this.salesRepService.deleteProspect(id);
   }
 
-  // ==================== PROPOSALS ====================
   @Get('proposals')
   async getProposals(@Request() req: any) {
     const salesRepId = BigInt(req.user.sub);
@@ -88,7 +85,6 @@ export class SalesRepController {
     return this.salesRepService.deleteProposal(id);
   }
 
-  // ==================== PIPELINE ====================
   @Get('pipeline')
   async getPipeline(@Request() req: any) {
     const salesRepId = BigInt(req.user.sub);
@@ -100,14 +96,12 @@ export class SalesRepController {
     return this.salesRepService.updatePipelineStage(id, body.stage);
   }
 
-  // ==================== METRICS ====================
   @Get('metrics')
   async getMetrics(@Request() req: any) {
     const salesRepId = BigInt(req.user.sub);
     return this.salesRepService.getMetrics(salesRepId);
   }
 
-  // ==================== COMMISSIONS ====================
   @Get('commissions')
   async getCommissions(@Request() req: any) {
     const salesRepId = BigInt(req.user.sub);
@@ -120,7 +114,6 @@ export class SalesRepController {
     return this.salesRepService.getCommissionsSummary(salesRepId);
   }
 
-  // ==================== MESSAGES ====================
   @Get('messages')
   async getMessages(@Request() req: any) {
     const userId = BigInt(req.user.sub);
@@ -171,7 +164,6 @@ export class SalesRepController {
     return this.salesMessageService.replyToMessage(messageId, senderId, body.content);
   }
 
-  // ==================== NOTIFICATIONS ====================
   @Get('notifications')
   async getNotifications(@Request() req: any) {
     const userId = BigInt(req.user.sub);

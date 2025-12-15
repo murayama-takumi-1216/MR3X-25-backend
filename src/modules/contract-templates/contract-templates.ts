@@ -1,24 +1,19 @@
 export type UserType = 'AGENCY' | 'INDEPENDENT_OWNER' | 'PLATFORM';
 export type PropertyType = 'RESIDENTIAL' | 'COMMERCIAL' | 'RURAL' | 'RURAL_RESIDENCE';
-export type PersonType = 'PF' | 'PJ'; // Pessoa Física ou Jurídica
+export type PersonType = 'PF' | 'PJ'; 
 
 export interface ContractTemplate {
   id: string;
   name: string;
   description: string;
   content: string;
-  type: 'CTR' | 'ACD' | 'VST'; // Contract, Accord, Inspection
-  allowedUserTypes: UserType[]; // Who can use this template
+  type: 'CTR' | 'ACD' | 'VST'; 
+  allowedUserTypes: UserType[];
   propertyType?: PropertyType;
   landlordType?: PersonType;
   tenantType?: PersonType;
   category: 'ADMINISTRATION' | 'RENTAL' | 'PLATFORM_SERVICE' | 'PARTNERSHIP';
 }
-
-// ========================================
-// CONTRATO 1: ADMINISTRAÇÃO DE IMÓVEL
-// IMOBILIÁRIA / LOCADOR (PF) / LOCATÁRIO
-// ========================================
 
 const adminImobiliariaPfLocatario: ContractTemplate = {
   id: "admin-imobiliaria-pf-locatario",
@@ -230,11 +225,6 @@ XIV – FORO
 
 Fica eleito o foro da comarca de [FORO_CIDADE_ESTADO] para dirimir conflitos deste contrato.`
 };
-
-// ========================================
-// CONTRATO 2: ADMINISTRAÇÃO DE IMÓVEL
-// (Apenas Imobiliária e Proprietário - Sem Locatário)
-// ========================================
 
 const administracaoImovel: ContractTemplate = {
   id: "administracao-imovel",
@@ -450,11 +440,6 @@ Fica eleito o foro da comarca de [FORO_CIDADE_ESTADO].
 IMOBILIÁRIA: [IMOBILIARIA_RAZAO_SOCIAL] – [DATA_ASS_IMOBILIARIA]
 LOCADOR: [LOCADOR_NOME] – [DATA_ASS_LOCADOR]`
 };
-
-// ========================================
-// CONTRATO 3: ADMINISTRAÇÃO DE IMÓVEL
-// IMOBILIÁRIA / LOCADOR (SEM LOCATÁRIO)
-// ========================================
 
 const contratoAdministracaoImovel: ContractTemplate = {
   id: "contrato-administracao-imovel",
@@ -680,11 +665,6 @@ IMOBILIÁRIA: [IMOBILIARIA_RAZAO_SOCIAL] – [DATA_ASS_IMOBILIARIA]
 LOCADOR: [LOCADOR_NOME] – [DATA_ASS_LOCADOR]`
 };
 
-// ========================================
-// CONTRATO 4: LOCAÇÃO DE IMÓVEL RURAL
-// LOCADORES (PF) / LOCATÁRIO (PJ)
-// ========================================
-
 const contratoLocacaoImovelRural: ContractTemplate = {
   id: "contrato-locacao-imovel-rural",
   name: "Contrato de Locação de Imóvel Rural",
@@ -893,11 +873,6 @@ Fica eleito o foro da comarca de [FORO_CIDADE_ESTADO], renunciando qualquer outr
 **LOCATÁRIO (PJ):**
 [LOCATARIO_RAZAO_SOCIAL] – [DATA_ASS_LOCATARIO]`
 };
-
-// ========================================
-// CONTRATO 5: LOCAÇÃO RESIDENCIAL (PADRÃO 2019)
-// LOCADOR (PF) / LOCATÁRIO (PF)
-// ========================================
 
 const contratoLocacaoResidencialPadrao: ContractTemplate = {
   id: "contrato-locacao-residencial-padrao",
@@ -1145,11 +1120,6 @@ LOCADOR: [LOCADOR_NOME] – [DATA_ASS_LOCADOR]
 LOCATÁRIO: [LOCATARIO_NOME] – [DATA_ASS_LOCATARIO]
 FIADOR (opcional): [FIADOR_NOME] – [DATA_ASS_FIADOR]`
 };
-
-// ========================================
-// CONTRATO 6: ADMINISTRAÇÃO E LOCAÇÃO COMERCIAL
-// IMOBILIÁRIA / LOCADOR (PF) / LOCATÁRIO (PJ)
-// ========================================
 
 const contratoAdministracaoLocacaoComercialPJ: ContractTemplate = {
   id: "contrato-administracao-locacao-comercial-pj",
@@ -1526,11 +1496,6 @@ IP: [IP_LOCATARIO]
 HASH DO DOCUMENTO: [HASH_DOCUMENTO]`
 };
 
-// ========================================
-// CONTRATO 7: LOCAÇÃO DE IMÓVEL RURAL
-// IMOBILIÁRIA / LOCATÁRIA (PJ)
-// ========================================
-
 const contratoLocacaoRuralImobiliariaPJ: ContractTemplate = {
   id: "contrato-locacao-rural-imobiliaria-pj",
   name: "Locação de Imóvel Rural - Imobiliária / Locatária PJ",
@@ -1885,11 +1850,6 @@ IP: [IP_FIADOR]
 HASH DO DOCUMENTO: [HASH_DOCUMENTO]
 DATA E HORA DE REGISTRO: [DATA_HORA_REGISTRO]`
 };
-
-// ========================================
-// CONTRATO 8: ADMINISTRAÇÃO E LOCAÇÃO RESIDENCIAL
-// IMOBILIÁRIA / LOCADOR (PF) / LOCATÁRIO (PJ)
-// ========================================
 
 const contratoAdministracaoLocacaoResidencialPJ: ContractTemplate = {
   id: "contrato-administracao-locacao-residencial-pj",
@@ -2261,10 +2221,6 @@ IMOBILIÁRIA: [IMOBILIARIA_RAZAO_SOCIAL]
 Representada por: [IMOBILIARIA_REPRESENTANTE]
 Data: [DATA_ASS_IMOBILIARIA]`
 };
-
-// ========================================
-// TEMPLATE 9: CONTRATO DE ADMINISTRAÇÃO DE IMÓVEL — IMOBILIÁRIA / LOCADOR (PESSOA FÍSICA) / LOCATÁRIO (PESSOA FÍSICA)
-// ========================================
 
 const contratoAdministracaoImovelLocadorPfLocatarioPf: ContractTemplate = {
   id: "contrato-administracao-imovel-locador-pf-locatario-pf",
@@ -2771,10 +2727,6 @@ Data: [DATA_ASS_TESTEMUNHA2]
 ════════════════════════════════════════════════════════════════════════════════`
 };
 
-// ========================================
-// TEMPLATE 10: CONTRATO DE LOCAÇÃO DE IMÓVEL RURAL — LOCADORES PF / LOCATÁRIO PJ
-// ========================================
-
 const contratoLocacaoRuralLocadoresPfLocatarioPj: ContractTemplate = {
   id: "contrato-locacao-rural-locadores-pf-locatario-pj",
   name: "Locação de Imóvel Rural - Locadores PF / Locatário PJ",
@@ -3088,10 +3040,6 @@ Data: [DATA_ASS_LOCATARIO]
                            FIM DO CONTRATO
 ════════════════════════════════════════════════════════════════════════════════`
 };
-
-// ========================================
-// TEMPLATE 11: CONTRATO DE LOCAÇÃO RESIDENCIAL PADRÃO 2019 — LOCADOR PF / LOCATÁRIO PF
-// ========================================
 
 const contratoLocacaoResidencialPadrao2019: ContractTemplate = {
   id: "contrato-locacao-residencial-padrao-2019",
@@ -3444,10 +3392,6 @@ Data: [DATA_ASS_FIADOR]
 ════════════════════════════════════════════════════════════════════════════════`
 };
 
-// ========================================
-// TEMPLATE 12: CONTRATO DE LOCAÇÃO COMERCIAL — PROPRIETÁRIO INDEPENDENTE x INQUILINO PJ
-// ========================================
-
 const contratoLocacaoComercialProprietarioPJ: ContractTemplate = {
   id: "contrato-locacao-comercial-proprietario-pj",
   name: "Locação Comercial - Proprietário Independente / Locatário PJ",
@@ -3782,11 +3726,6 @@ Data: [DATA_ASS_LOCATARIO]
 ════════════════════════════════════════════════════════════════════════════════`
 };
 
-// ========================================
-// TEMPLATE 13: CONTRATO DE LOCAÇÃO COMERCIAL SIMPLIFICADO
-// Proprietário Independente (PF) x Locatário (PJ)
-// ========================================
-
 const contratoLocacaoComercialSimplificado: ContractTemplate = {
   id: "contrato-locacao-comercial-simplificado",
   name: "Locação Comercial Simplificado - Proprietário PF / Locatário PJ",
@@ -3973,11 +3912,6 @@ Data: [DATA_ASS_LOCATARIO]
 ════════════════════════════════════════════════════════════════════════════════`
 };
 
-// ========================================
-// TEMPLATE 14: CONTRATO DE LOCAÇÃO RESIDENCIAL
-// Proprietário Independente (PF) x Inquilino (PF)
-// ========================================
-
 const contratoLocacaoResidencialProprietarioPF: ContractTemplate = {
   id: "contrato-locacao-residencial-proprietario-pf",
   name: "Locação Residencial - Proprietário PF / Locatário PF",
@@ -4158,11 +4092,6 @@ Data: [DATA_ASS_FIADOR]
                            FIM DO CONTRATO
 ════════════════════════════════════════════════════════════════════════════════`
 };
-
-// ========================================
-// TEMPLATE 15: CONTRATO DE LOCAÇÃO RURAL (FAZENDA / RESIDÊNCIA RURAL)
-// Proprietário Independente x Inquilino — Modelo Completo
-// ========================================
 
 const contratoLocacaoRuralProprietarioIndependente: ContractTemplate = {
   id: "contrato-locacao-rural-proprietario-independente",
@@ -4370,11 +4299,6 @@ Data: [DATA_ASS_LOCATARIO]
 ════════════════════════════════════════════════════════════════════════════════`
 };
 
-// ========================================
-// TEMPLATE 16: CONTRATO DE RESIDÊNCIA RURAL (Casa Rural)
-// Proprietário x Locatário
-// ========================================
-
 const contratoResidenciaRural: ContractTemplate = {
   id: "contrato-residencia-rural",
   name: "Locação Residência Rural - Casa Rural",
@@ -4534,11 +4458,6 @@ Data: [DATA_ASS_LOCATARIO]
                            FIM DO CONTRATO
 ════════════════════════════════════════════════════════════════════════════════`
 };
-
-// ========================================
-// TEMPLATE 17: LOCAÇÃO RESIDENCIAL (PESSOA FÍSICA)
-// Locador PF x Locatário PF com Fiador Opcional
-// ========================================
 
 const contratoLocacaoResidencialPFComFiador: ContractTemplate = {
   id: "contrato-locacao-residencial-pf-fiador",
@@ -4718,10 +4637,6 @@ Data: [DATA_ASS_FIADOR]
 ════════════════════════════════════════════════════════════════════════════════`
 };
 
-// ========================================
-// EXPORTAÇÃO DOS CONTRATOS
-// ========================================
-
 export const contractTemplates: ContractTemplate[] = [
   adminImobiliariaPfLocatario,
   administracaoImovel,
@@ -4741,10 +4656,6 @@ export const contractTemplates: ContractTemplate[] = [
   contratoResidenciaRural,
   contratoLocacaoResidencialPFComFiador,
 ];
-
-// ========================================
-// FUNÇÕES AUXILIARES
-// ========================================
 
 export const getTemplateById = (id: string): ContractTemplate | undefined => {
   return contractTemplates.find(template => template.id === id);

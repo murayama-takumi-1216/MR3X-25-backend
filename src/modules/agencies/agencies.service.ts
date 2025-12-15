@@ -51,7 +51,6 @@ export class AgenciesService {
   ) {}
 
   async createAgency(data: AgencyCreateDTO) {
-    // Check if agency with this CNPJ already exists
     const cleanCnpj = data.cnpj.replace(/\D/g, '');
     const existingAgency = await this.prisma.agency.findUnique({
       where: { cnpj: cleanCnpj },
@@ -61,7 +60,6 @@ export class AgenciesService {
       throw new BadRequestException('Agency with this CNPJ already exists');
     }
 
-    // Check if agency with this email already exists
     const existingEmail = await this.prisma.agency.findFirst({
       where: { email: data.email },
     });
@@ -70,7 +68,6 @@ export class AgenciesService {
       throw new BadRequestException('Agency with this email already exists');
     }
 
-    // Get plan limits for the selected plan
     const planName = data.plan || 'FREE';
     const planLimits = getPlanLimitsForEntity(planName, 'agency');
 
@@ -88,8 +85,8 @@ export class AgenciesService {
         zipCode: data.zipCode || null,
         plan: planName,
         status: 'ACTIVE',
-        maxProperties: planLimits.contracts, // Use contract-based plan limits
-        maxUsers: planLimits.users, // Use plan limits
+        maxProperties: planLimits.contracts,
+        maxUsers: planLimits.users,
         agencyFee: data.agencyFee ?? 8,
         apiEnabled: planLimits.apiAccess,
         lastPlanChange: new Date(),
@@ -181,7 +178,6 @@ export class AgenciesService {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Transform to match frontend expectations
     return agencies.map(agency => ({
       id: agency.id.toString(),
       name: agency.name,
@@ -254,12 +250,9 @@ export class AgenciesService {
       throw new NotFoundException('Agency not found');
     }
 
-    // Automatically enforce plan limits when loading agency data
-    // This ensures excess contracts/users are frozen
     try {
       await this.planEnforcement.enforceCurrentPlanLimits(id);
     } catch (error) {
-      // Log error but don't fail the request
       console.error('Error enforcing plan limits:', error);
     }
 
@@ -311,7 +304,6 @@ export class AgenciesService {
       throw new NotFoundException('Agency not found');
     }
 
-    // If email is being updated, check for duplicates
     if (data.email && data.email !== agency.email) {
       const existingEmail = await this.prisma.agency.findFirst({
         where: { email: data.email },
@@ -322,16 +314,12 @@ export class AgenciesService {
       }
     }
 
-    // Check if plan is being changed
     const isPlanChange = data.plan && data.plan !== agency.plan;
     let planEnforcementResult: Awaited<ReturnType<typeof this.planEnforcement.enforcePlanLimits>> | null = null;
 
-    // If plan is changing, enforce plan limits AFTER updating the agency
     if (isPlanChange && data.plan) {
-      // Get new plan limits
       const newPlanLimits = getPlanLimitsForEntity(data.plan, 'agency');
 
-      // Update agency with new plan and limits
       const updated = await this.prisma.agency.update({
         where: { id: BigInt(id) },
         data: {
@@ -384,10 +372,8 @@ export class AgenciesService {
         },
       });
 
-      // Now enforce plan limits (freeze/unfreeze as needed)
       planEnforcementResult = await this.planEnforcement.enforcePlanLimits(id, data.plan!);
 
-      // Get updated frozen counts after enforcement
       const updatedAgency = await this.prisma.agency.findUnique({
         where: { id: BigInt(id) },
         select: {
@@ -425,7 +411,6 @@ export class AgenciesService {
       };
     }
 
-    // No plan change - normal update without enforcement
     const updated = await this.prisma.agency.update({
       where: { id: BigInt(id) },
       data: {
@@ -530,39 +515,22 @@ export class AgenciesService {
     return { message: 'Agency deleted successfully' };
   }
 
-  // Plan enforcement methods
-
-  /**
-   * Get plan usage summary for an agency
-   */
   async getPlanUsage(agencyId: string) {
     return this.planEnforcement.getFrozenEntitiesSummary(agencyId);
   }
 
-  /**
-   * Get list of frozen entities for an agency
-   */
   async getFrozenEntities(agencyId: string) {
     return this.planEnforcement.getFrozenEntitiesList(agencyId);
   }
 
-  /**
-   * Preview what would happen if agency changes to a different plan
-   */
   async previewPlanChange(agencyId: string, newPlan: string) {
     return this.planEnforcement.previewPlanChange(agencyId, newPlan);
   }
 
-  /**
-   * Switch active contract for FREE plan (only 1 contract allowed)
-   */
   async switchActiveContract(agencyId: string, newActiveContractId: string) {
     return this.planEnforcement.switchActiveContract(agencyId, newActiveContractId);
   }
 
-  /**
-   * Manually enforce plan limits (admin operation)
-   */
   async enforcePlanLimits(agencyId: string) {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -576,23 +544,14 @@ export class AgenciesService {
     return this.planEnforcement.enforcePlanLimits(agencyId, agency.plan);
   }
 
-  /**
-   * Check if contract creation is allowed for the agency
-   */
   async checkContractCreationAllowed(agencyId: string) {
     return this.planEnforcement.checkContractOperationAllowed(agencyId, 'create');
   }
 
-  /**
-   * Check if user creation is allowed for the agency
-   */
   async checkUserCreationAllowed(agencyId: string) {
     return this.planEnforcement.checkUserOperationAllowed(agencyId, 'create');
   }
 
-  /**
-   * Change agency plan and enforce limits
-   */
   async changePlan(agencyId: string, newPlan: string) {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -603,15 +562,10 @@ export class AgenciesService {
       throw new NotFoundException('Agency not found');
     }
 
-    // IMPORTANT: Enforce plan limits BEFORE updating the plan in DB
-    // This allows enforcePlanLimits to read the OLD plan value and correctly
-    // determine if this is an upgrade or downgrade
     const enforcementResult = await this.planEnforcement.enforcePlanLimits(agencyId, newPlan);
 
-    // Get new plan limits
     const newPlanLimits = getPlanLimitsForEntity(newPlan, 'agency');
 
-    // Update agency with new plan AFTER enforcement
     await this.prisma.agency.update({
       where: { id: BigInt(agencyId) },
       data: {
@@ -622,7 +576,6 @@ export class AgenciesService {
       },
     });
 
-    // Get updated agency data
     const updatedAgency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
       select: {

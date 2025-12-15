@@ -18,17 +18,14 @@ export class AuditService {
 
     const where: any = {};
 
-    // Filter by entity type if provided
     if (params.entity) {
       where.entity = params.entity;
     }
 
-    // Filter by entity ID if provided
     if (params.entityId) {
       where.entityId = BigInt(params.entityId);
     }
 
-    // Filter by date range if provided
     if (params.startDate || params.endDate) {
       where.timestamp = {};
       if (params.startDate) {
@@ -59,7 +56,6 @@ export class AuditService {
       this.prisma.auditLog.count({ where }),
     ]);
 
-    // Handle null users gracefully and convert BigInt to string
     const itemsWithNullSafeUsers = items.map(item => ({
       id: item.id.toString(),
       event: item.event,
@@ -107,7 +103,6 @@ export class AuditService {
       throw new NotFoundException('Audit log not found');
     }
 
-    // Handle null user gracefully
     return {
       id: auditLog.id.toString(),
       event: auditLog.event,

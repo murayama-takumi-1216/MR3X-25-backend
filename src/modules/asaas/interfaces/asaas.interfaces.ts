@@ -1,9 +1,3 @@
-/**
- * Asaas API Interfaces
- * Based on Asaas API v3 documentation
- */
-
-// Customer interfaces
 export interface AsaasCustomer {
   id: string;
   name: string;
@@ -50,7 +44,6 @@ export interface CreateCustomerDto {
   groupName?: string;
 }
 
-// Payment interfaces
 export type AsaasBillingType = 'BOLETO' | 'CREDIT_CARD' | 'PIX' | 'UNDEFINED';
 export type AsaasPaymentStatus =
   | 'PENDING'
@@ -137,14 +130,12 @@ export interface AsaasSplit {
   totalFixedValue?: number;
 }
 
-// PIX interfaces
 export interface AsaasPixQrCode {
   encodedImage: string;
   payload: string;
   expirationDate: string;
 }
 
-// Webhook interfaces
 export type AsaasWebhookEvent =
   | 'PAYMENT_CREATED'
   | 'PAYMENT_AWAITING_RISK_ANALYSIS'
@@ -175,7 +166,6 @@ export interface AsaasWebhookPayload {
   payment: AsaasPayment;
 }
 
-// Subscription interfaces
 export interface AsaasSubscription {
   id: string;
   dateCreated: string;
@@ -218,7 +208,6 @@ export interface CreateSubscriptionDto {
   split?: AsaasSplit[];
 }
 
-// Installment interfaces
 export interface AsaasInstallment {
   id: string;
   value: number;
@@ -235,7 +224,6 @@ export interface AsaasInstallment {
   dateCreated: string;
 }
 
-// API Response interfaces
 export interface AsaasListResponse<T> {
   object: string;
   hasMore: boolean;
@@ -252,7 +240,6 @@ export interface AsaasError {
   }>;
 }
 
-// Internal interfaces for our system
 export interface PaymentCreationResult {
   success: boolean;
   paymentId?: string;

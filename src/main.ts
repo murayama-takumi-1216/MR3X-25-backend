@@ -13,7 +13,6 @@ import { join } from 'path';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Serve static files from uploads directory
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads/',
   });
@@ -75,9 +74,6 @@ async function bootstrap() {
 
   const port = process.env.PORT || 8081;
   await app.listen(port, '0.0.0.0');
-  console.log(`✅ Application is running on port ${port}`);
-  console.log(`✅ CORS enabled - allowing all origins`);
-  console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
 }
 
 bootstrap();

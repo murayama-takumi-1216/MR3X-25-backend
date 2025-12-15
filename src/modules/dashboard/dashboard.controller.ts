@@ -21,7 +21,6 @@ export class DashboardController {
     if (role === 'CEO') {
       return this.dashboardService.getCEODashboard();
     } else if (role === 'ADMIN') {
-      // ADMIN sees only their own data (each admin is independent)
       return this.dashboardService.getAdminDashboard(userId);
     } else if (role === 'INQUILINO') {
       return this.dashboardService.getTenantDashboard(userId);
@@ -32,7 +31,6 @@ export class DashboardController {
     } else if (role === 'BROKER') {
       return this.dashboardService.getBrokerDashboard(userId, agencyId, brokerId);
     } else if (role === 'INDEPENDENT_OWNER') {
-      // INDEPENDENT_OWNER sees only properties they created (not by ownerId)
       return this.dashboardService.getIndependentOwnerDashboard(userId);
     } else {
       return this.dashboardService.getOwnerDashboard(userId);

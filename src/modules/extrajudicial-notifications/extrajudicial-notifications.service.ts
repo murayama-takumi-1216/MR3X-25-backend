@@ -15,27 +15,18 @@ import * as crypto from 'crypto';
 export class ExtrajudicialNotificationsService {
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * Generate unique notification token
-   */
   private generateNotificationToken(): string {
     const year = new Date().getFullYear();
     const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
     return `MR3X-NEX-${year}-${random}`;
   }
 
-  /**
-   * Generate notification number
-   */
   private generateNotificationNumber(): string {
     const year = new Date().getFullYear();
     const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
     return `MR3X-NEX-${year}-${random}`;
   }
 
-  /**
-   * Generate protocol number
-   */
   private generateProtocolNumber(): string {
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
@@ -43,27 +34,17 @@ export class ExtrajudicialNotificationsService {
     return `PROT-${dateStr}-${random}`;
   }
 
-  /**
-   * Calculate deadline date
-   */
   private calculateDeadlineDate(deadlineDays: number): Date {
     const date = new Date();
     date.setDate(date.getDate() + deadlineDays);
     return date;
   }
 
-  /**
-   * Generate document hash
-   */
   private generateHash(content: string): string {
     return crypto.createHash('sha256').update(content).digest('hex');
   }
 
-  /**
-   * Create a new extrajudicial notification
-   */
   async create(data: CreateExtrajudicialNotificationDto, userId: string, clientIP?: string, userAgent?: string) {
-    // Validate property exists
     const property = await this.prisma.property.findUnique({
       where: { id: BigInt(data.propertyId) },
     });
@@ -72,7 +53,6 @@ export class ExtrajudicialNotificationsService {
       throw new NotFoundException('Property not found');
     }
 
-    // Calculate deadline date
     const deadlineDate = this.calculateDeadlineDate(data.deadlineDays);
 
     const notification = await this.prisma.extrajudicialNotification.create({
@@ -130,7 +110,6 @@ export class ExtrajudicialNotificationsService {
       },
     });
 
-    // Create audit entry
     await this.createAudit(notification.id.toString(), 'CREATED', userId, clientIP, userAgent, {
       action: 'Notification created',
     });
@@ -138,10 +117,6 @@ export class ExtrajudicialNotificationsService {
     return this.findOne(notification.id.toString());
   }
 
-  /**
-   * Find all notifications with filters
-   * Now includes notifications where user is the debtor (so they can see notifications sent TO them)
-   */
   async findAll(params: {
     skip?: number;
     take?: number;
@@ -155,7 +130,7 @@ export class ExtrajudicialNotificationsService {
     startDate?: string;
     endDate?: string;
     createdById?: string;
-    userId?: string; // Current user ID to show notifications where they are debtor
+    userId?: string;
     search?: string;
   }) {
     const {
@@ -177,14 +152,12 @@ export class ExtrajudicialNotificationsService {
 
     const where: any = {};
 
-    // Build OR condition for visibility:
-    // User can see notifications they created OR notifications where they are the debtor (after sent)
     if (userId && !agencyId && !createdById) {
       where.OR = [
         { createdBy: BigInt(userId) },
         {
           debtorId: BigInt(userId),
-          status: { notIn: ['RASCUNHO'] } // Debtors can only see after it's sent
+          status: { notIn: ['RASCUNHO'] }
         },
         {
           creditorId: BigInt(userId),
@@ -208,7 +181,6 @@ export class ExtrajudicialNotificationsService {
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
-    // Add search filter
     if (search && search.trim()) {
       where.AND = [
         ...(where.AND || []),
@@ -251,7 +223,6 @@ export class ExtrajudicialNotificationsService {
       this.prisma.extrajudicialNotification.count({ where }),
     ]);
 
-    // Add userRole field to each notification to indicate if current user is creditor or debtor
     const notificationsWithRole = notifications.map(n => {
       const serialized = this.serializeNotification(n);
       if (userId) {
@@ -275,9 +246,6 @@ export class ExtrajudicialNotificationsService {
     };
   }
 
-  /**
-   * Find one notification by ID
-   */
   async findOne(id: string) {
     const notification = await this.prisma.extrajudicialNotification.findUnique({
       where: { id: BigInt(id) },
@@ -321,9 +289,6 @@ export class ExtrajudicialNotificationsService {
     return this.serializeNotification(notification);
   }
 
-  /**
-   * Find notification by token (for external access)
-   */
   async findByToken(token: string) {
     const notification = await this.prisma.extrajudicialNotification.findUnique({
       where: { notificationToken: token },
@@ -343,9 +308,6 @@ export class ExtrajudicialNotificationsService {
     return this.serializeNotification(notification);
   }
 
-  /**
-   * Update notification
-   */
   async update(id: string, data: UpdateExtrajudicialNotificationDto, userId: string) {
     const notification = await this.prisma.extrajudicialNotification.findUnique({
       where: { id: BigInt(id) },
@@ -355,7 +317,6 @@ export class ExtrajudicialNotificationsService {
       throw new NotFoundException('Notification not found');
     }
 
-    // Only allow updates to draft notifications
     if (notification.status !== 'RASCUNHO') {
       throw new ForbiddenException('Can only update draft notifications');
     }
@@ -398,9 +359,6 @@ export class ExtrajudicialNotificationsService {
     return this.findOne(id);
   }
 
-  /**
-   * Send notification
-   */
   async send(id: string, data: SendNotificationDto, userId: string, clientIP?: string) {
     const notification = await this.prisma.extrajudicialNotification.findUnique({
       where: { id: BigInt(id) },
@@ -427,14 +385,10 @@ export class ExtrajudicialNotificationsService {
       sentVia: data.sentVia || 'EMAIL',
     });
 
-    // TODO: Implement actual email/WhatsApp sending
 
     return this.findOne(id);
   }
 
-  /**
-   * Mark notification as viewed
-   */
   async markAsViewed(id: string, clientIP?: string, userAgent?: string) {
     const notification = await this.prisma.extrajudicialNotification.findUnique({
       where: { id: BigInt(id) },
@@ -444,7 +398,6 @@ export class ExtrajudicialNotificationsService {
       throw new NotFoundException('Notification not found');
     }
 
-    // Only update if not already viewed
     if (!notification.viewedAt) {
       await this.prisma.extrajudicialNotification.update({
         where: { id: BigInt(id) },
@@ -462,10 +415,6 @@ export class ExtrajudicialNotificationsService {
     return this.findOne(id);
   }
 
-  /**
-   * Sign notification
-   * Validates that only the correct party can sign their respective role
-   */
   async sign(id: string, data: SignExtrajudicialNotificationDto, userId: string, clientIP?: string, userAgent?: string) {
     const notification = await this.prisma.extrajudicialNotification.findUnique({
       where: { id: BigInt(id) },
@@ -479,7 +428,6 @@ export class ExtrajudicialNotificationsService {
     const now = new Date();
     const updateData: any = {};
 
-    // Validate creditor signature - only the creditor or creator can sign as creditor
     if (data.creditorSignature) {
       const isCreditor = notification.creditorId === userIdBigInt;
       const isCreator = notification.createdBy === userIdBigInt;
@@ -500,7 +448,6 @@ export class ExtrajudicialNotificationsService {
       if (data.geoLng) updateData.creditorGeoLng = data.geoLng;
     }
 
-    // Validate debtor signature - only the debtor can sign as debtor
     if (data.debtorSignature) {
       const isDebtor = notification.debtorId === userIdBigInt;
 
@@ -512,7 +459,6 @@ export class ExtrajudicialNotificationsService {
         throw new BadRequestException('O devedor ja assinou esta notificacao');
       }
 
-      // Debtor can only sign if notification has been sent
       if (notification.status === 'RASCUNHO') {
         throw new BadRequestException('A notificacao deve ser enviada antes que o devedor possa assinar');
       }
@@ -539,7 +485,6 @@ export class ExtrajudicialNotificationsService {
       updateData.witness2SignedAt = now;
     }
 
-    // Update notification with signatures
     await this.prisma.extrajudicialNotification.update({
       where: { id: BigInt(id) },
       data: updateData,
@@ -551,9 +496,6 @@ export class ExtrajudicialNotificationsService {
     return this.findOne(id);
   }
 
-  /**
-   * Respond to notification (debtor)
-   */
   async respond(id: string, data: RespondExtrajudicialNotificationDto, userId: string, clientIP?: string) {
     const notification = await this.prisma.extrajudicialNotification.findUnique({
       where: { id: BigInt(id) },
@@ -582,9 +524,6 @@ export class ExtrajudicialNotificationsService {
     return this.findOne(id);
   }
 
-  /**
-   * Resolve notification
-   */
   async resolve(id: string, data: ResolveExtrajudicialNotificationDto, userId: string) {
     const notification = await this.prisma.extrajudicialNotification.findUnique({
       where: { id: BigInt(id) },
@@ -612,9 +551,6 @@ export class ExtrajudicialNotificationsService {
     return this.findOne(id);
   }
 
-  /**
-   * Forward to judicial process
-   */
   async forwardToJudicial(id: string, data: ForwardToJudicialDto, userId: string) {
     const notification = await this.prisma.extrajudicialNotification.findUnique({
       where: { id: BigInt(id) },
@@ -643,9 +579,6 @@ export class ExtrajudicialNotificationsService {
     return this.findOne(id);
   }
 
-  /**
-   * Cancel notification
-   */
   async cancel(id: string, userId: string, reason?: string) {
     const notification = await this.prisma.extrajudicialNotification.findUnique({
       where: { id: BigInt(id) },
@@ -672,9 +605,6 @@ export class ExtrajudicialNotificationsService {
     return this.findOne(id);
   }
 
-  /**
-   * Delete notification (only drafts)
-   */
   async remove(id: string) {
     const notification = await this.prisma.extrajudicialNotification.findUnique({
       where: { id: BigInt(id) },
@@ -688,7 +618,6 @@ export class ExtrajudicialNotificationsService {
       throw new ForbiddenException('Can only delete draft notifications');
     }
 
-    // Delete audits first
     await this.prisma.extrajudicialNotificationAudit.deleteMany({
       where: { notificationId: BigInt(id) },
     });
@@ -700,16 +629,11 @@ export class ExtrajudicialNotificationsService {
     return { message: 'Notification deleted successfully' };
   }
 
-  /**
-   * Get statistics
-   * userId is used to filter notifications where user is creditor, debtor, or creator
-   */
   async getStatistics(params: { agencyId?: string; createdById?: string; userId?: string }) {
     const { agencyId, createdById, userId } = params;
 
     const where: any = {};
 
-    // If userId is provided, show statistics for notifications where user is involved
     if (userId && !agencyId && !createdById) {
       where.OR = [
         { createdBy: BigInt(userId) },
@@ -746,9 +670,6 @@ export class ExtrajudicialNotificationsService {
     };
   }
 
-  /**
-   * Create audit entry
-   */
   private async createAudit(
     notificationId: string,
     action: string,
@@ -769,9 +690,6 @@ export class ExtrajudicialNotificationsService {
     });
   }
 
-  /**
-   * Serialize notification for response
-   */
   private serializeNotification(notification: any): any {
     const serialized: any = {
       ...notification,
@@ -807,7 +725,6 @@ export class ExtrajudicialNotificationsService {
       updatedAt: notification.updatedAt?.toISOString() || null,
     };
 
-    // Serialize relations
     if (notification.property) {
       serialized.property = {
         ...notification.property,

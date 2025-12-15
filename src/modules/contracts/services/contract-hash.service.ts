@@ -6,16 +6,10 @@ import { PrismaService } from '@config/prisma.service';
 export class ContractHashService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Generate SHA-256 hash from a buffer (PDF content)
-   */
   generateHash(buffer: Buffer): string {
     return createHash('sha256').update(buffer).digest('hex');
   }
 
-  /**
-   * Store the provisional hash (before signatures)
-   */
   async storeProvisionalHash(contractId: bigint, hash: string): Promise<void> {
     await this.prisma.contract.update({
       where: { id: contractId },
@@ -23,9 +17,6 @@ export class ContractHashService {
     });
   }
 
-  /**
-   * Store the final hash (after all signatures)
-   */
   async storeFinalHash(contractId: bigint, hash: string): Promise<void> {
     await this.prisma.contract.update({
       where: { id: contractId },
@@ -33,9 +24,6 @@ export class ContractHashService {
     });
   }
 
-  /**
-   * Verify if a provided hash matches the stored final hash
-   */
   async verifyHash(contractId: bigint, providedHash: string): Promise<boolean> {
     const contract = await this.prisma.contract.findUnique({
       where: { id: contractId },
@@ -49,9 +37,6 @@ export class ContractHashService {
     return contract.hashFinal === providedHash;
   }
 
-  /**
-   * Verify hash by contract token (public access)
-   */
   async verifyHashByToken(token: string, providedHash: string): Promise<{ valid: boolean; message: string }> {
     const contract = await this.prisma.contract.findUnique({
       where: { contractToken: token },
@@ -76,9 +61,6 @@ export class ContractHashService {
     };
   }
 
-  /**
-   * Generate hash from uploaded file and compare with stored hash
-   */
   async validateUploadedPdf(
     contractToken: string,
     fileBuffer: Buffer,

@@ -7,23 +7,14 @@ import * as fs from 'fs';
 export class ExtrajudicialNotificationHashService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Generate SHA-256 hash from buffer
-   */
   generateHash(buffer: Buffer): string {
     return crypto.createHash('sha256').update(buffer).digest('hex');
   }
 
-  /**
-   * Generate hash from string content
-   */
   generateHashFromString(content: string): string {
     return crypto.createHash('sha256').update(content).digest('hex');
   }
 
-  /**
-   * Store provisional hash for notification
-   */
   async storeProvisionalHash(notificationId: bigint, hash: string): Promise<void> {
     await this.prisma.extrajudicialNotification.update({
       where: { id: notificationId },
@@ -31,9 +22,6 @@ export class ExtrajudicialNotificationHashService {
     });
   }
 
-  /**
-   * Store final hash for notification
-   */
   async storeFinalHash(notificationId: bigint, hash: string): Promise<void> {
     await this.prisma.extrajudicialNotification.update({
       where: { id: notificationId },
@@ -41,9 +29,6 @@ export class ExtrajudicialNotificationHashService {
     });
   }
 
-  /**
-   * Verify notification hash integrity
-   */
   async verifyNotificationHash(notificationId: string): Promise<{
     valid: boolean;
     message: string;
@@ -67,7 +52,6 @@ export class ExtrajudicialNotificationHashService {
       throw new NotFoundException('Notification not found');
     }
 
-    // Check if final PDF exists
     const pdfPath = notification.finalPdfPath || notification.provisionalPdfPath;
     const storedHash = notification.hashFinal || notification.provisionalHash;
 
@@ -78,7 +62,6 @@ export class ExtrajudicialNotificationHashService {
       };
     }
 
-    // Check if file exists
     if (!fs.existsSync(pdfPath)) {
       return {
         valid: false,
@@ -87,7 +70,6 @@ export class ExtrajudicialNotificationHashService {
       };
     }
 
-    // Read PDF and calculate hash
     const pdfBuffer = fs.readFileSync(pdfPath);
     const calculatedHash = this.generateHash(pdfBuffer);
 
@@ -103,9 +85,6 @@ export class ExtrajudicialNotificationHashService {
     };
   }
 
-  /**
-   * Verify hash by notification token (for public verification)
-   */
   async verifyHashByToken(token: string): Promise<{
     valid: boolean;
     message: string;
@@ -168,9 +147,6 @@ export class ExtrajudicialNotificationHashService {
     };
   }
 
-  /**
-   * Validate uploaded PDF against stored hash
-   */
   async validateUploadedPdf(
     notificationToken: string,
     fileBuffer: Buffer,

@@ -8,11 +8,11 @@ import { ContractImmutabilityService } from './services/contract-immutability.se
 import { ContractValidationService } from './services/contract-validation.service';
 
 export interface SignatureDataWithGeo {
-  signature: string; // Base64 signature image
+  signature: string;
   clientIP?: string;
   userAgent?: string;
-  geoLat: number; // Required geolocation
-  geoLng: number; // Required geolocation
+  geoLat: number;
+  geoLng: number;
   geoConsent: boolean;
   witnessName?: string;
   witnessDocument?: string;
@@ -33,8 +33,6 @@ export class ContractsService {
   async findAll(params: { skip?: number; take?: number; agencyId?: string; status?: string; createdById?: string; userId?: string; search?: string }) {
     const { skip = 0, take = 10, agencyId, status, createdById, userId, search } = params;
 
-    // Enforce plan limits when fetching contracts for an agency
-    // This ensures excess contracts are frozen before returning data
     if (agencyId) {
       try {
         await this.planEnforcement.enforceCurrentPlanLimits(agencyId);
@@ -46,15 +44,11 @@ export class ContractsService {
     const where: any = { deleted: false };
     if (status) where.status = status;
 
-    // Build filter conditions
     if (agencyId) {
-      // Filter by agency
       where.agencyId = BigInt(agencyId);
     } else if (createdById) {
-      // Filter by property creator for ADMIN/INDEPENDENT_OWNER users
       where.property = { createdBy: BigInt(createdById) };
     } else if (userId) {
-      // Fallback: show contracts where user is owner, or property was created by user
       where.OR = [
         { ownerId: BigInt(userId) },
         { property: { createdBy: BigInt(userId) } },
@@ -62,7 +56,6 @@ export class ContractsService {
       ];
     }
 
-    // Add search filter
     if (search && search.trim()) {
       const searchConditions = [
         { property: { name: { contains: search.trim() } } },
@@ -72,7 +65,6 @@ export class ContractsService {
       ];
 
       if (where.OR) {
-        // Combine existing OR conditions with search
         where.AND = [{ OR: where.OR }, { OR: searchConditions }];
         delete where.OR;
       } else {
@@ -109,7 +101,7 @@ export class ContractsService {
       include: {
         property: {
           include: {
-            owner: true, // Include property owner for template variables
+            owner: true,
           },
         },
         tenantUser: true,
@@ -127,16 +119,13 @@ export class ContractsService {
   }
 
   async create(data: any, userId: string, userAgencyId?: string) {
-    // Get property to auto-populate ownerId and agencyId
     const property = await this.prisma.property.findUnique({
       where: { id: BigInt(data.propertyId) },
       select: { ownerId: true, agencyId: true },
     });
 
-    // Determine agencyId for plan check
     const checkAgencyId = data.agencyId || property?.agencyId?.toString() || userAgencyId;
 
-    // Check if the agency can create more contracts based on plan limits
     if (checkAgencyId) {
       const contractCheck = await this.planEnforcement.checkContractOperationAllowed(checkAgencyId, 'create');
       if (!contractCheck.allowed) {
@@ -144,7 +133,6 @@ export class ContractsService {
       }
     }
 
-    // Check if property already has an active contract (only one contract per property at a time)
     const existingActiveContract = await this.prisma.contract.findFirst({
       where: {
         propertyId: BigInt(data.propertyId),
@@ -167,13 +155,11 @@ export class ContractsService {
       );
     }
 
-    // Determine ownerId: from data, from property, or null
     let ownerId = data.ownerId ? BigInt(data.ownerId) : null;
     if (!ownerId && property?.ownerId) {
       ownerId = property.ownerId;
     }
 
-    // Determine agencyId: from data, from property, from user context, or null
     let agencyId = data.agencyId ? BigInt(data.agencyId) : null;
     if (!agencyId && property?.agencyId) {
       agencyId = property.agencyId;
@@ -182,7 +168,6 @@ export class ContractsService {
       agencyId = BigInt(userAgencyId);
     }
 
-    // Generate contract token
     const year = new Date().getFullYear();
     const random = Math.random().toString(36).substring(2, 7).toUpperCase();
     const contractToken = `MR3X-CTR-${year}-${random}`;
@@ -221,7 +206,6 @@ export class ContractsService {
       throw new NotFoundException('Contract not found');
     }
 
-    // Enforce immutability based on contract status
     const immutabilityCheck = await this.immutabilityService.enforceImmutability(
       BigInt(id),
       data,
@@ -240,24 +224,15 @@ export class ContractsService {
     return this.serializeContract(updated);
   }
 
-  /**
-   * Validate contract before preparing for signing
-   */
   async validateForSigning(id: string) {
     const validation = await this.validationService.validateContract(BigInt(id));
     return validation;
   }
 
-  /**
-   * Get contract immutability status
-   */
   async getImmutabilityStatus(id: string) {
     return this.immutabilityService.checkImmutability(BigInt(id));
   }
 
-  /**
-   * Create amended contract when original is immutable
-   */
   async createAmendedContract(originalId: string, amendments: Record<string, any>, userId: string) {
     const check = await this.immutabilityService.checkImmutability(BigInt(originalId));
 
@@ -277,7 +252,6 @@ export class ContractsService {
       throw new NotFoundException('Contract not found');
     }
 
-    // Check if deletion is allowed based on immutability status
     const immutabilityCheck = await this.immutabilityService.checkImmutability(BigInt(id));
     if (!immutabilityCheck.canDelete) {
       throw new ForbiddenException(`Não é possível excluir este contrato: ${immutabilityCheck.reason}`);
@@ -285,8 +259,6 @@ export class ContractsService {
 
     const contractIdBigInt = BigInt(id);
 
-    // Delete related records first (to avoid foreign key constraints)
-    // Tables with REQUIRED contractId - must delete
     await this.prisma.contractClauseHistory.deleteMany({
       where: { contractId: contractIdBigInt },
     });
@@ -303,7 +275,6 @@ export class ContractsService {
       where: { contractId: contractIdBigInt },
     });
 
-    // Tables with OPTIONAL contractId - set to null
     await this.prisma.payment.updateMany({
       where: { contratoId: contractIdBigInt },
       data: { contratoId: null },
@@ -329,7 +300,6 @@ export class ContractsService {
       data: { contractId: null },
     });
 
-    // Finally, hard delete the contract from the database
     await this.prisma.contract.delete({
       where: { id: contractIdBigInt },
     });
@@ -337,14 +307,11 @@ export class ContractsService {
     return { message: 'Contract deleted successfully' };
   }
 
-  /**
-   * Sign a contract as tenant, owner, agency, or witness
-   */
   async signContract(
     id: string,
     signatureType: 'tenant' | 'owner' | 'agency' | 'witness',
     signatureData: {
-      signature: string; // Base64 signature image
+      signature: string;
       clientIP?: string;
       userAgent?: string;
       witnessName?: string;
@@ -361,7 +328,6 @@ export class ContractsService {
       throw new NotFoundException('Contract not found');
     }
 
-    // Validate that the user has permission to sign
     if (signatureType === 'tenant') {
       if (contract.tenantId.toString() !== userId) {
         throw new ForbiddenException('You are not authorized to sign this contract as tenant');
@@ -408,13 +374,11 @@ export class ContractsService {
         break;
     }
 
-    // Check if all required signatures are present to update status to ATIVO
     const updatedContract = await this.prisma.contract.update({
       where: { id: BigInt(id) },
       data: updateData,
     });
 
-    // Check if contract should be activated (tenant signed)
     if (signatureType === 'tenant' && updatedContract.tenantSignature) {
       await this.prisma.contract.update({
         where: { id: BigInt(id) },
@@ -422,7 +386,6 @@ export class ContractsService {
       });
     }
 
-    // Log the signature in audit
     await this.prisma.contractAudit.create({
       data: {
         contractId: BigInt(id),
@@ -439,9 +402,6 @@ export class ContractsService {
     return this.findOne(id);
   }
 
-  /**
-   * Get contract for tenant (their own contract)
-   */
   async findByTenant(tenantId: string) {
     const contract = await this.prisma.contract.findFirst({
       where: {
@@ -483,7 +443,6 @@ export class ContractsService {
       deletedAt: contract.deletedAt?.toISOString() || null,
     };
 
-    // Serialize nested property object
     if (contract.property) {
       serialized.property = {
         ...contract.property,
@@ -493,7 +452,6 @@ export class ContractsService {
         brokerId: contract.property.brokerId?.toString() || null,
         createdBy: contract.property.createdBy?.toString() || null,
       };
-      // Serialize nested property.owner object
       if (contract.property.owner) {
         serialized.property.owner = {
           ...contract.property.owner,
@@ -507,7 +465,6 @@ export class ContractsService {
       }
     }
 
-    // Serialize nested tenantUser object
     if (contract.tenantUser) {
       serialized.tenantUser = {
         ...contract.tenantUser,
@@ -520,7 +477,6 @@ export class ContractsService {
       };
     }
 
-    // Serialize nested ownerUser object
     if (contract.ownerUser) {
       serialized.ownerUser = {
         ...contract.ownerUser,
@@ -533,7 +489,6 @@ export class ContractsService {
       };
     }
 
-    // Serialize nested agency object
     if (contract.agency) {
       serialized.agency = {
         ...contract.agency,
@@ -543,7 +498,6 @@ export class ContractsService {
       };
     }
 
-    // Serialize nested payments array
     if (contract.payments && Array.isArray(contract.payments)) {
       serialized.payments = contract.payments.map((payment: any) => ({
         ...payment,
@@ -559,13 +513,6 @@ export class ContractsService {
     return serialized;
   }
 
-  // ============================================
-  // ADVANCED SIGNATURE WORKFLOW METHODS
-  // ============================================
-
-  /**
-   * Prepare contract for signing: freeze clauses, generate provisional PDF, compute hash
-   */
   async prepareForSigning(id: string, userId: string) {
     const contract = await this.prisma.contract.findUnique({
       where: { id: BigInt(id) },
@@ -580,25 +527,20 @@ export class ContractsService {
       throw new NotFoundException('Contract not found');
     }
 
-    // Only allow preparing contracts in PENDENTE status
     if (contract.status !== 'PENDENTE') {
       throw new BadRequestException('Contrato deve estar com status PENDENTE para preparar para assinatura');
     }
 
-    // Validate contract has all required fields before freezing
     const validation = await this.validationService.validateContract(BigInt(id));
     if (!validation.valid) {
       const errorMessages = validation.errors.map(e => e.message).join('; ');
       throw new BadRequestException(`Contrato não pode ser preparado para assinatura: ${errorMessages}`);
     }
 
-    // Generate token if not exists
     const contractToken = contract.contractToken || this.pdfService.generateContractToken();
 
-    // Freeze current clauses
     const clausesSnapshot = contract.description ? { content: contract.description } : {};
 
-    // Update contract status to AGUARDANDO_ASSINATURAS
     await this.prisma.contract.update({
       where: { id: BigInt(id) },
       data: {
@@ -608,10 +550,8 @@ export class ContractsService {
       },
     });
 
-    // Generate provisional PDF
     const pdfBuffer = await this.pdfService.generateProvisionalPdf(BigInt(id));
 
-    // Log audit event
     await this.prisma.contractAudit.create({
       data: {
         contractId: BigInt(id),
@@ -631,16 +571,12 @@ export class ContractsService {
     };
   }
 
-  /**
-   * Sign contract with required geolocation data
-   */
   async signContractWithGeo(
     id: string,
     signatureType: 'tenant' | 'owner' | 'agency' | 'witness',
     signatureData: SignatureDataWithGeo,
     userId: string,
   ) {
-    // Validate geolocation is provided (REQUIRED)
     if (!signatureData.geoLat || !signatureData.geoLng) {
       throw new BadRequestException('Geolocalização é obrigatória para assinar o contrato');
     }
@@ -658,7 +594,6 @@ export class ContractsService {
       throw new NotFoundException('Contract not found');
     }
 
-    // Check contract is ready for signing
     if (contract.status !== 'AGUARDANDO_ASSINATURAS') {
       throw new BadRequestException('Contrato não está pronto para assinatura');
     }
@@ -720,13 +655,11 @@ export class ContractsService {
         break;
     }
 
-    // Update contract with signature
     const updatedContract = await this.prisma.contract.update({
       where: { id: BigInt(id) },
       data: updateData,
     });
 
-    // Log audit event
     await this.prisma.contractAudit.create({
       data: {
         contractId: BigInt(id),
@@ -742,7 +675,6 @@ export class ContractsService {
       },
     });
 
-    // Check if all required signatures are collected
     const allSigned = await this.checkAllSignaturesCollected(BigInt(id));
     if (allSigned) {
       await this.finalizeContract(id, userId);
@@ -751,9 +683,6 @@ export class ContractsService {
     return this.findOne(id);
   }
 
-  /**
-   * Check if all required signatures are collected
-   */
   private async checkAllSignaturesCollected(contractId: bigint): Promise<boolean> {
     const contract = await this.prisma.contract.findUnique({
       where: { id: contractId },
@@ -767,19 +696,14 @@ export class ContractsService {
 
     if (!contract) return false;
 
-    // Required: tenant and owner
     const hasTenant = !!contract.tenantSignature;
     const hasOwner = !!contract.ownerSignature;
 
-    // Agency signature required only if agency is associated
     const hasAgency = !contract.agencyId || !!contract.agencySignature;
 
     return hasTenant && hasOwner && hasAgency;
   }
 
-  /**
-   * Finalize contract: generate final PDF, compute final hash, set status
-   */
   async finalizeContract(id: string, userId: string) {
     const contract = await this.prisma.contract.findUnique({
       where: { id: BigInt(id) },
@@ -789,16 +713,13 @@ export class ContractsService {
       throw new NotFoundException('Contract not found');
     }
 
-    // Generate final PDF with all signatures
     const pdfBuffer = await this.pdfService.generateFinalPdf(BigInt(id));
 
-    // Update contract status
     await this.prisma.contract.update({
       where: { id: BigInt(id) },
       data: { status: 'ASSINADO' },
     });
 
-    // Log audit event
     await this.prisma.contractAudit.create({
       data: {
         contractId: BigInt(id),
@@ -817,9 +738,6 @@ export class ContractsService {
     };
   }
 
-  /**
-   * Update clauses (only allowed in draft/PENDENTE status)
-   */
   async updateClauses(id: string, clauses: any, userId: string, ip?: string, userAgent?: string) {
     const contract = await this.prisma.contract.findUnique({
       where: { id: BigInt(id) },
@@ -829,12 +747,10 @@ export class ContractsService {
       throw new NotFoundException('Contract not found');
     }
 
-    // Only allow editing in PENDENTE status
     if (contract.status !== 'PENDENTE') {
       throw new BadRequestException('Cláusulas só podem ser editadas quando o contrato está com status PENDENTE');
     }
 
-    // Save current version to history
     const currentClauses = contract.clausesSnapshot || (contract.description ? { content: contract.description } : {});
     await this.prisma.contractClauseHistory.create({
       data: {
@@ -846,7 +762,6 @@ export class ContractsService {
       },
     });
 
-    // Update clauses
     await this.prisma.contract.update({
       where: { id: BigInt(id) },
       data: {
@@ -855,7 +770,6 @@ export class ContractsService {
       },
     });
 
-    // Log audit event
     await this.prisma.contractAudit.create({
       data: {
         contractId: BigInt(id),
@@ -871,9 +785,6 @@ export class ContractsService {
     return this.findOne(id);
   }
 
-  /**
-   * Get clause history for a contract
-   */
   async getClauseHistory(id: string) {
     const history = await this.prisma.contractClauseHistory.findMany({
       where: { contractId: BigInt(id) },
@@ -898,9 +809,6 @@ export class ContractsService {
     }));
   }
 
-  /**
-   * Get contract by token (public access for verification)
-   */
   async findByToken(token: string) {
     const contract = await this.prisma.contract.findUnique({
       where: { contractToken: token },
@@ -915,7 +823,6 @@ export class ContractsService {
       return null;
     }
 
-    // Return anonymized data for public verification
     return {
       token: contract.contractToken,
       status: contract.status,
@@ -946,21 +853,14 @@ export class ContractsService {
     };
   }
 
-  /**
-   * Download provisional PDF
-   */
   async getProvisionalPdf(id: string): Promise<Buffer> {
     const pdf = await this.pdfService.getStoredPdf(BigInt(id), 'provisional');
     if (!pdf) {
-      // Generate if not exists
       return this.pdfService.generateProvisionalPdf(BigInt(id));
     }
     return pdf;
   }
 
-  /**
-   * Download final PDF
-   */
   async getFinalPdf(id: string): Promise<Buffer> {
     const contract = await this.prisma.contract.findUnique({
       where: { id: BigInt(id) },
@@ -982,9 +882,6 @@ export class ContractsService {
     return pdf;
   }
 
-  /**
-   * Create signature invitation links for all parties
-   */
   async createSignatureInvitations(
     id: string,
     parties: Array<{ signerType: 'tenant' | 'owner' | 'agency' | 'witness'; email: string; name?: string }>,
@@ -1008,7 +905,6 @@ export class ContractsService {
       parties,
     );
 
-    // Log audit event
     await this.prisma.contractAudit.create({
       data: {
         contractId: BigInt(id),
@@ -1024,9 +920,6 @@ export class ContractsService {
     return links;
   }
 
-  /**
-   * Revoke signed contract
-   */
   async revokeContract(id: string, userId: string, reason?: string) {
     const contract = await this.prisma.contract.findUnique({
       where: { id: BigInt(id) },
@@ -1041,10 +934,8 @@ export class ContractsService {
       data: { status: 'REVOGADO' },
     });
 
-    // Revoke all signature links
     await this.signatureLinkService.revokeAllContractLinks(BigInt(id));
 
-    // Log audit event
     await this.prisma.contractAudit.create({
       data: {
         contractId: BigInt(id),

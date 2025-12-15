@@ -38,7 +38,6 @@ export class UpdateAgreementDto {
   @IsString()
   ownerId?: string;
 
-  // Financial terms
   @ApiPropertyOptional({ description: 'Original amount' })
   @IsOptional()
   @IsNumber()
@@ -69,7 +68,6 @@ export class UpdateAgreementDto {
   @IsNumber()
   installmentValue?: number;
 
-  // Dates
   @ApiPropertyOptional({ description: 'Effective date' })
   @IsOptional()
   @IsDateString()
@@ -105,7 +103,6 @@ export class UpdateAgreementDto {
   @IsString()
   attachments?: string;
 
-  // Asaas integration
   @ApiPropertyOptional({ description: 'Asaas payment ID' })
   @IsOptional()
   @IsString()
