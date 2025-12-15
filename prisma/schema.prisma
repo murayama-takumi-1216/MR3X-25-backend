@@ -428,6 +428,8 @@ model Contract {
   userAgent                      String?  @map("user_agent") @db.VarChar(500)
 
   clausesSnapshot    Json?   @map("clauses_snapshot")
+  contentSnapshot    String? @map("content_snapshot") @db.LongText
+  dataSnapshot       Json?   @map("data_snapshot")
   provisionalPdfPath String? @map("provisional_pdf_path") @db.VarChar(500)
   provisionalHash    String? @map("provisional_hash") @db.VarChar(255)
   finalPdfPath       String? @map("final_pdf_path") @db.VarChar(500)

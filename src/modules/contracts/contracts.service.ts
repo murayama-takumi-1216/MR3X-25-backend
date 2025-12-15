@@ -121,7 +121,7 @@ export class ContractsService {
   async create(data: any, userId: string, userAgencyId?: string) {
     const property = await this.prisma.property.findUnique({
       where: { id: BigInt(data.propertyId) },
-      select: { ownerId: true, agencyId: true },
+      include: { owner: true },
     });
 
     const checkAgencyId = data.agencyId || property?.agencyId?.toString() || userAgencyId;
@@ -168,6 +168,90 @@ export class ContractsService {
       agencyId = BigInt(userAgencyId);
     }
 
+    const tenant = await this.prisma.user.findUnique({
+      where: { id: BigInt(data.tenantId) },
+    });
+
+    const owner = ownerId ? await this.prisma.user.findUnique({
+      where: { id: ownerId },
+    }) : null;
+
+    const agency = agencyId ? await this.prisma.agency.findUnique({
+      where: { id: agencyId },
+    }) : null;
+
+    const dataSnapshot = {
+      tenant: tenant ? {
+        id: tenant.id.toString(),
+        name: tenant.name,
+        email: tenant.email,
+        document: tenant.document,
+        rg: tenant.rg,
+        phone: tenant.phone,
+        address: tenant.address,
+        complement: tenant.complement,
+        neighborhood: tenant.neighborhood,
+        city: tenant.city,
+        state: tenant.state,
+        cep: tenant.cep,
+        nationality: tenant.nationality,
+        maritalStatus: tenant.maritalStatus,
+        profession: tenant.profession,
+        birthDate: tenant.birthDate?.toISOString(),
+      } : null,
+      owner: owner ? {
+        id: owner.id.toString(),
+        name: owner.name,
+        email: owner.email,
+        document: owner.document,
+        rg: owner.rg,
+        phone: owner.phone,
+        address: owner.address,
+        complement: owner.complement,
+        neighborhood: owner.neighborhood,
+        city: owner.city,
+        state: owner.state,
+        cep: owner.cep,
+        nationality: owner.nationality,
+        maritalStatus: owner.maritalStatus,
+        profession: owner.profession,
+      } : null,
+      property: property ? {
+        id: property.id.toString(),
+        name: property.name,
+        address: property.address,
+        neighborhood: property.neighborhood,
+        city: property.city,
+        cep: property.cep,
+        description: property.description,
+        registrationNumber: property.registrationNumber,
+        builtArea: property.builtArea?.toString(),
+        totalArea: property.totalArea?.toString(),
+      } : null,
+      agency: agency ? {
+        id: agency.id.toString(),
+        name: agency.name,
+        tradeName: agency.tradeName,
+        cnpj: agency.cnpj,
+        creci: agency.creci,
+        email: agency.email,
+        phone: agency.phone,
+        address: agency.address,
+        city: agency.city,
+        state: agency.state,
+        zipCode: agency.zipCode,
+      } : null,
+      guarantor: data.guarantorName ? {
+        name: data.guarantorName,
+        document: data.guarantorDocument,
+        rg: data.guarantorRg,
+        address: data.guarantorAddress,
+        profession: data.guarantorProfession,
+        cep: data.guarantorCep,
+      } : null,
+      createdAt: new Date().toISOString(),
+    };
+
     const year = new Date().getFullYear();
     const random = Math.random().toString(36).substring(2, 7).toUpperCase();
     const contractToken = `MR3X-CTR-${year}-${random}`;
@@ -191,6 +275,8 @@ export class ContractsService {
         contractToken: contractToken,
         clientIP: data.clientIP || null,
         userAgent: data.userAgent || null,
+        dataSnapshot: dataSnapshot,
+        contentSnapshot: data.contentSnapshot || null,
       },
     });
 

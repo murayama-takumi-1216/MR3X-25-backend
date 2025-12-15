@@ -71,7 +71,7 @@ export class InspectionMediaService {
         mimeType: media.mimeType,
         size: media.size,
         path: media.path,
-        url: `/api/inspections/${inspectionId}/media/${media.id}/file`,
+        url: `/uploads/inspections/${media.filename}`,
         type: mediaType as 'IMAGE' | 'VIDEO',
         createdAt: media.createdAt,
       });
@@ -116,7 +116,7 @@ export class InspectionMediaService {
       mimeType: media.mimeType,
       size: media.size,
       path: media.path,
-      url: `/api/inspections/${inspectionId}/media/${media.id}/file`,
+      url: `/uploads/inspections/${media.filename}`,
       type: media.type as 'IMAGE' | 'VIDEO',
       createdAt: media.createdAt,
     }));
@@ -144,7 +144,7 @@ export class InspectionMediaService {
       mimeType: media.mimeType,
       size: media.size,
       path: media.path,
-      url: `/api/inspections/${inspectionId}/media/${media.id}/file`,
+      url: `/uploads/inspections/${media.filename}`,
       type: media.type as 'IMAGE' | 'VIDEO',
       createdAt: media.createdAt,
     };
