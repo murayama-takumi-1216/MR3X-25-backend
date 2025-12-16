@@ -1189,6 +1189,209 @@ export class DashboardService {
     return this.buildDashboardResponse(properties, contracts, paymentsThisMonth, pendingContracts, recentPayments);
   }
 
+  async getTenantAlerts(userId: string) {
+    try {
+      const tenantId = BigInt(userId);
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      // Get tenant's contract and property
+      const contract = await this.prisma.contract.findFirst({
+        where: {
+          tenantId,
+          status: 'ATIVO',
+          deleted: false,
+        },
+        include: {
+          property: true,
+        },
+      });
+
+      // Check for overdue payments
+      let hasOverduePayment = false;
+      let overdueAmount = 0;
+      let overdueDays = 0;
+
+      if (contract?.property?.nextDueDate) {
+        const dueDate = new Date(contract.property.nextDueDate);
+        if (dueDate < now) {
+          hasOverduePayment = true;
+          overdueDays = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+          overdueAmount = Number(contract.monthlyRent || 0);
+        }
+      }
+
+      const isSeverelyOverdue = overdueDays > 30;
+
+      // Get active extrajudicial notifications for this tenant
+      const extrajudicialNotifications = await this.prisma.extrajudicialNotification.findMany({
+        where: {
+          debtorId: tenantId,
+          status: {
+            in: ['ENVIADO', 'AGUARDANDO_ENVIO', 'VISUALIZADO', 'GERADO'],
+          },
+        },
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          principalAmount: true,
+          deadlineDate: true,
+          viewedAt: true,
+          creditorName: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      const hasActiveExtrajudicial = extrajudicialNotifications.length > 0;
+
+      // Get pending agreements for this tenant
+      const pendingAgreements = await this.prisma.agreement.findMany({
+        where: {
+          tenantId,
+          status: 'AGUARDANDO_ASSINATURA',
+        },
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          negotiatedAmount: true,
+          effectiveDate: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      const hasPendingAgreement = pendingAgreements.length > 0;
+
+      // Determine if immediate action is required
+      const requiresImmediateAction =
+        hasActiveExtrajudicial ||
+        (isSeverelyOverdue && !hasPendingAgreement);
+
+      return {
+        hasOverduePayment,
+        overdueAmount,
+        overdueDays,
+        hasActiveExtrajudicial,
+        extrajudicialNotifications: extrajudicialNotifications.map((n: any) => ({
+          id: n.id.toString(),
+          type: n.type,
+          status: n.status,
+          principalAmount: n.principalAmount ? Number(n.principalAmount) : null,
+          deadlineDate: n.deadlineDate,
+          viewedAt: n.viewedAt,
+          creditorName: n.creditorName,
+        })),
+        hasPendingAgreement,
+        pendingAgreements: pendingAgreements.map((a: any) => ({
+          id: a.id.toString(),
+          type: a.type,
+          status: a.status,
+          totalAmount: a.negotiatedAmount ? Number(a.negotiatedAmount) : null,
+          effectiveDate: a.effectiveDate,
+        })),
+        isSeverelyOverdue,
+        requiresImmediateAction,
+      };
+    } catch (error: any) {
+      console.error('Error in getTenantAlerts:', error);
+      return {
+        hasOverduePayment: false,
+        overdueAmount: 0,
+        overdueDays: 0,
+        hasActiveExtrajudicial: false,
+        extrajudicialNotifications: [],
+        hasPendingAgreement: false,
+        pendingAgreements: [],
+        isSeverelyOverdue: false,
+        requiresImmediateAction: false,
+      };
+    }
+  }
+
+  async acknowledgeExtrajudicial(
+    userId: string,
+    notificationId: string,
+    data: {
+      acknowledgmentType: 'DASHBOARD_VIEW' | 'CLICK' | 'SIGNATURE';
+      ipAddress?: string;
+      geoLat?: number;
+      geoLng?: number;
+      geoConsent?: boolean;
+      userAgent?: string;
+      signature?: string;
+    },
+  ) {
+    try {
+      const notification = await this.prisma.extrajudicialNotification.findUnique({
+        where: { id: BigInt(notificationId) },
+      });
+
+      if (!notification) {
+        throw new Error('Notificação não encontrada');
+      }
+
+      // Update the notification with acknowledgment info
+      const updateData: any = {
+        viewedAt: notification.viewedAt || new Date(),
+        acknowledgedAt: new Date(),
+        status: 'VIEWED',
+      };
+
+      // If signature provided, update debtor signature
+      if (data.signature) {
+        updateData.debtorSignature = data.signature;
+        updateData.debtorSignedAt = new Date();
+        updateData.debtorIp = data.ipAddress;
+        if (data.geoLat && data.geoLng) {
+          updateData.debtorGeoLat = data.geoLat;
+          updateData.debtorGeoLng = data.geoLng;
+        }
+      }
+
+      const updated = await this.prisma.extrajudicialNotification.update({
+        where: { id: BigInt(notificationId) },
+        data: updateData,
+      });
+
+      // Create audit log entry
+      await this.prisma.auditLog.create({
+        data: {
+          event: 'EXTRAJUDICIAL_ACKNOWLEDGE',
+          entity: 'extrajudicial_notification',
+          entityId: BigInt(notificationId),
+          userId: BigInt(userId),
+          ip: data.ipAddress || null,
+          userAgent: data.userAgent || null,
+          dataAfter: JSON.stringify({
+            acknowledgmentType: data.acknowledgmentType,
+            acknowledgedAt: new Date().toISOString(),
+            ipAddress: data.ipAddress,
+            geoLat: data.geoLat,
+            geoLng: data.geoLng,
+            geoConsent: data.geoConsent,
+          }),
+        },
+      });
+
+      return {
+        success: true,
+        acknowledgedAt: updateData.acknowledgedAt,
+        notification: {
+          id: updated.id.toString(),
+          status: updated.status,
+        },
+      };
+    } catch (error: any) {
+      console.error('Error in acknowledgeExtrajudicial:', error);
+      throw error;
+    }
+  }
+
   async getPlatformRevenue() {
     try {
       const now = new Date();

@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { DashboardService } from './dashboard.service';
@@ -71,5 +71,31 @@ export class DashboardController {
     }
 
     return this.dashboardService.getPlatformRevenue();
+  }
+
+  @Get('tenant-alerts')
+  @ApiOperation({ summary: 'Get tenant alerts (extrajudicial notices, agreements, overdue payments)' })
+  async getTenantAlerts(@Req() req: any) {
+    const userId = req.user.sub;
+    return this.dashboardService.getTenantAlerts(userId);
+  }
+
+  @Post('extrajudicial/:notificationId/acknowledge')
+  @ApiOperation({ summary: 'Record tenant acknowledgment of extrajudicial notification' })
+  async acknowledgeExtrajudicial(
+    @Param('notificationId') notificationId: string,
+    @Body() data: {
+      acknowledgmentType: 'DASHBOARD_VIEW' | 'CLICK' | 'SIGNATURE';
+      ipAddress?: string;
+      geoLat?: number;
+      geoLng?: number;
+      geoConsent?: boolean;
+      userAgent?: string;
+      signature?: string;
+    },
+    @Req() req: any,
+  ) {
+    const userId = req.user.sub;
+    return this.dashboardService.acknowledgeExtrajudicial(userId, notificationId, data);
   }
 }

@@ -72,15 +72,17 @@ export class InspectionsService {
     if (userRole === 'INQUILINO' && userId) {
       // Tenant only sees inspections that have been sent AND where they are the tenant
       where.sentAt = { not: null };
+      // Note: Inspection doesn't have a direct contract relation, only contractId
+      // So we filter through property.tenantId only
       roleFilter = [
-        { contract: { tenantId: BigInt(userId) } },
         { property: { tenantId: BigInt(userId) } },
       ];
     } else if (userRole === 'PROPRIETARIO' && userId) {
       // Owner only sees inspections that have been sent AND where they are the owner
       where.sentAt = { not: null };
+      // Note: Inspection doesn't have a direct contract relation, only contractId
+      // So we filter through property.ownerId only
       roleFilter = [
-        { contract: { ownerId: BigInt(userId) } },
         { property: { ownerId: BigInt(userId) } },
       ];
     } else if (userRole === 'BROKER' && userId) {
