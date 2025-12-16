@@ -11,6 +11,14 @@ export enum TokenEntityType {
   DOCUMENT = 'DOC',
   INVOICE = 'INV',
   AGENCY = 'AGE',
+  ADMIN = 'ADM',
+  AGENCY_ADMIN = 'AGA',
+  CEO = 'CEO',
+  PLATFORM_MANAGER = 'PLM',
+  BUILDING_MANAGER = 'BLM',
+  LEGAL_AUDITOR = 'AUD',
+  REPRESENTATIVE = 'REP',
+  API_CLIENT = 'API',
 }
 
 @Injectable()
@@ -79,6 +87,14 @@ export class TokenGeneratorService {
         case TokenEntityType.OWNER:
         case TokenEntityType.BROKER:
         case TokenEntityType.MANAGER:
+        case TokenEntityType.ADMIN:
+        case TokenEntityType.AGENCY_ADMIN:
+        case TokenEntityType.CEO:
+        case TokenEntityType.PLATFORM_MANAGER:
+        case TokenEntityType.BUILDING_MANAGER:
+        case TokenEntityType.LEGAL_AUDITOR:
+        case TokenEntityType.REPRESENTATIVE:
+        case TokenEntityType.API_CLIENT:
           const user = await this.prisma.user.findFirst({
             where: { token },
           });
@@ -154,6 +170,14 @@ export class TokenGeneratorService {
       DOC: TokenEntityType.DOCUMENT,
       INV: TokenEntityType.INVOICE,
       AGE: TokenEntityType.AGENCY,
+      ADM: TokenEntityType.ADMIN,
+      AGA: TokenEntityType.AGENCY_ADMIN,
+      CEO: TokenEntityType.CEO,
+      PLM: TokenEntityType.PLATFORM_MANAGER,
+      BLM: TokenEntityType.BUILDING_MANAGER,
+      AUD: TokenEntityType.LEGAL_AUDITOR,
+      REP: TokenEntityType.REPRESENTATIVE,
+      API: TokenEntityType.API_CLIENT,
     };
 
     return typeMap[parsed.entityType] || null;

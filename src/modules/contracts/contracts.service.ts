@@ -42,7 +42,27 @@ export class ContractsService {
     }
 
     const where: any = { deleted: false };
-    if (status) where.status = status;
+    
+    // Hide PENDING contracts from non-admin users (BROKER, INQUILINO, PROPRIETARIO, etc.)
+    // Only AGENCY_ADMIN, AGENCY_MANAGER, CEO, ADMIN can see PENDING contracts
+    const adminRoles = ['AGENCY_ADMIN', 'AGENCY_MANAGER', 'CEO', 'ADMIN', 'PLATFORM_MANAGER'];
+    if (userRole && !adminRoles.includes(userRole)) {
+      // Non-admin users should not see PENDING contracts
+      // If status filter is provided, combine it with the exclusion of PENDENTE
+      if (status) {
+        if (status === 'PENDENTE') {
+          // Non-admin users cannot filter by PENDENTE, return empty result
+          where.status = 'NONEXISTENT_STATUS';
+        } else {
+          where.status = status;
+        }
+      } else {
+        where.status = { not: 'PENDENTE' };
+      }
+    } else if (status) {
+      // Admin users can see any status including PENDENTE
+      where.status = status;
+    }
 
     // Role-based filtering: only show contracts for properties the user is responsible for
     if (userRole === 'INQUILINO' && userId) {
@@ -91,7 +111,7 @@ export class ContractsService {
         skip,
         take,
         include: {
-          property: { select: { id: true, address: true, city: true, name: true, neighborhood: true } },
+          property: { select: { id: true, address: true, city: true, name: true, neighborhood: true, brokerId: true } },
           tenantUser: { select: { id: true, name: true, email: true, phone: true } },
           ownerUser: { select: { id: true, name: true, email: true } },
         },

@@ -57,6 +57,37 @@ export class UsersService {
     return password;
   }
 
+  private getTokenTypeForRole(role: string): TokenEntityType | null {
+    switch (role) {
+      case 'INQUILINO': return TokenEntityType.TENANT;
+      case 'PROPRIETARIO':
+      case 'INDEPENDENT_OWNER': return TokenEntityType.OWNER;
+      case 'BROKER': return TokenEntityType.BROKER;
+      case 'AGENCY_MANAGER': return TokenEntityType.MANAGER;
+      case 'ADMIN': return TokenEntityType.ADMIN;
+      case 'AGENCY_ADMIN': return TokenEntityType.AGENCY_ADMIN;
+      case 'CEO': return TokenEntityType.CEO;
+      case 'PLATFORM_MANAGER': return TokenEntityType.PLATFORM_MANAGER;
+      case 'BUILDING_MANAGER': return TokenEntityType.BUILDING_MANAGER;
+      case 'LEGAL_AUDITOR': return TokenEntityType.LEGAL_AUDITOR;
+      case 'REPRESENTATIVE': return TokenEntityType.REPRESENTATIVE;
+      case 'API_CLIENT': return TokenEntityType.API_CLIENT;
+      default: return null;
+    }
+  }
+
+  async ensureUserHasToken(userId: bigint, role: string): Promise<string | null> {
+    const tokenType = this.getTokenTypeForRole(role);
+    if (!tokenType) return null;
+
+    const token = await this.tokenGenerator.generateToken(tokenType);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { token },
+    });
+    return token;
+  }
+
   async findAll(params: {
     skip?: number;
     take?: number;
@@ -98,6 +129,7 @@ export class UsersService {
         take,
         select: {
           id: true,
+          token: true,
           email: true,
           name: true,
           role: true,
@@ -110,6 +142,7 @@ export class UsersService {
           city: true,
           state: true,
           cep: true,
+          photoUrl: true,
           agencyId: true,
           createdBy: true,
           createdAt: true,
@@ -121,6 +154,7 @@ export class UsersService {
           bankBranch: true,
           bankAccount: true,
           pixKey: true,
+          creci: true,
           agency: {
             select: { id: true, name: true },
           },
@@ -130,15 +164,27 @@ export class UsersService {
       this.prisma.user.count({ where }),
     ]);
 
+    // Generate tokens for users who don't have them
+    const usersWithTokens = await Promise.all(
+      users.map(async (u) => {
+        let token = u.token;
+        if (!token) {
+          token = await this.ensureUserHasToken(u.id, u.role);
+        }
+        return {
+          ...u,
+          token,
+          id: u.id.toString(),
+          agencyId: u.agencyId?.toString(),
+          createdBy: u.createdBy?.toString() || null,
+          frozenAt: u.frozenAt?.toISOString() || null,
+          agency: u.agency ? { ...u.agency, id: u.agency.id.toString() } : null,
+        };
+      })
+    );
+
     return {
-      data: users.map(u => ({
-        ...u,
-        id: u.id.toString(),
-        agencyId: u.agencyId?.toString(),
-        createdBy: u.createdBy?.toString() || null,
-        frozenAt: u.frozenAt?.toISOString() || null,
-        agency: u.agency ? { ...u.agency, id: u.agency.id.toString() } : null,
-      })),
+      data: usersWithTokens,
       total,
       page: Math.floor(skip / take) + 1,
       limit: take,
@@ -254,6 +300,22 @@ export class UsersService {
       token = await this.tokenGenerator.generateToken(TokenEntityType.BROKER);
     } else if (dto.role === 'AGENCY_MANAGER') {
       token = await this.tokenGenerator.generateToken(TokenEntityType.MANAGER);
+    } else if (dto.role === 'ADMIN') {
+      token = await this.tokenGenerator.generateToken(TokenEntityType.ADMIN);
+    } else if (dto.role === 'AGENCY_ADMIN') {
+      token = await this.tokenGenerator.generateToken(TokenEntityType.AGENCY_ADMIN);
+    } else if (dto.role === 'CEO') {
+      token = await this.tokenGenerator.generateToken(TokenEntityType.CEO);
+    } else if (dto.role === 'PLATFORM_MANAGER') {
+      token = await this.tokenGenerator.generateToken(TokenEntityType.PLATFORM_MANAGER);
+    } else if (dto.role === 'BUILDING_MANAGER') {
+      token = await this.tokenGenerator.generateToken(TokenEntityType.BUILDING_MANAGER);
+    } else if (dto.role === 'LEGAL_AUDITOR') {
+      token = await this.tokenGenerator.generateToken(TokenEntityType.LEGAL_AUDITOR);
+    } else if (dto.role === 'REPRESENTATIVE') {
+      token = await this.tokenGenerator.generateToken(TokenEntityType.REPRESENTATIVE);
+    } else if (dto.role === 'API_CLIENT') {
+      token = await this.tokenGenerator.generateToken(TokenEntityType.API_CLIENT);
     }
 
     const user = await this.prisma.user.create({
@@ -959,6 +1021,7 @@ export class UsersService {
             role: true,
             status: true,
             isFrozen: true,
+            photoUrl: true,
             agencyId: true,
             createdAt: true,
             createdBy: true,
@@ -1060,6 +1123,7 @@ export class UsersService {
         role: true,
         status: true,
         isFrozen: true,
+        photoUrl: true,
         agencyId: true,
         createdAt: true,
         createdBy: true,

@@ -211,6 +211,22 @@ export class UsersController {
     return this.usersService.findOne(id);
   }
 
+  @Post(':id/photo')
+  @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.AGENCY_MANAGER)
+  @ApiOperation({ summary: 'Upload photo for a specific user' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('photo'))
+  async uploadUserPhoto(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
+    return this.usersService.uploadProfilePhoto(id, file);
+  }
+
+  @Delete(':id/photo')
+  @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.AGENCY_MANAGER)
+  @ApiOperation({ summary: 'Delete photo for a specific user' })
+  async deleteUserPhoto(@Param('id') id: string) {
+    return this.usersService.deleteProfilePhoto(id);
+  }
+
   @Post()
   @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.AGENCY_MANAGER, UserRole.INDEPENDENT_OWNER)
   @ApiOperation({ summary: 'Create a new user' })
