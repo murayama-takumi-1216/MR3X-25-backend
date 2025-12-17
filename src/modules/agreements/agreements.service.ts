@@ -11,10 +11,14 @@ import {
   isImmutableStatus,
   AgreementStatusValue,
 } from './constants/agreement-permissions.constants';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AgreementsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   private generateAgreementToken(): string {
     const year = new Date().getFullYear();
@@ -308,6 +312,17 @@ export class AgreementsService {
   async sign(id: string, data: SignAgreementDto, userId: string, clientIP?: string, userAgent?: string) {
     const agreement = await this.prisma.agreement.findUnique({
       where: { id: BigInt(id) },
+      include: {
+        property: {
+          select: {
+            id: true,
+            ownerId: true,
+            tenantId: true,
+            name: true,
+            address: true,
+          },
+        },
+      },
     });
 
     if (!agreement) {
@@ -321,26 +336,26 @@ export class AgreementsService {
 
     const now = new Date();
     const updateData: any = {};
+    let signedBy: 'tenant' | 'owner' | 'agency' | null = null;
 
     if (data.tenantSignature) {
       updateData.tenantSignature = data.tenantSignature;
       updateData.tenantSignedAt = now;
+      signedBy = 'tenant';
     }
     if (data.ownerSignature) {
       updateData.ownerSignature = data.ownerSignature;
       updateData.ownerSignedAt = now;
+      signedBy = 'owner';
     }
     if (data.agencySignature) {
       updateData.agencySignature = data.agencySignature;
       updateData.agencySignedAt = now;
+      signedBy = 'agency';
     }
 
     if (clientIP) updateData.clientIP = clientIP;
     if (userAgent) updateData.userAgent = userAgent;
-
-    if (agreement.status === 'RASCUNHO') {
-      updateData.status = 'AGUARDANDO_ASSINATURA';
-    }
 
     await this.prisma.agreement.update({
       where: { id: BigInt(id) },
@@ -358,12 +373,53 @@ export class AgreementsService {
       });
     }
 
+    // Send notifications to other parties about the signature
+    const ownerId = agreement.ownerId || agreement.property?.ownerId;
+    const tenantId = agreement.tenantId || agreement.property?.tenantId;
+    const propertyName = agreement.property?.name || agreement.property?.address || 'Imóvel';
+
+    if (ownerId && tenantId && agreement.propertyId) {
+      let notificationDescription = '';
+
+      if (signedBy === 'tenant') {
+        notificationDescription = `O Inquilino assinou o acordo "${agreement.title}" - ${propertyName}`;
+      } else if (signedBy === 'owner') {
+        notificationDescription = `O Proprietário assinou o acordo "${agreement.title}" - ${propertyName}`;
+      } else if (signedBy === 'agency') {
+        notificationDescription = `A Agência assinou o acordo "${agreement.title}" - ${propertyName}`;
+      }
+
+      if (notificationDescription) {
+        await this.notificationsService.createNotification({
+          description: notificationDescription,
+          ownerId: ownerId,
+          tenantId: tenantId,
+          propertyId: agreement.propertyId,
+          agencyId: agreement.agencyId || undefined,
+          type: 'agreement_signed',
+          recurring: 'once',
+          days: 0,
+        });
+      }
+    }
+
     return this.findOne(id);
   }
 
   async approve(id: string, userId: string) {
     const agreement = await this.prisma.agreement.findUnique({
       where: { id: BigInt(id) },
+      include: {
+        property: {
+          select: {
+            id: true,
+            ownerId: true,
+            tenantId: true,
+            name: true,
+            address: true,
+          },
+        },
+      },
     });
 
     if (!agreement) {
@@ -383,12 +439,41 @@ export class AgreementsService {
       },
     });
 
+    // Send notification to tenant and owner about completion
+    const ownerId = agreement.ownerId || agreement.property?.ownerId;
+    const tenantId = agreement.tenantId || agreement.property?.tenantId;
+    const propertyName = agreement.property?.name || agreement.property?.address || 'Imóvel';
+
+    if (ownerId && tenantId && agreement.propertyId) {
+      await this.notificationsService.createNotification({
+        description: `O acordo "${agreement.title}" foi concluído - ${propertyName}`,
+        ownerId: ownerId,
+        tenantId: tenantId,
+        propertyId: agreement.propertyId,
+        agencyId: agreement.agencyId || undefined,
+        type: 'agreement_completed',
+        recurring: 'once',
+        days: 0,
+      });
+    }
+
     return this.findOne(id);
   }
 
   async reject(id: string, userId: string, data: ApproveRejectAgreementDto) {
     const agreement = await this.prisma.agreement.findUnique({
       where: { id: BigInt(id) },
+      include: {
+        property: {
+          select: {
+            id: true,
+            ownerId: true,
+            tenantId: true,
+            name: true,
+            address: true,
+          },
+        },
+      },
     });
 
     if (!agreement) {
@@ -412,6 +497,24 @@ export class AgreementsService {
         rejectionReason: data.rejectionReason,
       },
     });
+
+    // Send notification to tenant and owner about rejection
+    const ownerId = agreement.ownerId || agreement.property?.ownerId;
+    const tenantId = agreement.tenantId || agreement.property?.tenantId;
+    const propertyName = agreement.property?.name || agreement.property?.address || 'Imóvel';
+
+    if (ownerId && tenantId && agreement.propertyId) {
+      await this.notificationsService.createNotification({
+        description: `O acordo "${agreement.title}" foi rejeitado: ${data.rejectionReason} - ${propertyName}`,
+        ownerId: ownerId,
+        tenantId: tenantId,
+        propertyId: agreement.propertyId,
+        agencyId: agreement.agencyId || undefined,
+        type: 'agreement_rejected',
+        recurring: 'once',
+        days: 0,
+      });
+    }
 
     return this.findOne(id);
   }
@@ -493,6 +596,17 @@ export class AgreementsService {
   async sendForSignature(id: string) {
     const agreement = await this.prisma.agreement.findUnique({
       where: { id: BigInt(id) },
+      include: {
+        property: {
+          select: {
+            id: true,
+            ownerId: true,
+            tenantId: true,
+            name: true,
+            address: true,
+          },
+        },
+      },
     });
 
     if (!agreement) {
@@ -507,6 +621,27 @@ export class AgreementsService {
       where: { id: BigInt(id) },
       data: { status: 'AGUARDANDO_ASSINATURA' },
     });
+
+    // Create notifications for tenant and owner
+    // Use agreement's direct tenantId/ownerId, fallback to property's
+    const ownerId = agreement.ownerId || agreement.property?.ownerId;
+    const tenantId = agreement.tenantId || agreement.property?.tenantId;
+
+    if (ownerId && tenantId && agreement.propertyId) {
+      const propertyName = agreement.property?.name || agreement.property?.address || 'Imóvel';
+      const notificationDescription = `Novo acordo "${agreement.title}" enviado para assinatura - ${propertyName}`;
+
+      await this.notificationsService.createNotification({
+        description: notificationDescription,
+        ownerId: ownerId,
+        tenantId: tenantId,
+        propertyId: agreement.propertyId,
+        agencyId: agreement.agencyId || undefined,
+        type: 'agreement',
+        recurring: 'once',
+        days: 0,
+      });
+    }
 
     return this.findOne(id);
   }

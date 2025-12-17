@@ -316,6 +316,10 @@ export class AgreementPermissionService {
         if (!user.agencyId || (agreement.agencyId && agreement.agencyId.toString() !== user.agencyId)) {
           return { allowed: false, reason: 'You are not from the agency for this agreement' };
         }
+        // Agency can only sign after both tenant and owner have signed
+        if (!agreement.tenantSignature || !agreement.ownerSignature) {
+          return { allowed: false, reason: 'Both tenant and owner must sign before the agency can sign' };
+        }
         break;
 
       case SignatureType.BROKER:

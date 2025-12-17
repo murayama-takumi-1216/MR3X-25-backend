@@ -12,12 +12,24 @@ export class NotificationsController {
 
   constructor(private readonly notificationsService: NotificationsService) {}
 
+  private getAgencyId(req: any): bigint | undefined {
+    if (req.user.agencyId) {
+      try {
+        return BigInt(req.user.agencyId);
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all notifications for the current user' })
   async getNotifications(@Request() req: any) {
     try {
       const userId = BigInt(req.user.sub);
-      return await this.notificationsService.getNotifications(userId);
+      const agencyId = this.getAgencyId(req);
+      return await this.notificationsService.getNotifications(userId, agencyId);
     } catch (error) {
       this.logger.error('Error in getNotifications:', error);
       return { items: [], total: 0 };
@@ -29,7 +41,8 @@ export class NotificationsController {
   async getUnreadCount(@Request() req: any) {
     try {
       const userId = BigInt(req.user.sub);
-      const count = await this.notificationsService.getUnreadCount(userId);
+      const agencyId = this.getAgencyId(req);
+      const count = await this.notificationsService.getUnreadCount(userId, agencyId);
       return { count };
     } catch (error) {
       this.logger.error('Error in getUnreadCount:', error);
@@ -42,8 +55,9 @@ export class NotificationsController {
   async markAsRead(@Param('id') id: string, @Request() req: any) {
     try {
       const userId = BigInt(req.user.sub);
+      const agencyId = this.getAgencyId(req);
       const notificationId = BigInt(id);
-      await this.notificationsService.markAsRead(notificationId, userId);
+      await this.notificationsService.markAsRead(notificationId, userId, agencyId);
       return { success: true };
     } catch (error) {
       this.logger.error('Error in markAsRead:', error);
@@ -56,7 +70,8 @@ export class NotificationsController {
   async markAllAsRead(@Request() req: any) {
     try {
       const userId = BigInt(req.user.sub);
-      await this.notificationsService.markAllAsRead(userId);
+      const agencyId = this.getAgencyId(req);
+      await this.notificationsService.markAllAsRead(userId, agencyId);
       return { success: true };
     } catch (error) {
       this.logger.error('Error in markAllAsRead:', error);
@@ -69,8 +84,9 @@ export class NotificationsController {
   async deleteNotification(@Param('id') id: string, @Request() req: any) {
     try {
       const userId = BigInt(req.user.sub);
+      const agencyId = this.getAgencyId(req);
       const notificationId = BigInt(id);
-      await this.notificationsService.deleteNotification(notificationId, userId);
+      await this.notificationsService.deleteNotification(notificationId, userId, agencyId);
       return { success: true };
     } catch (error) {
       this.logger.error('Error in deleteNotification:', error);

@@ -550,6 +550,49 @@ export class CellereService {
     const isValid = situacao === 'REGULAR';
     const isActive = situacao !== 'SUSPENSO' && situacao !== 'CANCELADO' && situacao !== 'NULO';
 
+    // Check for address in nested structures (Endereco, EnderecoResidencial) or direct fields
+    const endereco = data?.Endereco || data?.EnderecoResidencial || {};
+    const hasNestedAddress = endereco?.Logradouro || endereco?.logradouro;
+    const hasDirectAddress = data?.Logradouro;
+
+    // Extract phones from multiple possible locations
+    const phones: string[] = [];
+    if (data?.TelefoneComDDD) phones.push(data.TelefoneComDDD);
+    if (data?.Telefone) phones.push(data.Telefone);
+    if (data?.Celular) phones.push(data.Celular);
+    if (endereco?.Telefone) phones.push(endereco.Telefone);
+
+    // Extract emails from multiple possible locations
+    const emails: string[] = [];
+    if (data?.EnderecoEmail) emails.push(data.EnderecoEmail);
+    if (data?.Email) emails.push(data.Email);
+
+    // Birth date can be in multiple fields
+    const birthDate = data?.DataNascimento || data?.dataNascimento || data?.Data_Nascimento || null;
+
+    this.logger.debug(`CPF Validation - Situacao: ${situacao}, HasNestedAddr: ${hasNestedAddress}, HasDirectAddr: ${hasDirectAddress}, BirthDate: ${birthDate}`);
+
+    let address: DocumentValidationResponse['address'];
+    if (hasNestedAddress) {
+      address = {
+        logradouro: endereco.Logradouro || endereco.logradouro,
+        numero: endereco.Numero || endereco.numero,
+        bairro: endereco.Bairro || endereco.bairro,
+        cidade: endereco.Cidade || endereco.cidade || endereco.Municipio,
+        uf: endereco.UF || endereco.uf,
+        cep: endereco.CEP || endereco.cep,
+      };
+    } else if (hasDirectAddress) {
+      address = {
+        logradouro: data.Logradouro,
+        numero: data.Numero,
+        bairro: data.Bairro,
+        cidade: data.Cidade || data.Municipio,
+        uf: data.UF,
+        cep: data.CEP,
+      };
+    }
+
     return {
       documentValid: isValid,
       documentActive: isActive,
@@ -557,18 +600,11 @@ export class CellereService {
       hasFraudAlerts: situacao === 'TITULAR FALECIDO',
       registrationName: data?.Nome,
       motherName: data?.NomeMae,
-      birthDate: data?.DataNascimento,
+      birthDate,
       situacaoCadastral: situacao,
-      address: data?.Logradouro ? {
-        logradouro: data.Logradouro,
-        numero: data.Numero,
-        bairro: data.Bairro,
-        cidade: data.Cidade,
-        uf: data.UF,
-        cep: data.CEP,
-      } : undefined,
-      phones: data?.TelefoneComDDD ? [data.TelefoneComDDD] : [],
-      emails: data?.EnderecoEmail ? [data.EnderecoEmail] : [],
+      address,
+      phones: phones.length > 0 ? phones : [],
+      emails: emails.length > 0 ? emails : [],
       status: isValid ? 'VALID' : (isActive ? 'WARNING' : 'INVALID'),
     };
   }

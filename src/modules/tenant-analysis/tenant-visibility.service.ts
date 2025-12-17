@@ -66,34 +66,39 @@ export class TenantVisibilityService {
     //   }
     // }
 
-    // 3) Owner / Agency / Broker: see only what is necessary (masked)
+    // 3) Agency roles: full visibility (they requested the analysis for rental decisions)
     if (
       role === UserRole.AGENCY_ADMIN ||
       role === UserRole.AGENCY_MANAGER ||
-      role === UserRole.BROKER ||
+      role === UserRole.BROKER
+    ) {
+      // Agency users who request analysis need full data for rental decisions
+      return formattedAnalysis;
+    }
+
+    // 4) Owner roles: see data with masked document but full basic data
+    if (
       role === UserRole.INDEPENDENT_OWNER ||
       role === UserRole.PROPRIETARIO
     ) {
       const masked = { ...formattedAnalysis };
 
-      // Mask core identifiers
+      // Mask core document identifier for privacy
       masked.document = this.maskDocument(formattedAnalysis.document);
 
-      // basicData branch for CPF / CNPJ already exists in formattedAnalysis
+      // basicData: show all fields including address, birthDate, phone (masked)
       if (formattedAnalysis.basicData?.type === 'CPF') {
         masked.basicData = {
           type: 'CPF',
           name: formattedAnalysis.basicData.name,
           status: formattedAnalysis.basicData.status,
-          // Keep only city/state; hide full address and zip
+          address: formattedAnalysis.basicData.address,
           city: formattedAnalysis.basicData.city,
           state: formattedAnalysis.basicData.state,
+          zipCode: formattedAnalysis.basicData.zipCode,
           phone: this.maskPhone(formattedAnalysis.basicData.phone),
-          // Hide sensitive details
-          address: undefined,
-          zipCode: undefined,
-          birthDate: undefined,
-          motherName: undefined,
+          birthDate: formattedAnalysis.basicData.birthDate,
+          motherName: undefined, // Keep mother name hidden for extra privacy
         };
       } else if (formattedAnalysis.basicData?.type === 'CNPJ') {
         masked.basicData = {
@@ -101,18 +106,14 @@ export class TenantVisibilityService {
           companyName: formattedAnalysis.basicData.companyName,
           tradingName: formattedAnalysis.basicData.tradingName,
           status: formattedAnalysis.basicData.status,
+          address: formattedAnalysis.basicData.address,
           city: formattedAnalysis.basicData.city,
           state: formattedAnalysis.basicData.state,
+          zipCode: formattedAnalysis.basicData.zipCode,
           phone: this.maskPhone(formattedAnalysis.basicData.phone),
-          // Hide detailed address / zip
-          address: undefined,
-          zipCode: undefined,
-          openingDate: undefined,
+          openingDate: formattedAnalysis.basicData.openingDate,
         };
       }
-
-      // Never expose raw photo / documents to owner profile
-      masked.photo = null;
 
       return masked;
     }

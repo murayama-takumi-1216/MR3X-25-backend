@@ -32,15 +32,23 @@ export class NotificationsService {
 
   constructor(private prisma: PrismaService) {}
 
-  async getNotifications(userId: bigint): Promise<{ items: NotificationDto[]; total: number }> {
+  async getNotifications(userId: bigint, agencyId?: bigint): Promise<{ items: NotificationDto[]; total: number }> {
     try {
+      // Build OR conditions based on user type
+      const orConditions: any[] = [
+        { ownerId: userId },
+        { tenantId: userId },
+      ];
+
+      // If user has an agencyId, also get notifications for their agency
+      if (agencyId) {
+        orConditions.push({ agencyId: agencyId });
+      }
+
       const [notifications, total] = await Promise.all([
         this.prisma.notification.findMany({
           where: {
-            OR: [
-              { ownerId: userId },
-              { tenantId: userId },
-            ],
+            OR: orConditions,
           },
           include: {
             owner: {
@@ -69,10 +77,7 @@ export class NotificationsService {
         }),
         this.prisma.notification.count({
           where: {
-            OR: [
-              { ownerId: userId },
-              { tenantId: userId },
-            ],
+            OR: orConditions,
           },
         }),
       ]);
@@ -109,15 +114,20 @@ export class NotificationsService {
     }
   }
 
-  async markAsRead(notificationId: bigint, userId: bigint): Promise<void> {
+  async markAsRead(notificationId: bigint, userId: bigint, agencyId?: bigint): Promise<void> {
     try {
+      const orConditions: any[] = [
+        { ownerId: userId },
+        { tenantId: userId },
+      ];
+      if (agencyId) {
+        orConditions.push({ agencyId: agencyId });
+      }
+
       await this.prisma.notification.updateMany({
         where: {
           id: notificationId,
-          OR: [
-            { ownerId: userId },
-            { tenantId: userId },
-          ],
+          OR: orConditions,
         },
         data: {
           lastExecutionDate: new Date(),
@@ -128,14 +138,19 @@ export class NotificationsService {
     }
   }
 
-  async markAllAsRead(userId: bigint): Promise<void> {
+  async markAllAsRead(userId: bigint, agencyId?: bigint): Promise<void> {
     try {
+      const orConditions: any[] = [
+        { ownerId: userId },
+        { tenantId: userId },
+      ];
+      if (agencyId) {
+        orConditions.push({ agencyId: agencyId });
+      }
+
       await this.prisma.notification.updateMany({
         where: {
-          OR: [
-            { ownerId: userId },
-            { tenantId: userId },
-          ],
+          OR: orConditions,
           lastExecutionDate: null,
         },
         data: {
@@ -147,14 +162,19 @@ export class NotificationsService {
     }
   }
 
-  async getUnreadCount(userId: bigint): Promise<number> {
+  async getUnreadCount(userId: bigint, agencyId?: bigint): Promise<number> {
     try {
+      const orConditions: any[] = [
+        { ownerId: userId },
+        { tenantId: userId },
+      ];
+      if (agencyId) {
+        orConditions.push({ agencyId: agencyId });
+      }
+
       return await this.prisma.notification.count({
         where: {
-          OR: [
-            { ownerId: userId },
-            { tenantId: userId },
-          ],
+          OR: orConditions,
           lastExecutionDate: null,
         },
       });
@@ -164,19 +184,55 @@ export class NotificationsService {
     }
   }
 
-  async deleteNotification(notificationId: bigint, userId: bigint): Promise<void> {
+  async deleteNotification(notificationId: bigint, userId: bigint, agencyId?: bigint): Promise<void> {
     try {
+      const orConditions: any[] = [
+        { ownerId: userId },
+        { tenantId: userId },
+      ];
+      if (agencyId) {
+        orConditions.push({ agencyId: agencyId });
+      }
+
       await this.prisma.notification.deleteMany({
         where: {
           id: notificationId,
-          OR: [
-            { ownerId: userId },
-            { tenantId: userId },
-          ],
+          OR: orConditions,
         },
       });
     } catch (error) {
       this.logger.error('Error deleting notification:', error);
+    }
+  }
+
+  async createNotification(data: {
+    description: string;
+    ownerId: bigint;
+    tenantId: bigint;
+    propertyId: bigint;
+    agencyId?: bigint;
+    type: string;
+    recurring?: string;
+    days?: number;
+  }): Promise<void> {
+    try {
+      await this.prisma.notification.create({
+        data: {
+          description: data.description,
+          ownerId: data.ownerId,
+          tenantId: data.tenantId,
+          propertyId: data.propertyId,
+          agencyId: data.agencyId || null,
+          type: data.type,
+          recurring: data.recurring || 'once',
+          days: data.days || 0,
+          creationDate: new Date(),
+          lastExecutionDate: null,
+        },
+      });
+      this.logger.log(`Notification created: ${data.description}`);
+    } catch (error) {
+      this.logger.error('Error creating notification:', error);
     }
   }
 }

@@ -4,8 +4,10 @@ import { AgreementsService } from './agreements.service';
 import { AgreementPermissionService } from './services/agreement-permission.service';
 import { AgreementCalculationService } from './services/agreement-calculation.service';
 import { AgreementPermissionGuard } from './guards/agreement-permission.guard';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
+  imports: [NotificationsModule],
   controllers: [AgreementsController],
   providers: [
     AgreementsService,

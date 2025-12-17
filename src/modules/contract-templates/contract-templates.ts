@@ -876,7 +876,7 @@ Fica eleito o foro da comarca de [FORO_CIDADE_ESTADO], renunciando qualquer outr
 
 const contratoLocacaoResidencialPadrao: ContractTemplate = {
   id: "contrato-locacao-residencial-padrao",
-  name: "Contrato de Locação Residencial (Padrão 2019)",
+  name: "Contrato de Locação Residencial",
   description: "Contrato de locação residencial padrão entre Locador Pessoa Física e Locatário Pessoa Física",
   type: "CTR",
   allowedUserTypes: ['AGENCY', 'INDEPENDENT_OWNER'],
@@ -884,7 +884,7 @@ const contratoLocacaoResidencialPadrao: ContractTemplate = {
   landlordType: 'PF',
   tenantType: 'PF',
   category: 'RENTAL',
-  content: `CONTRATO DE LOCAÇÃO RESIDENCIAL (PADRÃO 2019)
+  content: `CONTRATO DE LOCAÇÃO RESIDENCIAL
 
 ────────────────────────────────────────────────────
 
@@ -2930,9 +2930,9 @@ Data: [DATA_ASS_LOCATARIO]
 ════════════════════════════════════════════════════════════════════════════════`
 };
 
-const contratoLocacaoResidencialPadrao2019: ContractTemplate = {
+const contratoLocacaoResidencial: ContractTemplate = {
   id: "contrato-locacao-residencial-padrao-2019",
-  name: "Locação Residencial Padrão 2019 - Locador PF / Locatário PF",
+  name: "Locação Residencial - Locador PF / Locatário PF",
   description: "Contrato de locação residencial padrão entre Locador Pessoa Física e Locatário Pessoa Física, com opção de fiador",
   type: "CTR",
   allowedUserTypes: ['INDEPENDENT_OWNER'],
@@ -2943,7 +2943,6 @@ const contratoLocacaoResidencialPadrao2019: ContractTemplate = {
   content: `
 ════════════════════════════════════════════════════════════════════════════════
                     CONTRATO DE LOCAÇÃO RESIDENCIAL
-                           (PADRÃO 2019)
                       LOCADOR (PF) / LOCATÁRIO (PF)
 ════════════════════════════════════════════════════════════════════════════════
 
@@ -4498,7 +4497,7 @@ export const contractTemplates: ContractTemplate[] = [
   contratoAdministracaoLocacaoResidencialPJ,
   contratoAdministracaoImovelLocadorPfLocatarioPf,
   contratoLocacaoRuralLocadoresPfLocatarioPj,
-  contratoLocacaoResidencialPadrao2019,
+  contratoLocacaoResidencial,
   contratoLocacaoComercialProprietarioPJ,
   contratoLocacaoComercialSimplificado,
   contratoLocacaoResidencialProprietarioPF,

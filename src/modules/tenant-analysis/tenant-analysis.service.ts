@@ -283,6 +283,8 @@ export class TenantAnalysisService {
         basicData: item.documentType === 'CPF'
           ? {
               type: 'CPF',
+              name: item.name,
+              status: item.personStatus,
               phone: item.personPhone,
               birthDate: item.birthDate || null,
               address: item.personAddress,
@@ -292,6 +294,8 @@ export class TenantAnalysisService {
             }
           : {
               type: 'CNPJ',
+              companyName: item.companyName || item.name,
+              status: item.companyStatus,
               phone: item.companyPhone,
               address: item.companyAddress,
               city: item.companyCity,

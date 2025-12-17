@@ -459,7 +459,9 @@ export class ExtrajudicialNotificationsService {
         throw new BadRequestException('O devedor ja assinou esta notificacao');
       }
 
-      if (notification.status === 'RASCUNHO') {
+      // Only allow signing for notifications that have been sent/viewed/are in process
+      const cannotSignStatuses = ['RASCUNHO', 'CANCELADO', 'RESOLVIDO', 'ENCAMINHADO_JUDICIAL'];
+      if (cannotSignStatuses.includes(notification.status)) {
         throw new BadRequestException('A notificacao deve ser enviada antes que o devedor possa assinar');
       }
 

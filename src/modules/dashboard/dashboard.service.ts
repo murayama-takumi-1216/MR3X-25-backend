@@ -1223,22 +1223,25 @@ export class DashboardService {
 
       const isSeverelyOverdue = overdueDays > 30;
 
-      // Get active extrajudicial notifications for this tenant
+      // Get active extrajudicial notifications for this tenant (excluding already signed)
       const extrajudicialNotifications = await this.prisma.extrajudicialNotification.findMany({
         where: {
           debtorId: tenantId,
           status: {
             in: ['ENVIADO', 'AGUARDANDO_ENVIO', 'VISUALIZADO', 'GERADO'],
           },
+          debtorSignedAt: null, // Exclude notifications already signed by debtor
         },
         select: {
           id: true,
           type: true,
           status: true,
+          priority: true,
           principalAmount: true,
           deadlineDate: true,
           viewedAt: true,
           creditorName: true,
+          debtorSignedAt: true,
         },
         orderBy: {
           createdAt: 'desc',
@@ -1281,10 +1284,12 @@ export class DashboardService {
           id: n.id.toString(),
           type: n.type,
           status: n.status,
+          priority: n.priority,
           principalAmount: n.principalAmount ? Number(n.principalAmount) : null,
           deadlineDate: n.deadlineDate,
           viewedAt: n.viewedAt,
           creditorName: n.creditorName,
+          debtorSignedAt: n.debtorSignedAt,
         })),
         hasPendingAgreement,
         pendingAgreements: pendingAgreements.map((a: any) => ({
@@ -1336,17 +1341,29 @@ export class DashboardService {
       }
 
       // Update the notification with acknowledgment info
+      // If notification is in RASCUNHO or GERADO status, promote to ENVIADO first (simulating send)
+      // Then set to VISUALIZADO since tenant is acknowledging they've seen it
+      let newStatus = 'VISUALIZADO';
+      if (notification.status === 'RASCUNHO' || notification.status === 'GERADO') {
+        // Also set sentAt to mark when it was effectively "sent" (via dashboard view)
+        newStatus = 'VISUALIZADO';
+      }
+
       const updateData: any = {
         viewedAt: notification.viewedAt || new Date(),
-        acknowledgedAt: new Date(),
-        status: 'VIEWED',
+        viewedIP: data.ipAddress || null,
+        viewedUserAgent: data.userAgent || null,
+        status: newStatus,
+        // If notification was never formally sent, mark it as sent now
+        sentAt: notification.sentAt || new Date(),
       };
 
       // If signature provided, update debtor signature
       if (data.signature) {
         updateData.debtorSignature = data.signature;
         updateData.debtorSignedAt = new Date();
-        updateData.debtorIp = data.ipAddress;
+        updateData.debtorSignedIP = data.ipAddress || null;
+        updateData.debtorSignedAgent = data.userAgent || null;
         if (data.geoLat && data.geoLng) {
           updateData.debtorGeoLat = data.geoLat;
           updateData.debtorGeoLng = data.geoLng;
@@ -1369,7 +1386,7 @@ export class DashboardService {
           userAgent: data.userAgent || null,
           dataAfter: JSON.stringify({
             acknowledgmentType: data.acknowledgmentType,
-            acknowledgedAt: new Date().toISOString(),
+            viewedAt: new Date().toISOString(),
             ipAddress: data.ipAddress,
             geoLat: data.geoLat,
             geoLng: data.geoLng,
@@ -1380,7 +1397,7 @@ export class DashboardService {
 
       return {
         success: true,
-        acknowledgedAt: updateData.acknowledgedAt,
+        viewedAt: updateData.viewedAt,
         notification: {
           id: updated.id.toString(),
           status: updated.status,
