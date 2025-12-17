@@ -6,6 +6,7 @@ import { ContractHashService } from './services/contract-hash.service';
 import { SignatureLinkService } from './services/signature-link.service';
 import { ContractImmutabilityService } from './services/contract-immutability.service';
 import { ContractValidationService } from './services/contract-validation.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export interface SignatureDataWithGeo {
   signature: string;
@@ -28,6 +29,7 @@ export class ContractsService {
     private signatureLinkService: SignatureLinkService,
     private immutabilityService: ContractImmutabilityService,
     private validationService: ContractValidationService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async findAll(params: { skip?: number; take?: number; agencyId?: string; status?: string; createdById?: string; userId?: string; userRole?: string; search?: string }) {
@@ -683,6 +685,21 @@ export class ContractsService {
       },
     });
 
+    // Create notification for tenant and owner
+    if (contract.ownerId && contract.tenantId && contract.propertyId) {
+      const propertyName = contract.property?.name || contract.property?.address || 'Imóvel';
+      await this.notificationsService.createNotification({
+        description: `Novo contrato enviado para assinatura - ${propertyName}`,
+        ownerId: contract.ownerId,
+        tenantId: contract.tenantId,
+        propertyId: contract.propertyId,
+        agencyId: contract.agencyId || undefined,
+        type: 'contract',
+        recurring: 'once',
+        days: 0,
+      });
+    }
+
     return {
       message: 'Contrato preparado para assinatura',
       contractToken,
@@ -706,7 +723,7 @@ export class ContractsService {
 
     const contract = await this.prisma.contract.findUnique({
       where: { id: BigInt(id) },
-      include: { tenantUser: true, ownerUser: true, agency: true },
+      include: { tenantUser: true, ownerUser: true, agency: true, property: true },
     });
 
     if (!contract || contract.deleted) {
@@ -793,6 +810,28 @@ export class ContractsService {
         }),
       },
     });
+
+    // Create notification for contract signature
+    if (contract.ownerId && contract.tenantId && contract.propertyId) {
+      const propertyName = contract.property?.name || contract.property?.address || 'Imóvel';
+      let signedByLabel = '';
+      switch (signatureType) {
+        case 'tenant': signedByLabel = 'O Inquilino'; break;
+        case 'owner': signedByLabel = 'O Proprietário'; break;
+        case 'agency': signedByLabel = 'A Agência'; break;
+        case 'witness': signedByLabel = 'A Testemunha'; break;
+      }
+      await this.notificationsService.createNotification({
+        description: `${signedByLabel} assinou o contrato - ${propertyName}`,
+        ownerId: contract.ownerId,
+        tenantId: contract.tenantId,
+        propertyId: contract.propertyId,
+        agencyId: contract.agencyId || undefined,
+        type: 'contract_signed',
+        recurring: 'once',
+        days: 0,
+      });
+    }
 
     const allSigned = await this.checkAllSignaturesCollected(BigInt(id));
     if (allSigned) {

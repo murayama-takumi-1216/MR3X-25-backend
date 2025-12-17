@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ContractsController } from './contracts.controller';
 import { ContractsService } from './contracts.service';
 import { PlansModule } from '../plans/plans.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { ContractVerificationController, ExternalSigningController } from './contract-verification.controller';
 import { ContractHashService } from './services/contract-hash.service';
 import { ContractPdfService } from './services/contract-pdf.service';
@@ -12,7 +13,7 @@ import { ContractVerificationService } from './services/contract-verification.se
 import { ContractImmutabilityService } from './services/contract-immutability.service';
 
 @Module({
-  imports: [PlansModule],
+  imports: [PlansModule, NotificationsModule],
   controllers: [
     ContractsController,
     ContractVerificationController,

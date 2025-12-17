@@ -29,7 +29,8 @@ export class NotificationsController {
     try {
       const userId = BigInt(req.user.sub);
       const agencyId = this.getAgencyId(req);
-      return await this.notificationsService.getNotifications(userId, agencyId);
+      const userRole = req.user.role;
+      return await this.notificationsService.getNotifications(userId, agencyId, userRole);
     } catch (error) {
       this.logger.error('Error in getNotifications:', error);
       return { items: [], total: 0 };
@@ -42,7 +43,8 @@ export class NotificationsController {
     try {
       const userId = BigInt(req.user.sub);
       const agencyId = this.getAgencyId(req);
-      const count = await this.notificationsService.getUnreadCount(userId, agencyId);
+      const userRole = req.user.role;
+      const count = await this.notificationsService.getUnreadCount(userId, agencyId, userRole);
       return { count };
     } catch (error) {
       this.logger.error('Error in getUnreadCount:', error);
@@ -56,8 +58,9 @@ export class NotificationsController {
     try {
       const userId = BigInt(req.user.sub);
       const agencyId = this.getAgencyId(req);
+      const userRole = req.user.role;
       const notificationId = BigInt(id);
-      await this.notificationsService.markAsRead(notificationId, userId, agencyId);
+      await this.notificationsService.markAsRead(notificationId, userId, agencyId, userRole);
       return { success: true };
     } catch (error) {
       this.logger.error('Error in markAsRead:', error);
@@ -71,7 +74,8 @@ export class NotificationsController {
     try {
       const userId = BigInt(req.user.sub);
       const agencyId = this.getAgencyId(req);
-      await this.notificationsService.markAllAsRead(userId, agencyId);
+      const userRole = req.user.role;
+      await this.notificationsService.markAllAsRead(userId, agencyId, userRole);
       return { success: true };
     } catch (error) {
       this.logger.error('Error in markAllAsRead:', error);
@@ -85,8 +89,9 @@ export class NotificationsController {
     try {
       const userId = BigInt(req.user.sub);
       const agencyId = this.getAgencyId(req);
+      const userRole = req.user.role;
       const notificationId = BigInt(id);
-      await this.notificationsService.deleteNotification(notificationId, userId, agencyId);
+      await this.notificationsService.deleteNotification(notificationId, userId, agencyId, userRole);
       return { success: true };
     } catch (error) {
       this.logger.error('Error in deleteNotification:', error);

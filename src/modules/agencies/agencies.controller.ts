@@ -78,12 +78,21 @@ export class AgenciesController {
   }
 
   @Post(':id/change-plan')
-  @ApiOperation({ summary: 'Change agency plan and enforce limits' })
+  @ApiOperation({ summary: 'Change agency plan and enforce limits (direct change for downgrades/free)' })
   async changePlan(
     @Param('id') id: string,
     @Body() data: { newPlan: string },
   ) {
     return this.agenciesService.changePlan(id, data.newPlan);
+  }
+
+  @Post(':id/create-plan-payment')
+  @ApiOperation({ summary: 'Create Asaas payment for plan upgrade' })
+  async createPlanChangePayment(
+    @Param('id') id: string,
+    @Body() data: { newPlan: string },
+  ) {
+    return this.agenciesService.createPlanChangePayment(id, data.newPlan);
   }
 
   @Get(':id/check-contract-creation')

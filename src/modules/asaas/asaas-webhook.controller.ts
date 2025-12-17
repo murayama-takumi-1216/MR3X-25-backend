@@ -110,7 +110,25 @@ export class AsaasWebhookController {
       return;
     }
 
-    const [entityType, entityId] = externalRef.split(':');
+    // Handle both colon and underscore separators for external references
+    // Format can be: entityType:entityId or entityType_entityId_param
+    let parts: string[];
+    let entityType: string;
+    let entityId: string;
+
+    if (externalRef.startsWith('plan_change_')) {
+      // Format: plan_change_agencyId_newPlan
+      parts = externalRef.split('_');
+      entityType = 'plan_change';
+      entityId = parts[2]; // agencyId
+    } else if (externalRef.includes(':')) {
+      parts = externalRef.split(':');
+      entityType = parts[0];
+      entityId = parts[1];
+    } else {
+      this.logger.warn(`Unknown external reference format: ${externalRef}`);
+      return;
+    }
 
     const paymentDate = payment.paymentDate || payment.confirmedDate || new Date().toISOString();
     const internalStatus = this.asaasService.mapPaymentStatus(payment.status);
@@ -126,6 +144,12 @@ export class AsaasWebhookController {
 
       case 'microtransaction':
         await this.updateMicrotransactionPayment(entityId, payment, paymentDate);
+        break;
+
+      case 'plan_change':
+        // Format: plan_change_agencyId_newPlan
+        const newPlan = externalRef.startsWith('plan_change_') ? parts[3] : parts[2];
+        await this.handlePlanChangePayment(entityId, newPlan, payment, paymentDate);
         break;
 
       default:
@@ -342,6 +366,69 @@ export class AsaasWebhookController {
       } catch (error) {
         this.logger.error(`Failed to sync agreement ${entityId}: ${error.message}`);
       }
+    }
+  }
+
+  private async handlePlanChangePayment(
+    agencyId: string,
+    newPlan: string,
+    payment: any,
+    paymentDate: string,
+  ) {
+    try {
+      this.logger.log(`Processing plan change payment for agency ${agencyId} to plan ${newPlan}`);
+
+      // Verify agency exists
+      const agency = await this.prisma.agency.findUnique({
+        where: { id: BigInt(agencyId) },
+        select: {
+          id: true,
+          plan: true,
+        },
+      });
+
+      if (!agency) {
+        this.logger.error(`Agency not found for plan change: ${agencyId}`);
+        return;
+      }
+
+      // Import plan limits
+      const { getPlanLimitsForEntity } = await import('../plans/plans.data');
+
+      const newPlanLimits = getPlanLimitsForEntity(newPlan, 'agency');
+
+      // Update agency with new plan (core fields that always exist)
+      const updateData: any = {
+        plan: newPlan,
+        maxProperties: newPlanLimits.contracts,
+        maxUsers: newPlanLimits.users,
+        lastPlanChange: new Date(),
+        lastPaymentAt: new Date(paymentDate),
+        lastPaymentAmount: payment.value,
+      };
+
+      // Try to clear pending fields if they exist
+      try {
+        await this.prisma.agency.update({
+          where: { id: BigInt(agencyId) },
+          data: {
+            ...updateData,
+            pendingPlanChange: null,
+            pendingPlanPaymentId: null,
+          },
+        });
+      } catch (fieldError) {
+        // If pending fields don't exist, update without them
+        this.logger.warn(`Updating without pending fields: ${fieldError.message}`);
+        await this.prisma.agency.update({
+          where: { id: BigInt(agencyId) },
+          data: updateData,
+        });
+      }
+
+      this.logger.log(`Plan change confirmed for agency ${agencyId}: ${newPlan} (payment: ${payment.id})`);
+    } catch (error) {
+      this.logger.error(`Failed to process plan change for agency ${agencyId}: ${error.message}`);
     }
   }
 }

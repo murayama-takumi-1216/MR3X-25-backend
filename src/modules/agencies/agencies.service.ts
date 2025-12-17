@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
 import { PlanEnforcementService } from '../plans/plan-enforcement.service';
-import { getPlanLimitsForEntity } from '../plans/plans.data';
+import { getPlanLimitsForEntity, PLANS_CONFIG } from '../plans/plans.data';
+import { AsaasService } from '../asaas/asaas.service';
 
 export interface AgencyCreateDTO {
   name: string;
@@ -44,9 +45,12 @@ export interface AgencyUpdateDTO {
 
 @Injectable()
 export class AgenciesService {
+  private readonly logger = new Logger(AgenciesService.name);
+
   constructor(
     private prisma: PrismaService,
     private planEnforcement: PlanEnforcementService,
+    private asaasService: AsaasService,
   ) {}
 
   async createAgency(data: AgencyCreateDTO) {
@@ -593,6 +597,170 @@ export class AgenciesService {
       },
       enforcement: enforcementResult,
       message: enforcementResult.message,
+    };
+  }
+
+  async createPlanChangePayment(agencyId: string, newPlan: string) {
+    const agency = await this.prisma.agency.findUnique({
+      where: { id: BigInt(agencyId) },
+      select: {
+        id: true,
+        name: true,
+        cnpj: true,
+        email: true,
+        phone: true,
+        plan: true,
+        address: true,
+        city: true,
+        state: true,
+        zipCode: true,
+      },
+    });
+
+    if (!agency) {
+      throw new NotFoundException('Agency not found');
+    }
+
+    const currentPlan = agency.plan || 'FREE';
+    const newPlanConfig = PLANS_CONFIG[newPlan];
+    const currentPlanConfig = PLANS_CONFIG[currentPlan];
+
+    if (!newPlanConfig) {
+      throw new BadRequestException(`Invalid plan: ${newPlan}`);
+    }
+
+    // For FREE plan, no payment needed
+    if (newPlan === 'FREE') {
+      return {
+        requiresPayment: false,
+        message: 'Downgrade para plano gratuito não requer pagamento',
+      };
+    }
+
+    // For downgrade to a cheaper paid plan (but not FREE), no payment needed
+    if (newPlanConfig.price <= currentPlanConfig.price && newPlan !== 'FREE') {
+      return {
+        requiresPayment: false,
+        message: 'Downgrade não requer pagamento',
+      };
+    }
+
+    // Check if Asaas is configured
+    if (!this.asaasService.isEnabled()) {
+      throw new BadRequestException('Sistema de pagamento não está configurado');
+    }
+
+    // Sync or create customer in Asaas
+    this.logger.log(`Syncing customer for agency ${agencyId}: ${agency.name}, ${agency.cnpj}, ${agency.email}`);
+    const customerResult = await this.asaasService.syncCustomer({
+      id: agencyId,
+      name: agency.name,
+      email: agency.email,
+      document: agency.cnpj,
+      phone: agency.phone || undefined,
+      address: agency.address || undefined,
+      city: agency.city || undefined,
+      state: agency.state || undefined,
+      postalCode: agency.zipCode || undefined,
+    });
+
+    if (!customerResult.success || !customerResult.customerId) {
+      this.logger.error(`Failed to sync customer: ${customerResult.error}`);
+      throw new BadRequestException(`Erro ao sincronizar cliente: ${customerResult.error || 'erro desconhecido'}`);
+    }
+
+    // Calculate payment value (new plan price)
+    const paymentValue = newPlanConfig.price;
+
+    // Create payment in Asaas
+    const dueDate = this.asaasService.calculateDueDate(3); // 3 days from now
+    const externalReference = `plan_change_${agencyId}_${newPlan}`;
+    const description = `Upgrade para plano ${newPlanConfig.displayName} - ${agency.name}`;
+
+    this.logger.log(`Creating payment for agency ${agencyId}: value=${paymentValue}, dueDate=${dueDate}, customerId=${customerResult.customerId}`);
+
+    const paymentResult = await this.asaasService.createCompletePayment({
+      customerId: customerResult.customerId,
+      value: paymentValue,
+      dueDate,
+      description,
+      externalReference,
+      billingType: 'UNDEFINED', // Let user choose PIX or Boleto
+    });
+
+    if (!paymentResult.success || !paymentResult.paymentId) {
+      this.logger.error(`Failed to create payment: ${paymentResult.error}`);
+      throw new BadRequestException(`Erro ao criar cobrança: ${paymentResult.error || 'erro desconhecido'}`);
+    }
+
+    // Store pending plan change request (optional - field may not exist yet)
+    try {
+      await this.prisma.agency.update({
+        where: { id: BigInt(agencyId) },
+        data: {
+          pendingPlanChange: newPlan,
+          pendingPlanPaymentId: paymentResult.paymentId,
+        },
+      });
+    } catch (dbError) {
+      this.logger.warn(`Could not store pending plan change (field may not exist): ${dbError.message}`);
+    }
+
+    this.logger.log(`Plan change payment created for agency ${agencyId}: ${paymentResult.paymentId}`);
+
+    return {
+      requiresPayment: true,
+      paymentId: paymentResult.paymentId,
+      invoiceUrl: paymentResult.invoiceUrl,
+      bankSlipUrl: paymentResult.bankSlipUrl,
+      pixQrCode: paymentResult.pixQrCode,
+      pixCopyPaste: paymentResult.pixCopyPaste,
+      value: paymentValue,
+      dueDate,
+      currentPlan: currentPlanConfig.displayName,
+      newPlan: newPlanConfig.displayName,
+      message: `Pagamento de R$ ${paymentValue.toFixed(2)} necessário para ativar o plano ${newPlanConfig.displayName}`,
+    };
+  }
+
+  async confirmPlanChangePayment(agencyId: string, newPlan: string) {
+    // This method is called by the webhook when payment is confirmed
+    const agency = await this.prisma.agency.findUnique({
+      where: { id: BigInt(agencyId) },
+      select: { id: true, plan: true, pendingPlanChange: true },
+    });
+
+    if (!agency) {
+      this.logger.error(`Agency not found for plan change confirmation: ${agencyId}`);
+      return;
+    }
+
+    // Verify the pending plan matches
+    if (agency.pendingPlanChange !== newPlan) {
+      this.logger.warn(`Pending plan mismatch: expected ${agency.pendingPlanChange}, got ${newPlan}`);
+    }
+
+    // Apply the plan change
+    const enforcementResult = await this.planEnforcement.enforcePlanLimits(agencyId, newPlan);
+    const newPlanLimits = getPlanLimitsForEntity(newPlan, 'agency');
+
+    await this.prisma.agency.update({
+      where: { id: BigInt(agencyId) },
+      data: {
+        plan: newPlan,
+        maxProperties: newPlanLimits.contracts,
+        maxUsers: newPlanLimits.users,
+        lastPlanChange: new Date(),
+        pendingPlanChange: null,
+        pendingPlanPaymentId: null,
+      },
+    });
+
+    this.logger.log(`Plan change confirmed for agency ${agencyId}: ${newPlan}`);
+
+    return {
+      success: true,
+      message: `Plano alterado para ${newPlan} com sucesso`,
     };
   }
 }

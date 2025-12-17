@@ -132,6 +132,9 @@ model Agency {
   apiEnabled Boolean @default(false) @map("api_enabled")
   apiKey     String? @map("api_key") @db.VarChar(255)
 
+  pendingPlanChange    String? @map("pending_plan_change") @db.VarChar(30)
+  pendingPlanPaymentId String? @map("pending_plan_payment_id") @db.VarChar(100)
+
   extrajudicialEnabled           Boolean @default(true) @map("extrajudicial_enabled")
   extrajudicialDaysBeforeNotice  Int     @default(30) @map("extrajudicial_days_before_notice")
   extrajudicialLegalDeadlineDays Int     @default(15) @map("extrajudicial_legal_deadline_days")

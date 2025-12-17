@@ -32,24 +32,58 @@ export class NotificationsService {
 
   constructor(private prisma: PrismaService) {}
 
-  async getNotifications(userId: bigint, agencyId?: bigint): Promise<{ items: NotificationDto[]; total: number }> {
-    try {
-      // Build OR conditions based on user type
-      const orConditions: any[] = [
+  /**
+   * Build where conditions based on user role
+   * - Owner roles: only see notifications where they are the owner
+   * - Tenant roles: only see notifications where they are the tenant
+   * - Agency roles: only see notifications for their agency
+   * - Admin roles: see all notifications
+   */
+  private buildWhereConditions(userId: bigint, agencyId?: bigint, userRole?: string): any {
+    const ownerRoles = ['PROPRIETARIO', 'INDEPENDENT_OWNER'];
+    const tenantRoles = ['INQUILINO'];
+    const agencyRoles = ['AGENCY_ADMIN', 'AGENCY_MANAGER', 'BROKER'];
+    const adminRoles = ['ADMIN', 'CEO'];
+
+    if (adminRoles.includes(userRole || '')) {
+      // Admins can see all notifications
+      return {};
+    }
+
+    if (ownerRoles.includes(userRole || '')) {
+      // Owners only see their own notifications (where they are the owner)
+      return { ownerId: userId };
+    }
+
+    if (tenantRoles.includes(userRole || '')) {
+      // Tenants only see their own notifications (where they are the tenant)
+      return { tenantId: userId };
+    }
+
+    if (agencyRoles.includes(userRole || '') && agencyId) {
+      // Agency users see notifications for their agency
+      return { agencyId: agencyId };
+    }
+
+    // Default: only show notifications where user is directly involved
+    return {
+      OR: [
         { ownerId: userId },
         { tenantId: userId },
-      ];
+      ],
+    };
+  }
 
-      // If user has an agencyId, also get notifications for their agency
-      if (agencyId) {
-        orConditions.push({ agencyId: agencyId });
-      }
+  async getNotifications(userId: bigint, agencyId?: bigint, userRole?: string): Promise<{ items: NotificationDto[]; total: number }> {
+    try {
+      const whereConditions = this.buildWhereConditions(userId, agencyId, userRole);
+
+      this.logger.debug(`getNotifications - userId: ${userId}, agencyId: ${agencyId}, userRole: ${userRole}`);
+      this.logger.debug(`whereConditions: ${JSON.stringify(whereConditions)}`);
 
       const [notifications, total] = await Promise.all([
         this.prisma.notification.findMany({
-          where: {
-            OR: orConditions,
-          },
+          where: whereConditions,
           include: {
             owner: {
               select: {
@@ -76,9 +110,7 @@ export class NotificationsService {
           take: 50,
         }),
         this.prisma.notification.count({
-          where: {
-            OR: orConditions,
-          },
+          where: whereConditions,
         }),
       ]);
 
@@ -114,20 +146,14 @@ export class NotificationsService {
     }
   }
 
-  async markAsRead(notificationId: bigint, userId: bigint, agencyId?: bigint): Promise<void> {
+  async markAsRead(notificationId: bigint, userId: bigint, agencyId?: bigint, userRole?: string): Promise<void> {
     try {
-      const orConditions: any[] = [
-        { ownerId: userId },
-        { tenantId: userId },
-      ];
-      if (agencyId) {
-        orConditions.push({ agencyId: agencyId });
-      }
+      const whereConditions = this.buildWhereConditions(userId, agencyId, userRole);
 
       await this.prisma.notification.updateMany({
         where: {
           id: notificationId,
-          OR: orConditions,
+          ...whereConditions,
         },
         data: {
           lastExecutionDate: new Date(),
@@ -138,19 +164,13 @@ export class NotificationsService {
     }
   }
 
-  async markAllAsRead(userId: bigint, agencyId?: bigint): Promise<void> {
+  async markAllAsRead(userId: bigint, agencyId?: bigint, userRole?: string): Promise<void> {
     try {
-      const orConditions: any[] = [
-        { ownerId: userId },
-        { tenantId: userId },
-      ];
-      if (agencyId) {
-        orConditions.push({ agencyId: agencyId });
-      }
+      const whereConditions = this.buildWhereConditions(userId, agencyId, userRole);
 
       await this.prisma.notification.updateMany({
         where: {
-          OR: orConditions,
+          ...whereConditions,
           lastExecutionDate: null,
         },
         data: {
@@ -162,19 +182,13 @@ export class NotificationsService {
     }
   }
 
-  async getUnreadCount(userId: bigint, agencyId?: bigint): Promise<number> {
+  async getUnreadCount(userId: bigint, agencyId?: bigint, userRole?: string): Promise<number> {
     try {
-      const orConditions: any[] = [
-        { ownerId: userId },
-        { tenantId: userId },
-      ];
-      if (agencyId) {
-        orConditions.push({ agencyId: agencyId });
-      }
+      const whereConditions = this.buildWhereConditions(userId, agencyId, userRole);
 
       return await this.prisma.notification.count({
         where: {
-          OR: orConditions,
+          ...whereConditions,
           lastExecutionDate: null,
         },
       });
@@ -184,20 +198,14 @@ export class NotificationsService {
     }
   }
 
-  async deleteNotification(notificationId: bigint, userId: bigint, agencyId?: bigint): Promise<void> {
+  async deleteNotification(notificationId: bigint, userId: bigint, agencyId?: bigint, userRole?: string): Promise<void> {
     try {
-      const orConditions: any[] = [
-        { ownerId: userId },
-        { tenantId: userId },
-      ];
-      if (agencyId) {
-        orConditions.push({ agencyId: agencyId });
-      }
+      const whereConditions = this.buildWhereConditions(userId, agencyId, userRole);
 
       await this.prisma.notification.deleteMany({
         where: {
           id: notificationId,
-          OR: orConditions,
+          ...whereConditions,
         },
       });
     } catch (error) {
@@ -216,6 +224,8 @@ export class NotificationsService {
     days?: number;
   }): Promise<void> {
     try {
+      this.logger.debug(`Creating notification - ownerId: ${data.ownerId}, tenantId: ${data.tenantId}, agencyId: ${data.agencyId}, type: ${data.type}`);
+
       await this.prisma.notification.create({
         data: {
           description: data.description,
@@ -230,7 +240,7 @@ export class NotificationsService {
           lastExecutionDate: null,
         },
       });
-      this.logger.log(`Notification created: ${data.description}`);
+      this.logger.log(`Notification created: ${data.description} (ownerId: ${data.ownerId}, tenantId: ${data.tenantId})`);
     } catch (error) {
       this.logger.error('Error creating notification:', error);
     }
