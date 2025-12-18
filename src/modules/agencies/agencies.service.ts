@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
 import { PlanEnforcementService } from '../plans/plan-enforcement.service';
-import { getPlanLimitsForEntity, PLANS_CONFIG } from '../plans/plans.data';
+import { getPlanLimitsForEntity, PLANS_CONFIG, getPlanByName } from '../plans/plans.data';
 import { AsaasService } from '../asaas/asaas.service';
 
 export interface AgencyCreateDTO {
@@ -761,6 +761,85 @@ export class AgenciesService {
     return {
       success: true,
       message: `Plano alterado para ${newPlan} com sucesso`,
+    };
+  }
+
+  async confirmPlanPaymentManually(agencyId: string, paymentId: string, newPlan: string) {
+    // This method manually confirms a plan change payment
+    // Useful for testing or when webhook is not working
+    this.logger.log(`Manually confirming plan payment for agency ${agencyId}: paymentId=${paymentId}, newPlan=${newPlan}`);
+
+    const agency = await this.prisma.agency.findUnique({
+      where: { id: BigInt(agencyId) },
+      select: { id: true, name: true, plan: true },
+    });
+
+    if (!agency) {
+      throw new NotFoundException('Agency not found');
+    }
+
+    // Try to mark payment as received in Asaas (optional - may fail in sandbox)
+    try {
+      const payment = await this.asaasService.getPayment(paymentId);
+      if (payment && payment.status === 'PENDING') {
+        await this.asaasService.receiveInCash(
+          paymentId,
+          this.asaasService.formatDate(new Date()),
+          payment.value,
+        );
+        this.logger.log(`Payment ${paymentId} marked as received in Asaas`);
+      }
+    } catch (asaasError) {
+      this.logger.warn(`Could not mark payment as received in Asaas: ${asaasError.message}`);
+      // Continue anyway - we'll update the plan locally
+    }
+
+    // Get plan configuration
+    const newPlanConfig = getPlanByName(newPlan);
+    if (!newPlanConfig) {
+      throw new BadRequestException(`Invalid plan: ${newPlan}`);
+    }
+
+    // Apply the plan change
+    const enforcementResult = await this.planEnforcement.enforcePlanLimits(agencyId, newPlan);
+    const newPlanLimits = getPlanLimitsForEntity(newPlan, 'agency');
+
+    // Update agency with new plan
+    const updateData: any = {
+      plan: newPlan,
+      maxProperties: newPlanLimits.contracts,
+      maxUsers: newPlanLimits.users,
+      lastPlanChange: new Date(),
+      lastPaymentAt: new Date(),
+    };
+
+    // Try to clear pending fields if they exist
+    try {
+      await this.prisma.agency.update({
+        where: { id: BigInt(agencyId) },
+        data: {
+          ...updateData,
+          pendingPlanChange: null,
+          pendingPlanPaymentId: null,
+        },
+      });
+    } catch (fieldError) {
+      // If pending fields don't exist, update without them
+      await this.prisma.agency.update({
+        where: { id: BigInt(agencyId) },
+        data: updateData,
+      });
+    }
+
+    this.logger.log(`Plan manually upgraded for agency ${agencyId}: ${agency.plan} -> ${newPlan}`);
+
+    return {
+      success: true,
+      message: `Plano atualizado para ${newPlanConfig.displayName} com sucesso!`,
+      previousPlan: agency.plan,
+      newPlan: newPlan,
+      newLimits: newPlanLimits,
+      enforcement: enforcementResult,
     };
   }
 }

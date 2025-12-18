@@ -106,4 +106,13 @@ export class AgenciesController {
   async checkUserCreationAllowed(@Param('id') id: string) {
     return this.agenciesService.checkUserCreationAllowed(id);
   }
+
+  @Post(':id/confirm-plan-payment')
+  @ApiOperation({ summary: 'Manually confirm plan change payment (marks as paid in Asaas and updates plan)' })
+  async confirmPlanPayment(
+    @Param('id') id: string,
+    @Body() data: { paymentId: string; newPlan: string },
+  ) {
+    return this.agenciesService.confirmPlanPaymentManually(id, data.paymentId, data.newPlan);
+  }
 }
