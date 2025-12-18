@@ -140,7 +140,7 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     maxInternalUsers: 5,
 
     maxProperties: 20,
-    maxTenants: 5,
+    maxTenants: 20, // Must match maxActiveContracts (1 contract = 1 tenant)
 
     unlimitedInspections: true,
     unlimitedSettlements: false,
@@ -169,7 +169,8 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
 
     features: [
       '20 contratos ativos',
-      '5 usuários',
+      '20 inquilinos',
+      '5 usuários internos',
       'Vistorias ilimitadas',
       '10 análises gratuitas/mês',
       '5 acordos gratuitos/mês',
@@ -194,7 +195,7 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     maxInternalUsers: 10,
 
     maxProperties: 60,
-    maxTenants: 10,
+    maxTenants: 60, // Must match maxActiveContracts (1 contract = 1 tenant)
 
     unlimitedInspections: true,
     unlimitedSettlements: true,
@@ -223,7 +224,8 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
 
     features: [
       '60 contratos ativos',
-      '10 usuários',
+      '60 inquilinos',
+      '10 usuários internos',
       'Vistorias ilimitadas',
       'Acordos ilimitados',
       '20 análises gratuitas/mês',

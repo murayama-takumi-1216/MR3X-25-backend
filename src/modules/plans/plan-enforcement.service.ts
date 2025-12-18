@@ -3,6 +3,22 @@ import { PrismaService } from '../../config/prisma.service';
 import { PLANS_CONFIG, getPlanLimits, getPlanByName, EntityType, PlanLimits } from './plans.data';
 import { UserRole } from '@prisma/client';
 
+// Platform-level roles that are NEVER subject to plan limits
+// These users manage the platform itself and should never be frozen or blocked
+export const PLATFORM_ROLES: UserRole[] = [
+  UserRole.CEO,
+  UserRole.ADMIN,
+  UserRole.PLATFORM_MANAGER,
+];
+
+// Roles excluded from agency user counts (not counted against plan limits)
+export const EXCLUDED_FROM_USER_COUNT: UserRole[] = [
+  UserRole.CEO,
+  UserRole.ADMIN,
+  UserRole.PLATFORM_MANAGER,
+  UserRole.AGENCY_ADMIN, // Agency admin is always allowed
+];
+
 export const PLAN_MESSAGES = {
   CONTRACT_FROZEN: 'Este contrato está congelado. Seu plano atual permite apenas {limit} contrato(s) ativo(s). Faça upgrade para desbloquear.',
   USER_FROZEN: 'Este usuário está congelados devido ao limite do plano. Faça upgrade para reativar.',
@@ -182,8 +198,13 @@ export class PlanEnforcementService {
     if ((operation === 'update' || operation === 'delete') && userId) {
       const user = await this.prisma.user.findUnique({
         where: { id: BigInt(userId) },
-        select: { isFrozen: true, frozenReason: true },
+        select: { isFrozen: true, frozenReason: true, role: true },
       });
+
+      // Platform users are never subject to plan limits
+      if (user?.role && PLATFORM_ROLES.includes(user.role)) {
+        return { allowed: true };
+      }
 
       if (user?.isFrozen) {
         return {
@@ -194,13 +215,14 @@ export class PlanEnforcementService {
     }
 
     if (operation === 'create') {
+      // Count only users that are subject to plan limits (excluding platform and agency admin roles)
       const activeUserCount = await this.prisma.user.count({
         where: {
           agencyId: BigInt(agencyId),
           isFrozen: false,
           status: 'ACTIVE',
           role: {
-            not: UserRole.AGENCY_ADMIN,
+            notIn: EXCLUDED_FROM_USER_COUNT,
           },
         },
       });
@@ -461,11 +483,16 @@ export class PlanEnforcementService {
   async checkUserCanLogin(userId: string): Promise<OperationResult> {
     const user = await this.prisma.user.findUnique({
       where: { id: BigInt(userId) },
-      select: { isFrozen: true, frozenReason: true },
+      select: { isFrozen: true, frozenReason: true, role: true },
     });
 
     if (!user) {
       return { allowed: false, message: 'Usuário não encontrado' };
+    }
+
+    // Platform users can ALWAYS login - they are never subject to plan limits
+    if (user.role && PLATFORM_ROLES.includes(user.role)) {
+      return { allowed: true };
     }
 
     if (user.isFrozen) {
@@ -817,13 +844,14 @@ export class PlanEnforcementService {
   }
 
   async freezeExcessUsers(agencyId: string, limit: number): Promise<FreezeResult> {
+    // Only count users subject to plan limits (exclude platform and agency admin roles)
     const activeUsers = await this.prisma.user.findMany({
       where: {
         agencyId: BigInt(agencyId),
         isFrozen: false,
         status: 'ACTIVE',
         role: {
-          not: UserRole.AGENCY_ADMIN,
+          notIn: EXCLUDED_FROM_USER_COUNT,
         },
       },
       orderBy: { createdAt: 'asc' },
@@ -851,6 +879,11 @@ export class PlanEnforcementService {
 
     const frozenIds: string[] = [];
     for (const user of toFreeze) {
+      // Double-check: Never freeze platform users (safety check)
+      if (user.role && PLATFORM_ROLES.includes(user.role)) {
+        continue;
+      }
+
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
@@ -863,9 +896,9 @@ export class PlanEnforcementService {
     }
 
     return {
-      frozen: toFreeze.length,
+      frozen: frozenIds.length,
       kept: toKeepActive.map(u => u.id.toString()),
-      message: `${toFreeze.length} usuário(s) foram congelados devido ao limite do plano.`,
+      message: `${frozenIds.length} usuário(s) foram congelados devido ao limite do plano.`,
     };
   }
 
@@ -919,13 +952,14 @@ export class PlanEnforcementService {
   }
 
   async unfreezeUsers(agencyId: string, newLimit: number): Promise<UnfreezeResult> {
+    // Count only users subject to plan limits (exclude platform and agency admin roles)
     const activeCount = await this.prisma.user.count({
       where: {
         agencyId: BigInt(agencyId),
         isFrozen: false,
         status: 'ACTIVE',
         role: {
-          not: UserRole.AGENCY_ADMIN,
+          notIn: EXCLUDED_FROM_USER_COUNT,
         },
       },
     });
@@ -939,10 +973,14 @@ export class PlanEnforcementService {
       };
     }
 
+    // Only unfreeze non-platform users (platform users should never be frozen in the first place)
     const frozenUsers = await this.prisma.user.findMany({
       where: {
         agencyId: BigInt(agencyId),
         isFrozen: true,
+        role: {
+          notIn: PLATFORM_ROLES,
+        },
       },
       orderBy: { frozenAt: 'asc' },
       take: canUnfreeze,
@@ -1482,20 +1520,20 @@ export class PlanEnforcementService {
           agencyId: BigInt(agencyId),
           isFrozen: false,
           status: 'ACTIVE',
-          role: { not: UserRole.AGENCY_ADMIN },
+          role: { notIn: EXCLUDED_FROM_USER_COUNT },
         },
       }),
       this.prisma.user.count({
         where: {
           agencyId: BigInt(agencyId),
           isFrozen: true,
-          role: { not: UserRole.AGENCY_ADMIN },
+          role: { notIn: EXCLUDED_FROM_USER_COUNT },
         },
       }),
       this.prisma.user.count({
         where: {
           agencyId: BigInt(agencyId),
-          role: { not: UserRole.AGENCY_ADMIN },
+          role: { notIn: EXCLUDED_FROM_USER_COUNT },
         },
       }),
     ]);
@@ -1626,7 +1664,7 @@ export class PlanEnforcementService {
         agencyId: BigInt(agencyId),
         isFrozen: false,
         status: 'ACTIVE',
-        role: { not: UserRole.AGENCY_ADMIN },
+        role: { notIn: EXCLUDED_FROM_USER_COUNT },
       },
     });
 
@@ -1635,7 +1673,11 @@ export class PlanEnforcementService {
     });
 
     const frozenUsers = await this.prisma.user.count({
-      where: { agencyId: BigInt(agencyId), isFrozen: true },
+      where: {
+        agencyId: BigInt(agencyId),
+        isFrozen: true,
+        role: { notIn: EXCLUDED_FROM_USER_COUNT },
+      },
     });
 
     const contractsWouldFreeze = Math.max(0, activeContracts - newConfig.maxActiveContracts);
@@ -1697,7 +1739,11 @@ export class PlanEnforcementService {
 
   private async countFrozenUsers(agencyId: string): Promise<number> {
     return this.prisma.user.count({
-      where: { agencyId: BigInt(agencyId), isFrozen: true, role: { not: UserRole.AGENCY_ADMIN } },
+      where: {
+        agencyId: BigInt(agencyId),
+        isFrozen: true,
+        role: { notIn: EXCLUDED_FROM_USER_COUNT }
+      },
     });
   }
 
