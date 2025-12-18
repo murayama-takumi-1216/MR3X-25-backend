@@ -9,7 +9,10 @@ export interface PlanConfig {
   maxInternalUsers: number;
 
   maxProperties: number;
-  maxTenants: number;
+  maxTenants: number;       // Inquilinos
+  maxOwners: number;        // Proprietários
+  maxBrokers: number;       // Corretores
+  maxManagers: number;      // Gerentes
 
   unlimitedInspections: boolean;
   unlimitedSettlements: boolean;
@@ -66,7 +69,10 @@ export interface PlanLimits {
   contracts: number;
   users: number;
   properties: number;
-  tenants: number;
+  tenants: number;       // Inquilinos
+  owners: number;        // Proprietários
+  brokers: number;       // Corretores
+  managers: number;      // Gerentes
   apiAccess: boolean;
   advancedReports: boolean;
   automations: boolean;
@@ -83,10 +89,13 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     price: 0,
 
     maxActiveContracts: 1,
-    maxInternalUsers: 2,
+    maxInternalUsers: 4, // 1 inquilino + 1 proprietário + 1 corretor + 1 gerente
 
     maxProperties: 1,
-    maxTenants: 2,
+    maxTenants: 1,       // 1 inquilino
+    maxOwners: 1,        // 1 proprietário
+    maxBrokers: 1,       // 1 corretor
+    maxManagers: 1,      // 1 gerente
 
     unlimitedInspections: false,
     unlimitedSettlements: false,
@@ -114,15 +123,14 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     supportTier: 'EMAIL',
 
     features: [
-      '1 contrato ativo',
-      '2 usuários',
+      '1 imóvel',
+      '1 inquilino',
+      '1 proprietário',
+      '1 corretor',
+      '1 gerente',
       '2 vistorias gratuitas/mês',
       '5 análises gratuitas/mês',
       '1 acordo gratuito/mês',
-      'Contratos extras: R$ 4,90/cada',
-      'Vistorias extras: R$ 3,90/cada',
-      'Acordos extras: R$ 6,90/cada',
-      'Análise extra: R$ 8,90/cada',
       'Suporte por email',
     ],
     isPopular: false,
@@ -137,10 +145,13 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     price: 89.90,
 
     maxActiveContracts: 20,
-    maxInternalUsers: 5,
+    maxInternalUsers: 24, // 20 inquilinos + 20 proprietários + 3 corretores + 1 gerente
 
     maxProperties: 20,
-    maxTenants: 20, // Must match maxActiveContracts (1 contract = 1 tenant)
+    maxTenants: 20,      // 20 inquilinos
+    maxOwners: 20,       // 20 proprietários
+    maxBrokers: 3,       // 3 corretores
+    maxManagers: 1,      // 1 gerente
 
     unlimitedInspections: true,
     unlimitedSettlements: false,
@@ -168,15 +179,14 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     supportTier: 'PRIORITY',
 
     features: [
-      '20 contratos ativos',
+      '20 imóveis',
       '20 inquilinos',
-      '5 usuários internos',
+      '20 proprietários',
+      '3 corretores',
+      '1 gerente',
       'Vistorias ilimitadas',
       '10 análises gratuitas/mês',
       '5 acordos gratuitos/mês',
-      'Contratos extras: R$ 2,90/cada',
-      'Acordos extras: R$ 4,90/cada',
-      'Análise extra: R$ 6,90/cada',
       'Relatórios avançados',
       'Suporte prioritário',
     ],
@@ -192,10 +202,13 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     price: 189.90,
 
     maxActiveContracts: 60,
-    maxInternalUsers: 10,
+    maxInternalUsers: 134, // 60 inquilinos + 60 proprietários + 10 corretores + 4 gerentes
 
     maxProperties: 60,
-    maxTenants: 60, // Must match maxActiveContracts (1 contract = 1 tenant)
+    maxTenants: 60,      // 60 inquilinos
+    maxOwners: 60,       // 60 proprietários
+    maxBrokers: 10,      // 10 corretores
+    maxManagers: 4,      // 4 gerentes
 
     unlimitedInspections: true,
     unlimitedSettlements: true,
@@ -223,14 +236,14 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     supportTier: 'PRIORITY',
 
     features: [
-      '60 contratos ativos',
+      '60 imóveis',
       '60 inquilinos',
-      '10 usuários internos',
+      '60 proprietários',
+      '10 corretores',
+      '4 gerentes',
       'Vistorias ilimitadas',
       'Acordos ilimitados',
       '20 análises gratuitas/mês',
-      '100 chamadas API gratuitas/mês',
-      'Análise extra: R$ 4,90/cada',
       'API opcional: +R$ 29/mês',
       'Automações',
       'Relatórios avançados',
@@ -242,19 +255,22 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
   ENTERPRISE: {
     id: 'enterprise',
     name: 'ENTERPRISE',
-    displayName: 'Enterprise',
+    displayName: 'Empresarial',
     description: 'Para grandes imobiliárias - Máximo retorno',
     price: 449.90,
 
-    maxActiveContracts: 200,
-    maxInternalUsers: -1,
+    maxActiveContracts: 300,
+    maxInternalUsers: 640, // 300 inquilinos + 300 proprietários + 30 corretores + 10 gerentes
 
-    maxProperties: 200,
-    maxTenants: 9999,
+    maxProperties: 300,
+    maxTenants: 300,     // 300 inquilinos
+    maxOwners: 300,      // 300 proprietários
+    maxBrokers: 30,      // 30 corretores
+    maxManagers: 10,     // 10 gerentes
 
     unlimitedInspections: true,
     unlimitedSettlements: true,
-    unlimitedUsers: true,
+    unlimitedUsers: false,
     apiAccessIncluded: true,
     apiAccessOptional: false,
     advancedReports: true,
@@ -278,14 +294,14 @@ export const PLANS_CONFIG: Record<string, PlanConfig> = {
     supportTier: '24X7',
 
     features: [
-      '200 contratos ativos',
-      'Usuários ilimitados',
+      '300 imóveis',
+      '300 inquilinos',
+      '300 proprietários',
+      '30 corretores',
+      '10 gerentes',
       'Vistorias ilimitadas',
       'Acordos ilimitados',
-      '50 análises gratuitas/mês',
       'API ilimitada incluída',
-      'Análise extra: R$ 3,90/cada',
-      'R$ 0,90/contrato excedente',
       'Integrações avançadas',
       'White-label',
       'Analytics avançado',
@@ -354,6 +370,9 @@ export function getPlanLimits(planName: string, entityType: EntityType = 'agency
     users: plan.maxInternalUsers === -1 ? 9999 : plan.maxInternalUsers,
     properties: plan.maxProperties,
     tenants: plan.maxTenants,
+    owners: plan.maxOwners,
+    brokers: plan.maxBrokers,
+    managers: plan.maxManagers,
     apiAccess: plan.apiAccessIncluded || plan.apiAccessOptional,
     advancedReports: plan.advancedReports,
     automations: plan.automations,
@@ -484,6 +503,11 @@ export interface Plan {
   price: number;
   propertyLimit: number;
   userLimit: number;
+  // Role-based limits
+  tenantLimit: number;      // Inquilinos
+  ownerLimit: number;       // Proprietários
+  brokerLimit: number;      // Corretores
+  managerLimit: number;     // Gerentes
   features: string[];
   description: string;
   isActive: boolean;
@@ -497,8 +521,13 @@ export function toLegacyPlan(config: PlanConfig): Omit<Plan, 'subscribers' | 'cr
     id: config.id,
     name: config.name,
     price: config.price,
-    propertyLimit: config.maxActiveContracts,
+    propertyLimit: config.maxProperties,
     userLimit: config.maxInternalUsers === -1 ? 9999 : config.maxInternalUsers,
+    // Role-based limits
+    tenantLimit: config.maxTenants,
+    ownerLimit: config.maxOwners,
+    brokerLimit: config.maxBrokers,
+    managerLimit: config.maxManagers,
     features: config.features,
     description: config.description,
     isActive: true,

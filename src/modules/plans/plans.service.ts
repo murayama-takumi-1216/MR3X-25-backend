@@ -24,6 +24,9 @@ export interface PlanUpdateDTO {
   userLimit?: number;
   contractLimit?: number;
   tenantLimit?: number;
+  ownerLimit?: number;
+  brokerLimit?: number;
+  managerLimit?: number;
   features?: string[];
   description?: string;
   isActive?: boolean;
@@ -99,8 +102,13 @@ export class PlansService {
         id: `plan-${defaultPlan.name.toLowerCase()}`,
         name: defaultPlan.name,
         price: update?.price ?? defaultPlan.price,
-        propertyLimit: update?.maxActiveContracts ?? defaultPlan.propertyLimit,
+        propertyLimit: update?.maxProperties ?? update?.maxActiveContracts ?? defaultPlan.propertyLimit,
         userLimit: update?.maxInternalUsers ?? defaultPlan.userLimit,
+        // Role-based limits
+        tenantLimit: update?.maxTenants ?? defaultPlan.tenantLimit,
+        ownerLimit: update?.maxOwners ?? defaultPlan.ownerLimit,
+        brokerLimit: update?.maxBrokers ?? defaultPlan.brokerLimit,
+        managerLimit: update?.maxManagers ?? defaultPlan.managerLimit,
         features: update?.features ?? defaultPlan.features,
         description: update?.description ?? defaultPlan.description,
         isActive: true,
@@ -148,7 +156,7 @@ export class PlansService {
 
     const plans = this.getPlansWithUpdates();
     return plans.map(plan => {
-      // Get the full config to access free usage limits and tenant limits
+      // Get the full config to access free usage limits and all role limits
       const planConfig = PLANS_CONFIG[plan.name];
       return {
         ...plan,
@@ -161,10 +169,15 @@ export class PlansService {
         freeSearches: planConfig?.freeSearches ?? 0,
         freeSettlements: planConfig?.freeSettlements ?? 0,
         freeApiCalls: planConfig?.freeApiCalls ?? 0,
-        // Include tenant limit (separate from internal users)
-        // 1 contract = 1 tenant, so maxTenants should match maxActiveContracts
-        maxTenants: planConfig?.maxTenants ?? planConfig?.maxActiveContracts ?? 1,
-        tenantLimit: planConfig?.maxTenants ?? planConfig?.maxActiveContracts ?? 1,
+        // Include all role-based limits
+        maxTenants: planConfig?.maxTenants ?? 1,        // Inquilinos
+        tenantLimit: planConfig?.maxTenants ?? 1,
+        maxOwners: planConfig?.maxOwners ?? 1,          // Proprietários
+        ownerLimit: planConfig?.maxOwners ?? 1,
+        maxBrokers: planConfig?.maxBrokers ?? 1,        // Corretores
+        brokerLimit: planConfig?.maxBrokers ?? 1,
+        maxManagers: planConfig?.maxManagers ?? 1,      // Gerentes
+        managerLimit: planConfig?.maxManagers ?? 1,
       };
     });
   }
@@ -700,6 +713,9 @@ export class PlansService {
         maxActiveContracts: data.contractLimit ?? data.propertyLimit,
         maxProperties: data.propertyLimit,
         maxTenants: data.tenantLimit ?? data.contractLimit ?? data.propertyLimit,
+        maxOwners: data.ownerLimit ?? data.propertyLimit,
+        maxBrokers: data.brokerLimit,
+        maxManagers: data.managerLimit,
         maxInternalUsers: data.userLimit,
         features: data.features,
         description: data.description,
@@ -729,6 +745,9 @@ export class PlansService {
         maxActiveContracts: data.contractLimit ?? data.propertyLimit,
         maxProperties: data.propertyLimit,
         maxTenants: data.tenantLimit ?? data.contractLimit ?? data.propertyLimit,
+        maxOwners: data.ownerLimit ?? data.propertyLimit,
+        maxBrokers: data.brokerLimit,
+        maxManagers: data.managerLimit,
         maxInternalUsers: data.userLimit,
         features: data.features,
         description: data.description,
