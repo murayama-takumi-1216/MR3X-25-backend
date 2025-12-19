@@ -442,11 +442,24 @@ export class CellereService {
       if (cpfData?.EnderecoEmail) emails.push(cpfData.EnderecoEmail);
 
       // Build full street name including type (RUA, AV, etc.)
+      // Cellere API often doesn't return TipoLogradouro, so we default to "RUA" (most common in Brazil)
       const tipoLogradouro = endereco?.TipoLogradouro || cpfData?.TipoLogradouro || '';
       const logradouroNome = endereco?.Logradouro || cpfData?.Logradouro || '';
-      const fullLogradouro = tipoLogradouro
-        ? `${tipoLogradouro} ${logradouroNome}`.trim()
-        : logradouroNome;
+
+      // If we have a street name but no type, default to "RUA"
+      let fullLogradouro = logradouroNome;
+      if (logradouroNome) {
+        if (tipoLogradouro) {
+          fullLogradouro = `${tipoLogradouro} ${logradouroNome}`.trim();
+        } else {
+          // Check if the street name already starts with a known type
+          const knownTypes = ['RUA', 'AVENIDA', 'AV', 'ALAMEDA', 'AL', 'TRAVESSA', 'TV', 'PRACA', 'PC', 'ESTRADA', 'EST', 'RODOVIA', 'ROD', 'LARGO', 'VIELA', 'BECO', 'LADEIRA'];
+          const startsWithType = knownTypes.some(type => logradouroNome.toUpperCase().startsWith(type + ' '));
+          if (!startsWithType) {
+            fullLogradouro = `RUA ${logradouroNome}`.trim();
+          }
+        }
+      }
 
       return {
         name: cpfData?.Nome || rfData?.NomePessoaFisica,
@@ -579,17 +592,28 @@ export class CellereService {
 
     this.logger.debug(`CPF Validation - Situacao: ${situacao}, HasNestedAddr: ${hasNestedAddress}, HasDirectAddr: ${hasDirectAddress}, BirthDate: ${birthDate}`);
 
+    // Helper to build full street name with default "RUA" if no type provided
+    const buildFullLogradouro = (tipoLogradouro: string, logradouroNome: string): string => {
+      if (!logradouroNome) return '';
+      if (tipoLogradouro) {
+        return `${tipoLogradouro} ${logradouroNome}`.trim();
+      }
+      // Check if the street name already starts with a known type
+      const knownTypes = ['RUA', 'AVENIDA', 'AV', 'ALAMEDA', 'AL', 'TRAVESSA', 'TV', 'PRACA', 'PC', 'ESTRADA', 'EST', 'RODOVIA', 'ROD', 'LARGO', 'VIELA', 'BECO', 'LADEIRA'];
+      const startsWithType = knownTypes.some(type => logradouroNome.toUpperCase().startsWith(type + ' '));
+      if (!startsWithType) {
+        return `RUA ${logradouroNome}`.trim();
+      }
+      return logradouroNome;
+    };
+
     let address: DocumentValidationResponse['address'];
     if (hasNestedAddress) {
-      // Build full street name including type (RUA, AV, etc.)
       const tipoLogradouro = endereco?.TipoLogradouro || endereco?.tipoLogradouro || '';
       const logradouroNome = endereco?.Logradouro || endereco?.logradouro || '';
-      const fullLogradouro = tipoLogradouro
-        ? `${tipoLogradouro} ${logradouroNome}`.trim()
-        : logradouroNome;
 
       address = {
-        logradouro: fullLogradouro,
+        logradouro: buildFullLogradouro(tipoLogradouro, logradouroNome),
         numero: endereco.Numero || endereco.numero,
         bairro: endereco.Bairro || endereco.bairro,
         cidade: endereco.Cidade || endereco.cidade || endereco.Municipio,
@@ -597,15 +621,11 @@ export class CellereService {
         cep: endereco.CEP || endereco.cep,
       };
     } else if (hasDirectAddress) {
-      // Build full street name including type (RUA, AV, etc.)
       const tipoLogradouro = data?.TipoLogradouro || '';
       const logradouroNome = data?.Logradouro || '';
-      const fullLogradouro = tipoLogradouro
-        ? `${tipoLogradouro} ${logradouroNome}`.trim()
-        : logradouroNome;
 
       address = {
-        logradouro: fullLogradouro,
+        logradouro: buildFullLogradouro(tipoLogradouro, logradouroNome),
         numero: data.Numero,
         bairro: data.Bairro,
         cidade: data.Cidade || data.Municipio,

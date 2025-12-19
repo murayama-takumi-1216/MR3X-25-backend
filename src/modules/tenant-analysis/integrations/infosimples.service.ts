@@ -255,23 +255,39 @@ export class InfoSimplesService {
       throw new Error(`InfoSimples error: ${response.code_message}`);
     }
 
-    const data = response.data?.[0];
+    // Handle response.data which might be an array or object
+    let data: any;
+    if (Array.isArray(response.data)) {
+      data = response.data[0];
+    } else if (response.data && typeof response.data === 'object') {
+      data = response.data;
+    }
+
     if (!data) {
+      this.logger.debug('No data found in InfoSimples response');
       return this.getEmptyResult();
     }
 
     const protests: ProtestAnalysisResult['protests'] = [];
     let totalValue = 0;
 
-    for (const cartorio of data.cartorios || []) {
-      for (const protesto of cartorio.protestos || []) {
+    // Ensure cartorios is an array
+    const cartorios = Array.isArray(data.cartorios) ? data.cartorios : [];
+
+    for (const cartorio of cartorios) {
+      // Ensure protestos is an array
+      const protestos = Array.isArray(cartorio?.protestos) ? cartorio.protestos : [];
+
+      for (const protesto of protestos) {
+        if (!protesto) continue;
+
         const amount = this.parseValue(protesto.valor);
         totalValue += amount;
 
         protests.push({
-          notaryOffice: cartorio.nome || protesto.cartorio,
-          city: cartorio.cidade || protesto.cidade,
-          state: cartorio.uf || protesto.uf,
+          notaryOffice: cartorio?.nome || protesto.cartorio || 'Não informado',
+          city: cartorio?.cidade || protesto.cidade || '',
+          state: cartorio?.uf || protesto.uf || '',
           date: protesto.data_protesto,
           amount,
           protocol: protesto.protocolo,
@@ -282,12 +298,14 @@ export class InfoSimplesService {
       }
     }
 
+    const cartoriosWithProtests = cartorios.filter((c: any) => c && c.quantidade_protestos > 0).length;
+
     return {
-      hasProtests: data.quantidade_titulos > 0 || protests.length > 0,
+      hasProtests: (data.quantidade_titulos > 0) || (protests.length > 0),
       totalProtests: data.quantidade_titulos || protests.length,
       totalValue,
       protests,
-      cartoriosWithProtests: (data.cartorios || []).filter(c => c.quantidade_protestos > 0).length,
+      cartoriosWithProtests,
       consultationProtocol: data.protocolo_consulta,
       consultationDate: data.data_consulta,
       source: `INFOSIMPLES_${source}` as any,

@@ -52,6 +52,15 @@ export class AnalyzeTenantDto {
   @IsBoolean({ message: 'lgpdAccepted deve ser um valor booleano' })
   @IsNotEmpty({ message: 'Você deve aceitar os termos da LGPD para continuar' })
   lgpdAccepted: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Force a new analysis even if a valid cached one exists',
+    example: false
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  forceRefresh?: boolean = false;
 }
 
 export class GetAnalysisHistoryDto {
@@ -59,6 +68,11 @@ export class GetAnalysisHistoryDto {
   @IsOptional()
   @IsString()
   document?: string;
+
+  @ApiPropertyOptional({ description: 'Search by document or name' })
+  @IsOptional()
+  @IsString()
+  search?: string;
 
   @ApiPropertyOptional({ description: 'Filter by risk level' })
   @IsOptional()

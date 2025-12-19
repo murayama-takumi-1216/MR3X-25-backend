@@ -29,7 +29,7 @@ export class TenantAnalysisService {
   }
 
   async analyzeTenant(dto: AnalyzeTenantDto, userId: bigint, agencyId?: bigint) {
-    const { document, analysisType = AnalysisType.FULL, name, lgpdAccepted } = dto;
+    const { document, analysisType = AnalysisType.FULL, name, lgpdAccepted, forceRefresh = false } = dto;
     const documentType = document.length === 11 ? 'CPF' : 'CNPJ';
 
     if (!lgpdAccepted) {
@@ -38,12 +38,20 @@ export class TenantAnalysisService {
       );
     }
 
-    this.logger.log(`Starting ${analysisType} analysis for document: ${this.maskDocument(document)}`);
+    this.logger.log(`Starting ${analysisType} analysis for document: ${this.maskDocument(document)}${forceRefresh ? ' (forced refresh)' : ''}`);
 
-    const existingAnalysis = await this.findRecentAnalysis(document);
-    if (existingAnalysis) {
-      this.logger.log(`Found recent valid analysis for document: ${this.maskDocument(document)}`);
-      return this.formatAnalysisResponse(existingAnalysis);
+    if (!forceRefresh) {
+      const existingAnalysis = await this.findRecentAnalysis(document);
+      if (existingAnalysis) {
+        this.logger.log(`Found recent valid analysis for document: ${this.maskDocument(document)}`);
+        return this.formatAnalysisResponse(existingAnalysis);
+      }
+    } else {
+      // Delete all existing analyses for this document when force refresh is enabled
+      const deletedCount = await this.prisma.tenantAnalysis.deleteMany({
+        where: { document },
+      });
+      this.logger.log(`Force refresh: deleted ${deletedCount.count} existing analyses for document: ${this.maskDocument(document)}`);
     }
 
     let financial, background, documentValidation;
@@ -200,7 +208,7 @@ export class TenantAnalysisService {
   }
 
   async getAnalysisHistory(dto: GetAnalysisHistoryDto, userId: bigint, userRole: string, agencyId?: bigint) {
-    const { document, riskLevel, status, page = 1, limit = 10 } = dto;
+    const { document, search, riskLevel, status, page = 1, limit = 10 } = dto;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -238,9 +246,37 @@ export class TenantAnalysisService {
       };
     }
 
-    if (document) {
-      where.document = { contains: document };
+    // Handle search parameter - search by document or name
+    if (search) {
+      // Clean the search term (remove dots, dashes, spaces for document search)
+      const cleanedSearch = search.replace(/[\.\-\s\/]/g, '');
+      this.logger.log(`Search term: "${search}", cleaned: "${cleanedSearch}"`);
+
+      // Use AND to combine role-based filters with OR search conditions
+      // Note: MySQL is case-insensitive by default with utf8 collation
+      const searchConditions = [
+        { document: { contains: cleanedSearch } },
+        { name: { contains: search } },
+        { token: { contains: search } },
+      ];
+
+      // If we already have role-based conditions, combine with AND
+      const existingConditions = { ...where };
+      where.AND = [
+        existingConditions,
+        { OR: searchConditions }
+      ];
+      // Remove the duplicated conditions from root level
+      delete where.agencyId;
+      delete where.requestedById;
     }
+
+    // Also support direct document filter (for backwards compatibility)
+    if (document && !search) {
+      const cleanedDocument = document.replace(/[\.\-\s\/]/g, '');
+      where.document = { contains: cleanedDocument };
+    }
+
     if (riskLevel) {
       where.riskLevel = riskLevel as RiskLevel;
     }
