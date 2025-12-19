@@ -545,8 +545,16 @@ export class AgenciesService {
     return this.planEnforcement.checkContractOperationAllowed(agencyId, 'create');
   }
 
-  async checkUserCreationAllowed(agencyId: string) {
-    return this.planEnforcement.checkUserOperationAllowed(agencyId, 'create');
+  async checkUserCreationAllowed(agencyId: string, role?: string) {
+    // Import UserRole mapping
+    const roleMapping: Record<string, any> = {
+      'BROKER': 'BROKER',
+      'AGENCY_MANAGER': 'AGENCY_MANAGER',
+      'TENANT': 'TENANT',
+      'PROPRIETARIO': 'PROPRIETARIO',
+    };
+    const targetRole = role ? roleMapping[role.toUpperCase()] : undefined;
+    return this.planEnforcement.checkUserOperationAllowed(agencyId, 'create', undefined, targetRole);
   }
 
   async changePlan(agencyId: string, newPlan: string) {

@@ -182,6 +182,7 @@ export class PlanEnforcementService {
     agencyId: string,
     operation: 'create' | 'update' | 'delete',
     userId?: string,
+    targetRole?: UserRole,
   ): Promise<OperationResult> {
     const agency = await this.prisma.agency.findUnique({
       where: { id: BigInt(agencyId) },
@@ -215,7 +216,37 @@ export class PlanEnforcementService {
     }
 
     if (operation === 'create') {
-      // Count only users that are subject to plan limits (excluding platform and agency admin roles)
+      // Check per-role limits if targetRole is provided
+      if (targetRole) {
+        const roleLimit = this.getRoleLimitFromPlan(planConfig, targetRole);
+        const roleName = this.getRoleDisplayName(targetRole);
+
+        if (roleLimit === -1 || roleLimit >= 9999) {
+          return { allowed: true };
+        }
+
+        const roleCount = await this.prisma.user.count({
+          where: {
+            agencyId: BigInt(agencyId),
+            isFrozen: false,
+            status: 'ACTIVE',
+            role: targetRole,
+          },
+        });
+
+        if (roleCount >= roleLimit) {
+          return {
+            allowed: false,
+            message: `Você atingiu o limite de ${roleLimit} ${roleName} do seu plano ${planConfig.displayName}. Faça upgrade para adicionar mais.`,
+            current: roleCount,
+            limit: roleLimit,
+          };
+        }
+
+        return { allowed: true };
+      }
+
+      // Fallback to total user count if no specific role
       const activeUserCount = await this.prisma.user.count({
         where: {
           agencyId: BigInt(agencyId),
@@ -244,6 +275,36 @@ export class PlanEnforcementService {
     }
 
     return { allowed: true };
+  }
+
+  private getRoleLimitFromPlan(planConfig: any, role: UserRole): number {
+    switch (role) {
+      case UserRole.BROKER:
+        return planConfig.maxBrokers ?? -1;
+      case UserRole.AGENCY_MANAGER:
+        return planConfig.maxManagers ?? -1;
+      case UserRole.INQUILINO:
+        return planConfig.maxTenants ?? -1;
+      case UserRole.PROPRIETARIO:
+        return planConfig.maxOwners ?? -1;
+      default:
+        return -1; // No limit for other roles
+    }
+  }
+
+  private getRoleDisplayName(role: UserRole): string {
+    switch (role) {
+      case UserRole.BROKER:
+        return 'corretor(es)';
+      case UserRole.AGENCY_MANAGER:
+        return 'gerente(s)';
+      case UserRole.INQUILINO:
+        return 'inquilino(s)';
+      case UserRole.PROPRIETARIO:
+        return 'proprietário(s)';
+      default:
+        return 'usuário(s)';
+    }
   }
 
   async checkPropertyOperationAllowed(

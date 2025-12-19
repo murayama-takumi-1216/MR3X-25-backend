@@ -103,8 +103,12 @@ export class AgenciesController {
 
   @Get(':id/check-user-creation')
   @ApiOperation({ summary: 'Check if user creation is allowed for the agency' })
-  async checkUserCreationAllowed(@Param('id') id: string) {
-    return this.agenciesService.checkUserCreationAllowed(id);
+  @ApiQuery({ name: 'role', required: false, description: 'The role to check (BROKER, AGENCY_MANAGER, TENANT, PROPRIETARIO)' })
+  async checkUserCreationAllowed(
+    @Param('id') id: string,
+    @Query('role') role?: string,
+  ) {
+    return this.agenciesService.checkUserCreationAllowed(id, role);
   }
 
   @Post(':id/confirm-plan-payment')
