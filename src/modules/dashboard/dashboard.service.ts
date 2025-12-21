@@ -827,36 +827,47 @@ export class DashboardService {
   }
 
   async getDueDates(userId: string, role?: string, userAgencyId?: string | null, userBrokerId?: string | null) {
+    // Get due dates from active contracts instead of properties
     const whereClause: any = {
       deleted: false,
-      status: 'ALUGADO',
-      nextDueDate: { not: null },
+      status: { in: ['ATIVO', 'ACTIVE', 'ASSINADO', 'SIGNED', 'AGUARDANDO_ASSINATURA', 'AWAITING_SIGNATURE', 'PENDENTE', 'PENDING'] },
     };
 
     if (role === 'CEO') {
+      // CEO sees all contracts
     } else if (role === 'ADMIN') {
-      whereClause.createdBy = BigInt(userId);
+      whereClause.property = { createdBy: BigInt(userId) };
     } else if (role === 'INDEPENDENT_OWNER') {
-      whereClause.createdBy = BigInt(userId);
+      whereClause.property = { createdBy: BigInt(userId) };
     } else if (role === 'AGENCY_ADMIN') {
       if (!userAgencyId) {
         return [];
       }
       whereClause.agencyId = BigInt(userAgencyId);
     } else if (role === 'AGENCY_MANAGER') {
-      whereClause.createdBy = BigInt(userId);
+      whereClause.property = { createdBy: BigInt(userId) };
       if (userAgencyId) {
         whereClause.agencyId = BigInt(userAgencyId);
       }
     } else if (role === 'BROKER') {
       const brokerFilterId = userBrokerId ? BigInt(userBrokerId) : BigInt(userId);
-      whereClause.brokerId = brokerFilterId;
+      whereClause.property = { brokerId: brokerFilterId };
     } else {
-      whereClause.ownerId = BigInt(userId);
+      whereClause.property = { ownerId: BigInt(userId) };
     }
 
     const includeClause: any = {
-      tenant: {
+      property: {
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          dueDay: true,
+          nextDueDate: true,
+          monthlyRent: true,
+        },
+      },
+      tenantUser: {
         select: {
           id: true,
           name: true,
@@ -875,36 +886,56 @@ export class DashboardService {
       };
     }
 
-    const properties = await this.prisma.property.findMany({
+    const contracts = await this.prisma.contract.findMany({
       where: whereClause,
       include: includeClause,
       orderBy: {
-        nextDueDate: 'asc',
+        startDate: 'asc',
       },
     });
 
     const now = new Date();
 
-    return properties.map((property: any) => {
-      const daysUntilDue = property.nextDueDate
-        ? Math.ceil((property.nextDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    return contracts.map((contract: any) => {
+      // Calculate next due date based on contract's dueDay or property's dueDay
+      const dueDay = contract.dueDay || contract.property?.dueDay || 1;
+      let nextDueDate = contract.property?.nextDueDate;
+
+      // If no nextDueDate on property, calculate based on dueDay
+      if (!nextDueDate) {
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        nextDueDate = new Date(currentYear, currentMonth, dueDay);
+        if (nextDueDate < now) {
+          nextDueDate = new Date(currentYear, currentMonth + 1, dueDay);
+        }
+      }
+
+      const daysUntilDue = nextDueDate
+        ? Math.ceil((new Date(nextDueDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
         : null;
 
       return {
-        propertyId: property.id.toString(),
-        propertyName: property.name,
-        propertyAddress: property.address,
-        tenant: property.tenant,
-        agency: property.agency || null,
-        nextDueDate: property.nextDueDate,
-        dueDay: property.dueDay,
+        propertyId: contract.property?.id?.toString() || contract.propertyId?.toString(),
+        propertyName: contract.property?.name || 'N/A',
+        propertyAddress: contract.property?.address || 'N/A',
+        tenant: contract.tenantUser ? {
+          id: contract.tenantUser.id.toString(),
+          name: contract.tenantUser.name,
+          email: contract.tenantUser.email,
+          phone: contract.tenantUser.phone,
+        } : null,
+        agency: contract.agency || null,
+        nextDueDate,
+        dueDay,
         daysUntilDue,
         status: daysUntilDue !== null
           ? daysUntilDue < 0 ? 'overdue'
           : daysUntilDue <= 7 ? 'upcoming'
           : 'ok'
           : 'unknown',
-        monthlyRent: property.monthlyRent,
+        monthlyRent: contract.monthlyRent || contract.property?.monthlyRent,
+        contractId: contract.id.toString(),
       };
     });
   }
