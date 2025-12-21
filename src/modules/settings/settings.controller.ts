@@ -14,14 +14,14 @@ export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
   @Get('payment-config')
-  @Roles(UserRole.CEO, UserRole.ADMIN)
+  @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.AGENCY_MANAGER, UserRole.INDEPENDENT_OWNER)
   @ApiOperation({ summary: 'Get payment configuration (platform and agency fees)' })
   async getPaymentConfig(): Promise<PaymentConfig> {
     return this.settingsService.getPaymentConfig();
   }
 
   @Put('payment-config')
-  @Roles(UserRole.CEO, UserRole.ADMIN)
+  @Roles(UserRole.CEO, UserRole.ADMIN, UserRole.AGENCY_ADMIN, UserRole.AGENCY_MANAGER, UserRole.INDEPENDENT_OWNER)
   @ApiOperation({ summary: 'Update payment configuration' })
   async updatePaymentConfig(@Body() config: PaymentConfig): Promise<PaymentConfig> {
     return this.settingsService.updatePaymentConfig(config);
