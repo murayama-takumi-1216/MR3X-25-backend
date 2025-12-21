@@ -201,30 +201,53 @@ export class DashboardService {
 
       const platformFee = Number(monthlyRevenue) * 0.02;
 
-      const overdueProperties = await this.prisma.property.findMany({
+      // Calculate overdue from active contracts
+      const activeContractsList = await this.prisma.contract.findMany({
         where: {
           deleted: false,
-          status: 'ALUGADO',
-          nextDueDate: {
-            lt: now,
+          status: { in: ['ATIVO', 'ACTIVE', 'ASSINADO', 'SIGNED', 'AGUARDANDO_ASSINATURA', 'AWAITING_SIGNATURE', 'PENDENTE', 'PENDING'] },
+        },
+        include: {
+          property: {
+            select: {
+              dueDay: true,
+              nextDueDate: true,
+              monthlyRent: true,
+            },
           },
         },
       }).catch(() => []);
 
-      const overdueCount = overdueProperties.length;
+      // Calculate overdue contracts based on due date
+      let overdueCount = 0;
+      let overdueRevenue = 0;
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-      const overdueRevenue = (overdueProperties as any[]).reduce((sum: number, prop: any) => {
-        const rent = Number(prop.monthlyRent) || 0;
-        return sum + rent;
-      }, 0);
+      for (const contract of activeContractsList as any[]) {
+        const dueDay = contract.dueDay || contract.property?.dueDay || 1;
+        let nextDueDate = contract.property?.nextDueDate;
+
+        // Calculate next due date if not set
+        if (!nextDueDate) {
+          const currentMonth = now.getMonth();
+          const currentYear = now.getFullYear();
+          nextDueDate = new Date(currentYear, currentMonth, dueDay);
+        }
+
+        // Check if overdue (due date has passed)
+        if (new Date(nextDueDate) < now) {
+          overdueCount++;
+          overdueRevenue += Number(contract.monthlyRent || contract.property?.monthlyRent || 0);
+        }
+      }
 
       const receivedRevenue = monthlyRevenue;
 
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      // Pending payments - contracts without recent payment
       const pendingPayments = await this.prisma.contract.count({
         where: {
           deleted: false,
-          status: 'ATIVO',
+          status: { in: ['ATIVO', 'ACTIVE', 'ASSINADO', 'SIGNED'] },
           OR: [
             { lastPaymentDate: null },
             { lastPaymentDate: { lt: thirtyDaysAgo } },
@@ -277,14 +300,9 @@ export class DashboardService {
         take: 5,
       }).catch(() => []);
 
-      const totalDueProperties = await this.prisma.property.count({
-        where: {
-          deleted: false,
-          status: 'ALUGADO',
-          nextDueDate: { not: null },
-        },
-      }).catch(() => 0);
-      const defaultRate = totalDueProperties > 0 ? (overdueCount / totalDueProperties) * 100 : 0;
+      // Default rate is based on active contracts
+      const totalActiveContracts = (activeContractsList as any[]).length;
+      const defaultRate = totalActiveContracts > 0 ? (overdueCount / totalActiveContracts) * 100 : 0;
 
       const maintenanceCount = await this.prisma.property.count({
         where: { deleted: false, status: 'MANUTENCAO' },
