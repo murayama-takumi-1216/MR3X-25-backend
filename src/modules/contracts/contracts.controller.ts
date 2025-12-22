@@ -82,10 +82,9 @@ export class ContractsController {
       userId = undefined;
     } else if (user?.role === 'ADMIN') {
       createdById = user.sub;
-    } else if (user?.role === 'INDEPENDENT_OWNER') {
-      createdById = user.sub;
-    } else if (user?.role === 'INQUILINO' || user?.role === 'PROPRIETARIO' || user?.role === 'BROKER') {
-      // Tenant, Owner, Broker - filtered by property/contract relationship in service
+    } else if (user?.role === 'INDEPENDENT_OWNER' || user?.role === 'INQUILINO' || user?.role === 'PROPRIETARIO' || user?.role === 'BROKER') {
+      // INDEPENDENT_OWNER, Tenant, Owner, Broker - filtered by property/contract relationship in service
+      // userId and userRole are already set, service will handle filtering
     } else if (user?.role === 'AGENCY_ADMIN' || user?.role === 'AGENCY_MANAGER') {
       // Agency admins/managers see all contracts for their agency
       effectiveAgencyId = user.agencyId;

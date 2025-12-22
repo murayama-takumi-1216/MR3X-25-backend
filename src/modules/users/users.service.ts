@@ -197,12 +197,105 @@ export class UsersService {
       include: {
         agency: true,
         company: true,
+        ownedProperties: {
+          where: { deleted: false },
+          select: { id: true, name: true, address: true },
+          take: 10,
+        },
+        contracts: {
+          where: { deleted: false },
+          select: { id: true, status: true },
+          take: 10,
+        },
+        ownerContracts: {
+          where: { deleted: false },
+          select: { id: true, status: true },
+          take: 10,
+        },
+        _count: {
+          select: {
+            ownedProperties: true,
+            contracts: true,
+            ownerContracts: true,
+          },
+        },
       },
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
+    // For AGENCY_ADMIN or AGENCY_MANAGER, get agency properties and contracts
+    let agencyProperties: any[] = [];
+    let agencyContracts: any[] = [];
+    let agencyPropertyCount = 0;
+    let agencyContractCount = 0;
+
+    if (user.agencyId && (user.role === 'AGENCY_ADMIN' || user.role === 'AGENCY_MANAGER')) {
+      const [properties, contracts, propertyCount, contractCount] = await Promise.all([
+        this.prisma.property.findMany({
+          where: { agencyId: user.agencyId, deleted: false },
+          select: { id: true, name: true, address: true },
+          take: 10,
+        }),
+        this.prisma.contract.findMany({
+          where: { agencyId: user.agencyId, deleted: false },
+          select: { id: true, status: true },
+          take: 10,
+        }),
+        this.prisma.property.count({
+          where: { agencyId: user.agencyId, deleted: false },
+        }),
+        this.prisma.contract.count({
+          where: { agencyId: user.agencyId, deleted: false },
+        }),
+      ]);
+      agencyProperties = properties;
+      agencyContracts = contracts;
+      agencyPropertyCount = propertyCount;
+      agencyContractCount = contractCount;
+    }
+
+    // For PROPRIETARIO or INDEPENDENT_OWNER, use ownedProperties and ownerContracts
+    // For AGENCY_ADMIN/AGENCY_MANAGER, use agency properties/contracts
+    // For INQUILINO, use contracts (tenant contracts)
+    const isAgencyUser = user.role === 'AGENCY_ADMIN' || user.role === 'AGENCY_MANAGER';
+    const isTenant = user.role === 'INQUILINO';
+    const isOwner = user.role === 'PROPRIETARIO' || user.role === 'INDEPENDENT_OWNER';
+
+    const ownedPropertiesResult = isAgencyUser
+      ? agencyProperties.map(p => ({ id: p.id.toString(), name: p.name || p.address }))
+      : (user.ownedProperties || []).map(p => ({ id: p.id.toString(), name: p.name || p.address }));
+
+    const contractsResult = isAgencyUser
+      ? agencyContracts.map(c => ({ id: c.id.toString(), status: c.status }))
+      : isTenant
+        ? (user.contracts || []).map(c => ({ id: c.id.toString(), status: c.status }))
+        : isOwner
+          ? (user.ownerContracts || []).map(c => ({ id: c.id.toString(), status: c.status }))
+          : [];
+
+    const propertyCount = isAgencyUser ? agencyPropertyCount : (user._count?.ownedProperties || 0);
+    const contractCount = isAgencyUser
+      ? agencyContractCount
+      : isTenant
+        ? (user._count?.contracts || 0)
+        : isOwner
+          ? (user._count?.ownerContracts || 0)
+          : 0;
+
+    // Get recent audit logs
+    const auditLogs = await this.prisma.auditLog.findMany({
+      where: { userId: BigInt(id) },
+      orderBy: { timestamp: 'desc' },
+      take: 5,
+      select: {
+        timestamp: true,
+        event: true,
+        userId: true,
+      },
+    }).catch(() => []);
 
     const { password: _, ...result } = user;
     return {
@@ -215,6 +308,17 @@ export class UsersService {
       createdBy: result.createdBy?.toString(),
       legalRepresentativeId: result.legalRepresentativeId?.toString(),
       plainPassword: result.plainPassword,
+      ownedProperties: ownedPropertiesResult,
+      contracts: contractsResult,
+      _count: {
+        ownedProperties: propertyCount,
+        contracts: contractCount,
+      },
+      audit: auditLogs.map(log => ({
+        timestamp: log.timestamp,
+        event: log.event,
+        userId: log.userId?.toString(),
+      })),
     };
   }
 

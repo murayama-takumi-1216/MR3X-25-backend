@@ -46,8 +46,8 @@ export class ContractsService {
     const where: any = { deleted: false };
     
     // Hide PENDING contracts from non-admin users (BROKER, INQUILINO, PROPRIETARIO, etc.)
-    // Only AGENCY_ADMIN, AGENCY_MANAGER, CEO, ADMIN can see PENDING contracts
-    const adminRoles = ['AGENCY_ADMIN', 'AGENCY_MANAGER', 'CEO', 'ADMIN', 'PLATFORM_MANAGER'];
+    // AGENCY_ADMIN, AGENCY_MANAGER, CEO, ADMIN, and INDEPENDENT_OWNER can see PENDING contracts
+    const adminRoles = ['AGENCY_ADMIN', 'AGENCY_MANAGER', 'CEO', 'ADMIN', 'PLATFORM_MANAGER', 'INDEPENDENT_OWNER'];
     if (userRole && !adminRoles.includes(userRole)) {
       // Non-admin users should not see PENDING contracts
       // If status filter is provided, combine it with the exclusion of PENDENTE
@@ -70,11 +70,12 @@ export class ContractsService {
     if (userRole === 'INQUILINO' && userId) {
       // Tenant only sees contracts where they are the tenant
       where.tenantId = BigInt(userId);
-    } else if (userRole === 'PROPRIETARIO' && userId) {
-      // Owner only sees contracts where they are the owner (contract owner or property owner)
+    } else if ((userRole === 'PROPRIETARIO' || userRole === 'INDEPENDENT_OWNER') && userId) {
+      // Owner/Independent Owner sees contracts where they are the owner (contract owner or property owner or property creator)
       where.OR = [
         { ownerId: BigInt(userId) },
         { property: { ownerId: BigInt(userId) } },
+        { property: { createdBy: BigInt(userId) } },
       ];
     } else if (userRole === 'BROKER' && userId) {
       // Broker only sees contracts for properties they are assigned to

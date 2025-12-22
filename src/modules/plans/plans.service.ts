@@ -1519,6 +1519,15 @@ export class PlansService {
       throw new BadRequestException('Sistema de pagamento não está configurado');
     }
 
+    // Validate required fields for payment
+    if (!user.document || user.document.trim() === '') {
+      throw new BadRequestException('CPF/CNPJ é obrigatório para realizar o pagamento. Por favor, complete seu perfil antes de fazer upgrade.');
+    }
+
+    if (!user.email || user.email.trim() === '') {
+      throw new BadRequestException('Email é obrigatório para realizar o pagamento. Por favor, complete seu perfil antes de fazer upgrade.');
+    }
+
     // Sync or create customer in Asaas
     this.logger.log(`Syncing customer for owner ${userId}: ${user.name}, ${user.document}, ${user.email}`);
     const customerResult = await this.asaasService.syncCustomer({
