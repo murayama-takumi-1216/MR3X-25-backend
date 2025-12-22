@@ -529,7 +529,7 @@ export class ContractsService {
       where: {
         tenantId: BigInt(tenantId),
         deleted: false,
-        status: { in: ['PENDENTE', 'ATIVO'] },
+        status: { in: ['PENDENTE', 'ATIVO', 'AGUARDANDO_ASSINATURAS', 'ASSINADO'] },
       },
       include: {
         property: true,
