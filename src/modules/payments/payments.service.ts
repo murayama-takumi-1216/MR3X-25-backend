@@ -302,12 +302,33 @@ export class PaymentsService {
       }
 
       if (data.dueDate) {
-        await this.prisma.property.update({
+        const updatedProperty = await this.prisma.property.update({
           where: { id: BigInt(data.propertyId) },
           data: {
             nextDueDate: new Date(data.dueDate),
           },
+          include: {
+            owner: {
+              select: {
+                role: true,
+              },
+            },
+          },
         });
+
+        // Calculate status for INDEPENDENT_OWNER: if has both tenant and nextDueDate, change to DISPONIVEL
+        if (updatedProperty.owner?.role === 'INDEPENDENT_OWNER') {
+          const hasTenant = !!updatedProperty.tenantId;
+          const hasNextDue = !!updatedProperty.nextDueDate;
+          
+          if (hasTenant && hasNextDue && updatedProperty.status === 'INCOMPLETO') {
+            // If status is INCOMPLETO but now has both tenant and nextDueDate, change to DISPONIVEL
+            await this.prisma.property.update({
+              where: { id: BigInt(data.propertyId) },
+              data: { status: 'DISPONIVEL' },
+            });
+          }
+        }
       }
 
       return {

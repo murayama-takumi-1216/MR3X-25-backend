@@ -316,6 +316,47 @@ export class ContractsService {
       },
     });
 
+    // Update property: assign tenant and calculate nextDueDate
+    const startDate = new Date(data.startDate);
+    const dueDay = data.dueDay || property?.dueDay || 5; // Default to day 5 if not specified
+    const nextDueDate = new Date(startDate.getFullYear(), startDate.getMonth(), dueDay);
+    
+    // If the due date has already passed this month, set it for next month
+    if (nextDueDate < startDate) {
+      nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+    }
+
+    const propertyUpdateData: any = {
+      tenantId: BigInt(data.tenantId),
+      nextDueDate: nextDueDate,
+    };
+
+    const updatedProperty = await this.prisma.property.update({
+      where: { id: BigInt(data.propertyId) },
+      data: propertyUpdateData,
+      include: {
+        owner: {
+          select: {
+            role: true,
+          },
+        },
+      },
+    });
+
+    // Calculate status for INDEPENDENT_OWNER: if has both tenant and nextDueDate, change to DISPONIVEL
+    if (updatedProperty.owner?.role === 'INDEPENDENT_OWNER') {
+      const hasTenant = !!updatedProperty.tenantId;
+      const hasNextDue = !!updatedProperty.nextDueDate;
+      
+      if (hasTenant && hasNextDue && updatedProperty.status === 'INCOMPLETO') {
+        // If status is INCOMPLETO but now has both tenant and nextDueDate, change to DISPONIVEL
+        await this.prisma.property.update({
+          where: { id: BigInt(data.propertyId) },
+          data: { status: 'DISPONIVEL' },
+        });
+      }
+    }
+
     return this.serializeContract(contract);
   }
 
