@@ -2,11 +2,15 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { PrismaService } from '../../config/prisma.service';
 import { CreateInspectionDto, InspectionStatus } from './dto/create-inspection.dto';
 import { UpdateInspectionDto, SignInspectionDto, ApproveRejectInspectionDto } from './dto/update-inspection.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class InspectionsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   private generateInspectionToken(): string {
     const year = new Date().getFullYear();
@@ -380,6 +384,29 @@ export class InspectionsService {
       data: updateData,
     });
 
+    // Create notification for inspection signature
+    if (inspection.property?.ownerId && inspection.property?.tenantId && inspection.propertyId) {
+      const propertyName = inspection.property?.name || inspection.property?.address || 'Imóvel';
+      let signedByLabel = '';
+      if (data.tenantSignature) signedByLabel = 'O Inquilino';
+      else if (data.ownerSignature) signedByLabel = 'O Proprietário';
+      else if (data.agencySignature) signedByLabel = 'A Agência';
+      else if (data.inspectorSignature) signedByLabel = 'O Vistoriador';
+      
+      if (signedByLabel) {
+        await this.notificationsService.createNotification({
+          description: `${signedByLabel} assinou a vistoria - ${propertyName}`,
+          ownerId: inspection.property.ownerId,
+          tenantId: inspection.property.tenantId,
+          propertyId: inspection.propertyId,
+          agencyId: inspection.agencyId || undefined,
+          type: 'inspection_signed',
+          recurring: 'once',
+          days: 0,
+        });
+      }
+    }
+
     return this.findOne(id);
   }
 
@@ -482,6 +509,14 @@ export class InspectionsService {
   async sendInspection(id: string, userId: string) {
     const inspection = await this.prisma.inspection.findUnique({
       where: { id: BigInt(id) },
+      include: {
+        property: {
+          include: {
+            owner: true,
+            tenant: true,
+          }
+        },
+      },
     });
 
     if (!inspection) {
@@ -500,6 +535,21 @@ export class InspectionsService {
         status: inspection.status === 'RASCUNHO' ? 'EM_ANDAMENTO' : inspection.status,
       },
     });
+
+    // Create notification for tenant and owner when inspection is sent
+    if (inspection.property?.ownerId && inspection.property?.tenantId && inspection.propertyId) {
+      const propertyName = inspection.property?.name || inspection.property?.address || 'Imóvel';
+      await this.notificationsService.createNotification({
+        description: `Nova vistoria enviada para assinatura - ${propertyName}`,
+        ownerId: inspection.property.ownerId,
+        tenantId: inspection.property.tenantId,
+        propertyId: inspection.propertyId,
+        agencyId: inspection.agencyId || undefined,
+        type: 'inspection',
+        recurring: 'once',
+        days: 0,
+      });
+    }
 
     return this.findOne(id);
   }

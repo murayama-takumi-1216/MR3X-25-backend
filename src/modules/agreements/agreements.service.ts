@@ -366,11 +366,25 @@ export class AgreementsService {
       where: { id: BigInt(id) },
     });
 
-    if (updated?.tenantSignature && updated?.agencySignature) {
-      await this.prisma.agreement.update({
-        where: { id: BigInt(id) },
-        data: { status: 'ASSINADO' },
-      });
+    // Update status to ASSINADO based on signatures
+    // For agreements with agency: need tenant + agency signatures
+    // For agreements without agency (independent owner): need tenant + owner signatures
+    if (updated?.agencyId) {
+      // Agreement with agency - requires tenant and agency signatures
+      if (updated?.tenantSignature && updated?.agencySignature) {
+        await this.prisma.agreement.update({
+          where: { id: BigInt(id) },
+          data: { status: 'ASSINADO' },
+        });
+      }
+    } else {
+      // Agreement without agency (independent owner) - requires tenant and owner signatures
+      if (updated?.tenantSignature && updated?.ownerSignature) {
+        await this.prisma.agreement.update({
+          where: { id: BigInt(id) },
+          data: { status: 'ASSINADO' },
+        });
+      }
     }
 
     // Send notifications to other parties about the signature

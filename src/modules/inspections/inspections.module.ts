@@ -8,8 +8,10 @@ import { InspectionHashService } from './services/inspection-hash.service';
 import { InspectionPdfService } from './services/inspection-pdf.service';
 import { InspectionSignatureService } from './services/inspection-signature.service';
 import { InspectionSignatureLinkService } from './services/inspection-signature-link.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
+  imports: [NotificationsModule],
   controllers: [
     InspectionsController,
     InspectionMediaController,
