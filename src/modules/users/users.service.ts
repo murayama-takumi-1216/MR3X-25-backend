@@ -93,6 +93,7 @@ export class UsersService {
     take?: number;
     search?: string;
     role?: UserRole;
+    roles?: string[];
     agencyId?: string;
     status?: string;
     plan?: string;
@@ -100,10 +101,11 @@ export class UsersService {
     excludeUserId?: string;
     excludeFrozen?: boolean;
   }) {
-    const { skip = 0, take = 10, search, role, agencyId, status, plan, createdById, excludeUserId, excludeFrozen } = params;
+    const { skip = 0, take = 10, search, role, roles, agencyId, status, plan, createdById, excludeUserId, excludeFrozen } = params;
 
     const where: any = {};
     if (role) where.role = role;
+    if (roles && roles.length > 0) where.role = { in: roles };
     if (agencyId) where.agencyId = BigInt(agencyId);
     if (status) where.status = status;
     if (plan) where.plan = plan;

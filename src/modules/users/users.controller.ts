@@ -62,6 +62,8 @@ export class UsersController {
   @ApiQuery({ name: 'plan', required: false })
   @ApiQuery({ name: 'excludeCurrentUser', required: false })
   @ApiQuery({ name: 'excludeFrozen', required: false, description: 'Exclude frozen users from results' })
+  @ApiQuery({ name: 'createdById', required: false, description: 'Filter by creator user id' })
+  @ApiQuery({ name: 'roles', required: false, description: 'Comma-separated list of roles' })
   async findAll(
     @Query('skip') skip?: number,
     @Query('take') take?: number,
@@ -72,10 +74,13 @@ export class UsersController {
     @Query('plan') plan?: string,
     @Query('excludeCurrentUser') excludeCurrentUser?: string,
     @Query('excludeFrozen') excludeFrozen?: string,
+    @Query('createdById') createdByIdParam?: string,
+    @Query('roles') rolesParam?: string,
     @CurrentUser() user?: any,
   ) {
-    let createdById: string | undefined;
+    let createdById: string | undefined = createdByIdParam;
     let finalAgencyId: string | undefined = agencyId;
+    const roles = rolesParam ? rolesParam.split(',').filter(Boolean) : undefined;
 
     if (user?.role === UserRole.ADMIN) {
       if (role === UserRole.AGENCY_ADMIN || role === UserRole.INDEPENDENT_OWNER) {
@@ -98,7 +103,7 @@ export class UsersController {
 
     const shouldExcludeFrozen = excludeFrozen === 'true';
 
-    return this.usersService.findAll({ skip, take, search, role, agencyId: finalAgencyId, status, plan, createdById, excludeUserId, excludeFrozen: shouldExcludeFrozen });
+    return this.usersService.findAll({ skip, take, search, role, roles, agencyId: finalAgencyId, status, plan, createdById, excludeUserId, excludeFrozen: shouldExcludeFrozen });
   }
 
   @Get('details')
