@@ -156,7 +156,8 @@ export class UsersService {
           pixKey: true,
           creci: true,
           agency: {
-            select: { id: true, name: true },
+            // include plan so we can surface the current agency subscription
+            select: { id: true, name: true, plan: true },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -171,8 +172,12 @@ export class UsersService {
         if (!token) {
           token = await this.ensureUserHasToken(u.id, u.role);
         }
+        // Prefer the agency's current plan when available to avoid stale or default "FREE" user plans
+        const resolvedPlan = u.agency?.plan || u.plan || 'FREE';
+
         return {
           ...u,
+          plan: resolvedPlan,
           token,
           id: u.id.toString(),
           agencyId: u.agencyId?.toString(),
